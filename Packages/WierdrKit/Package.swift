@@ -62,6 +62,11 @@ let package = Package(
             swiftSettings: swift5
         ),
         .testTarget(
+            name: "HerdrSSHTests",
+            dependencies: ["HerdrSSH", "HerdrCore"],
+            swiftSettings: swift5
+        ),
+        .testTarget(
             name: "WierdrModelTests",
             dependencies: ["WierdrModel", "HerdrCore"],
             swiftSettings: swift5
