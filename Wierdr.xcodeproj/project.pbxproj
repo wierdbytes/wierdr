@@ -1,0 +1,452 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2603EB8A5D761C502BED791F /* HerdrSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 8129A5BF2F3516F166B530D1 /* HerdrSSH */; };
+		293313B9597429F72BDC4358 /* JetBrainsMono-Italic-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */; };
+		2A3D21E671673CE9B484D247 /* SymbolsNerdFont-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C08C4C79EED0725EFF2BDA7 /* SymbolsNerdFont-Regular.ttf */; };
+		2C98A2A2E414AC5E23D584D7 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 5414B4EB3559CA74F9238D6D /* SwiftTerm */; };
+		3E7FF8899E7032CB014CC131 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3FDE13B0AE2E033B2732E515 /* Assets.xcassets */; };
+		57035D2E92266855712F81FF /* WierdrModel in Frameworks */ = {isa = PBXBuildFile; productRef = FAD500E79D2A09A7B26072EE /* WierdrModel */; };
+		663DD5DB3F4E821E4CBC1689 /* OFL-JetBrainsMono.txt in Resources */ = {isa = PBXBuildFile; fileRef = 01C3406FAFCF5644EFEE9E8C /* OFL-JetBrainsMono.txt */; };
+		6906CB2012BEE68B90983619 /* LICENSE-SymbolsNerdFont.txt in Resources */ = {isa = PBXBuildFile; fileRef = DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */; };
+		B643253F51979CBEAB68A2E0 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */; };
+		EC18DDA987FF0473A49F2D7E /* WierdrApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12BEB38073DA12C77FA628AC /* WierdrApp.swift */; };
+		F247CF5AF89B8F79CB38DA41 /* HerdrCore in Frameworks */ = {isa = PBXBuildFile; productRef = D4DFE261604A49E49A1A80AC /* HerdrCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		01C3406FAFCF5644EFEE9E8C /* OFL-JetBrainsMono.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-JetBrainsMono.txt"; sourceTree = "<group>"; };
+		0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Variable.ttf"; sourceTree = "<group>"; };
+		12BEB38073DA12C77FA628AC /* WierdrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WierdrApp.swift; sourceTree = "<group>"; };
+		3F148D55F4969B78423C1E75 /* Wierdr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Wierdr.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3FDE13B0AE2E033B2732E515 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		95F98EDA00D58F322E07186C /* WierdrKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WierdrKit; path = Packages/WierdrKit; sourceTree = SOURCE_ROOT; };
+		9C08C4C79EED0725EFF2BDA7 /* SymbolsNerdFont-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SymbolsNerdFont-Regular.ttf"; sourceTree = "<group>"; };
+		A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Italic-Variable.ttf"; sourceTree = "<group>"; };
+		DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "LICENSE-SymbolsNerdFont.txt"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		89B17A604DE381E1A3391ACC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F247CF5AF89B8F79CB38DA41 /* HerdrCore in Frameworks */,
+				2603EB8A5D761C502BED791F /* HerdrSSH in Frameworks */,
+				57035D2E92266855712F81FF /* WierdrModel in Frameworks */,
+				2C98A2A2E414AC5E23D584D7 /* SwiftTerm in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2EA2787168C17FC715145BA0 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				12BEB38073DA12C77FA628AC /* WierdrApp.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		4836B7413E1D1381BD8B7F74 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3F148D55F4969B78423C1E75 /* Wierdr.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5DC9AD197DC57DD9744F410C = {
+			isa = PBXGroup;
+			children = (
+				D2880683D217396AF19B7EEE /* App */,
+				D6B7375E78193B26ECB4E0BF /* Packages */,
+				4836B7413E1D1381BD8B7F74 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C31BACBD440CB6BC0A75178C /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */,
+				0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */,
+				DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */,
+				01C3406FAFCF5644EFEE9E8C /* OFL-JetBrainsMono.txt */,
+				9C08C4C79EED0725EFF2BDA7 /* SymbolsNerdFont-Regular.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		D2880683D217396AF19B7EEE /* App */ = {
+			isa = PBXGroup;
+			children = (
+				EFD3CC082A60C7ED00864293 /* Resources */,
+				2EA2787168C17FC715145BA0 /* Sources */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D6B7375E78193B26ECB4E0BF /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				95F98EDA00D58F322E07186C /* WierdrKit */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		EFD3CC082A60C7ED00864293 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				3FDE13B0AE2E033B2732E515 /* Assets.xcassets */,
+				C31BACBD440CB6BC0A75178C /* Fonts */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		286A67CEADBE557B7E99E136 /* Wierdr */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8DAD24C07D4025F21EAC7D2E /* Build configuration list for PBXNativeTarget "Wierdr" */;
+			buildPhases = (
+				F862E9DB21CD302CB67C9B60 /* Sources */,
+				90EEB49B7ED31CAEDE3F7A71 /* Resources */,
+				89B17A604DE381E1A3391ACC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Wierdr;
+			packageProductDependencies = (
+				D4DFE261604A49E49A1A80AC /* HerdrCore */,
+				8129A5BF2F3516F166B530D1 /* HerdrSSH */,
+				FAD500E79D2A09A7B26072EE /* WierdrModel */,
+				5414B4EB3559CA74F9238D6D /* SwiftTerm */,
+			);
+			productName = Wierdr;
+			productReference = 3F148D55F4969B78423C1E75 /* Wierdr.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		95A83474B65B03686ABAE6A1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					286A67CEADBE557B7E99E136 = {
+						DevelopmentTeam = AUL4CCB2XY;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 5E4325C379DAAC5CCCF5AB50 /* Build configuration list for PBXProject "Wierdr" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 5DC9AD197DC57DD9744F410C;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				EE2D5E6ADC3BB968AFE880FC /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				E82AF3F9FB7B44B0DA38CD54 /* XCLocalSwiftPackageReference "Packages/WierdrKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 4836B7413E1D1381BD8B7F74 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				286A67CEADBE557B7E99E136 /* Wierdr */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		90EEB49B7ED31CAEDE3F7A71 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3E7FF8899E7032CB014CC131 /* Assets.xcassets in Resources */,
+				293313B9597429F72BDC4358 /* JetBrainsMono-Italic-Variable.ttf in Resources */,
+				B643253F51979CBEAB68A2E0 /* JetBrainsMono-Variable.ttf in Resources */,
+				6906CB2012BEE68B90983619 /* LICENSE-SymbolsNerdFont.txt in Resources */,
+				663DD5DB3F4E821E4CBC1689 /* OFL-JetBrainsMono.txt in Resources */,
+				2A3D21E671673CE9B484D247 /* SymbolsNerdFont-Regular.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F862E9DB21CD302CB67C9B60 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EC18DDA987FF0473A49F2D7E /* WierdrApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0A64100C0A8BA014B9B9A488 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Wierdr;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Wierdr connects over SSH to herdr-core on computers in your local network.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = pw.xff.wierdr;
+				PRODUCT_NAME = Wierdr;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		206377A9424AD969C151A410 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = AUL4CCB2XY;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		5E742512C2C71B517473BF87 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = AUL4CCB2XY;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		8DD7B34A5E6DF5F84C2F7197 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Wierdr;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Wierdr connects over SSH to herdr-core on computers in your local network.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = pw.xff.wierdr;
+				PRODUCT_NAME = Wierdr;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5E4325C379DAAC5CCCF5AB50 /* Build configuration list for PBXProject "Wierdr" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				206377A9424AD969C151A410 /* Debug */,
+				5E742512C2C71B517473BF87 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8DAD24C07D4025F21EAC7D2E /* Build configuration list for PBXNativeTarget "Wierdr" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8DD7B34A5E6DF5F84C2F7197 /* Debug */,
+				0A64100C0A8BA014B9B9A488 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		E82AF3F9FB7B44B0DA38CD54 /* XCLocalSwiftPackageReference "Packages/WierdrKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WierdrKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		EE2D5E6ADC3BB968AFE880FC /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.99.3;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5414B4EB3559CA74F9238D6D /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EE2D5E6ADC3BB968AFE880FC /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
+		};
+		8129A5BF2F3516F166B530D1 /* HerdrSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HerdrSSH;
+		};
+		D4DFE261604A49E49A1A80AC /* HerdrCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HerdrCore;
+		};
+		FAD500E79D2A09A7B26072EE /* WierdrModel */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WierdrModel;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 95A83474B65B03686ABAE6A1 /* Project object */;
+}
