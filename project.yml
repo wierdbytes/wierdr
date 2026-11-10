@@ -55,6 +55,7 @@ targets:
       path: App/Info.plist
       properties:
         UIAppFonts:
+          - Geist-Variable.ttf
           - JetBrainsMono-Variable.ttf
           - JetBrainsMono-Italic-Variable.ttf
           - SymbolsNerdFont-Regular.ttf
