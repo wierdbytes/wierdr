@@ -1,24 +1,6 @@
 {
-  "originHash" : "19429b8466fee73591f6a59d5b0386840feb559fba5f06fe92d5bc34ece05a6c",
+  "originHash" : "5c96230eb27dcc9c417fdd2eaa8246fc5f69fcc18a0cd0f412955ec990f5753d",
   "pins" : [
-    {
-      "identity" : "h",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/rarestype/h",
-      "state" : {
-        "revision" : "aa3626829160917d4378330617971977cbd78f5b",
-        "version" : "1.0.1"
-      }
-    },
-    {
-      "identity" : "swift-argument-parser",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-argument-parser",
-      "state" : {
-        "revision" : "6a52f3251125d74daf04fcbd5e6f08a75d074382",
-        "version" : "1.8.2"
-      }
-    },
     {
       "identity" : "swift-asn1",
       "kind" : "remoteSourceControl",
@@ -74,12 +56,12 @@
       }
     },
     {
-      "identity" : "swift-png",
+      "identity" : "swift-nio-transport-services",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tayloraswift/swift-png",
+      "location" : "https://github.com/apple/swift-nio-transport-services.git",
       "state" : {
-        "revision" : "2d17c6c51c098628574c0383f1119892655a73a2",
-        "version" : "4.5.2"
+        "revision" : "67787bb645a5e67d2edcdfbe48a216cc549222d5",
+        "version" : "1.28.0"
       }
     },
     {
@@ -89,15 +71,6 @@
       "state" : {
         "revision" : "869129b7bf4ecc57b97d0193ad29690ca2134750",
         "version" : "1.8.1"
-      }
-    },
-    {
-      "identity" : "swiftterm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/migueldeicaza/SwiftTerm",
-      "state" : {
-        "revision" : "282c3c3a932b55c129628876b70f37d993af1615",
-        "version" : "1.99.3"
       }
     }
   ],
