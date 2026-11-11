@@ -46,7 +46,13 @@ final class LiveConnector {
                 guard let line = Self.publicKeyLine() else { throw SessionError.failed("No key") }
                 try await session.installPublicKey(line)
             },
-            terminalSession: { [weak self] address in self?.active?.terminals.session(for: address) }
+            terminalSession: { [weak self] address in
+                // Only for terminals that exist (or already have a session): a
+                // removed terminal must not get a new, never-closed session.
+                guard let session = self?.active else { return nil }
+                guard session.workspace.terminal(address) != nil || session.terminals.sessions[address] != nil else { return nil }
+                return session.terminals.session(for: address)
+            }
         )
     }
 

@@ -69,6 +69,7 @@ struct ConnectView: View {
                     } label: {
                         Label("Try the Demo", systemImage: "play.rectangle")
                     }
+                    .disabled(app.connecting != nil)
                 } footer: {
                     Text("Explore Wierdr with sample spaces and agents, no computer needed.")
                 }

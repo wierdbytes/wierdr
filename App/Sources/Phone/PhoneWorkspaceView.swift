@@ -51,18 +51,21 @@ struct PhoneWorkspaceView: View {
         .onChange(of: showing, initial: true) { _, showing in
             if showing { controller.workspace.refreshLaunchers(machine: controller.activeSpace?.machine) }
         }
-        .onChange(of: controller.workspace.spaces) { _, _ in
+        .onChange(of: controller.workspace.spaces) { old, new in
             // The pane on screen was closed (here, on the desktop, or its program
             // exited): back to the list rather than showing some other pane.
-            guard showing, let id = requestedPane, controller.workspace.location(ofPane: id) == nil else { return }
+            guard showing, let id = Self.shownPane(controller.screen.snapshot, in: old),
+                  !new.contains(where: { $0.tabs.contains { $0.panes.contains { $0.id == id } } }) else { return }
             controller.showSidebar()
         }
     }
 
-    /// The pane this screen asked for (not the fallback `focusedPane` resolves to).
-    private var requestedPane: String? {
-        let s = controller.screen.snapshot
-        return s.space.flatMap { s.tabBySpace[$0] }.flatMap { s.focusByTab[$0] }
+    /// The pane the screen showed with these spaces (`ScreenState`'s resolution, fallbacks included).
+    private static func shownPane(_ s: ScreenState.Snapshot, in spaces: [Space]) -> String? {
+        guard let space = spaces.first(where: { $0.id == s.space }) ?? spaces.first else { return nil }
+        guard let tab = space.tabs.first(where: { $0.id == s.tabBySpace[space.id] }) ?? space.tabs.first else { return nil }
+        let panes = tab.panes
+        return (panes.first { $0.id == s.focusByTab[tab.id] } ?? panes.first { $0.terminal != nil } ?? panes.first)?.id
     }
 
     private func finishBackSwipe(projected: CGFloat) {
@@ -195,6 +198,8 @@ private struct AttentionBanner: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
     @State private var last: [String: AgentStatus] = [:]
+    /// The connection was live at the last update (a reconnect's refill is not news).
+    @State private var wasLive = false
     @State private var banner: Banner?
     @State private var hide: Task<Void, Never>?
 
@@ -220,6 +225,15 @@ private struct AttentionBanner: View {
             return banner.status == .blocked ? .warning : .success
         }
         .onChange(of: statusKey, initial: true) { _, _ in update() }
+        .onChange(of: controller.workspace.phase) { _, phase in
+            guard phase == .live else { wasLive = false; return }
+            // Back live without any status change: news count again after the refill.
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                if controller.workspace.phase == .live { wasLive = true }
+            }
+        }
+        .onChange(of: showing) { _, showing in if !showing { banner = nil } }
         #if DEBUG
         .task(id: showing) {
             // `-open banner`: show one for the first agent that needs you (screenshots).
@@ -244,13 +258,17 @@ private struct AttentionBanner: View {
         let ws = controller.workspace
         var now: [String: AgentStatus] = [:]
         for (address, t) in ws.terminals { if let s = t.status { now[address] = s } }
-        defer { last.merge(now) { _, new in new } }
+        let live = ws.phase == .live
+        defer {
+            last.merge(now) { _, new in new }
+            wasLive = live
+        }
         // Only fresh changes on a live connection (not the first snapshot or a reconnect's refill).
-        guard ws.phase == .live, !last.isEmpty, showing else { return }
+        guard live, wasLive, !last.isEmpty, showing else { return }
         let onScreen = Set(controller.onScreenPanes.compactMap(\.terminal))
         let fresh = now.filter { address, status in
             (status == .blocked || status == .done) && last[address].map { $0 != status } == true
-                && !onScreen.contains(address)
+                && !onScreen.contains(address) && ws.pane(showing: address) != nil
         }
         // Needs you beats done; then the most recent.
         guard let pick = fresh.max(by: { a, b in
