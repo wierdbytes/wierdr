@@ -77,6 +77,16 @@ final class AppModel {
         mode = .none
     }
 
+    /// Installs this device's key on the connected computer and switches the
+    /// host to key login (the saved password is deleted).
+    func installKeyAndSwitch() async throws {
+        guard case .live(var host) = mode else { return }
+        try await services.installKey()
+        host.auth = .key
+        save(host, password: nil)
+        mode = .live(host)
+    }
+
     // MARK: Hosts
 
     func save(_ host: Host, password: String?) {

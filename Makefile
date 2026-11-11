@@ -13,7 +13,7 @@ test:
 	cd Packages/WierdrKit && swift test
 
 sim-build: project
-	$(XCB) -configuration Debug -destination 'platform=iOS Simulator,name=$(SIM_NAME)' build | tail -3
+	$(XCB) -configuration Debug -destination 'platform=iOS Simulator,name=$(SIM_NAME)' build | grep -E "error:|BUILD" | cut -c1-300
 
 sim: sim-build
 	xcrun simctl boot "$(SIM_NAME)" 2>/dev/null || true
@@ -21,12 +21,15 @@ sim: sim-build
 	xcrun simctl install "$(SIM_NAME)" $(DERIVED)/Build/Products/Debug-iphonesimulator/Wierdr.app
 	xcrun simctl launch "$(SIM_NAME)" $(BUNDLE_ID)
 
+# Release by default: SwiftTerm parses output ~7x faster than in Debug.
+CONFIG ?= Release
+
 device: project
-	$(XCB) -configuration Debug -destination 'generic/platform=iOS' -allowProvisioningUpdates build | tail -3
+	$(XCB) -configuration $(CONFIG) -destination 'generic/platform=iOS' -allowProvisioningUpdates build | grep -E "error:|BUILD" | cut -c1-300
 
 # Installs on the first connected iPad (or DEVICE=<udid|name>).
 install: device
-	./scripts/install-device.sh $(DERIVED)/Build/Products/Debug-iphoneos/Wierdr.app $(DEVICE)
+	./scripts/install-device.sh $(DERIVED)/Build/Products/$(CONFIG)-iphoneos/Wierdr.app $(DEVICE)
 
 ipa: project
 	./scripts/make-ipa.sh

@@ -113,6 +113,24 @@ final class HostSession {
         if loop == nil { start() } else { wake() }
     }
 
+    /// Appends `line` to `~/.ssh/authorized_keys` on the connected computer
+    /// (once; keeps the file's permissions strict).
+    func installPublicKey(_ line: String) async throws {
+        guard let c = current else { throw SessionError.failed("Not connected") }
+        let script = """
+        set -e; d="$HOME/.ssh"; f="$d/authorized_keys"
+        mkdir -p "$d"; chmod 700 "$d"; touch "$f"; chmod 600 "$f"
+        if grep -qxF "$WIERDR_KEY" "$f"; then exit 0; fi
+        if [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ]; then echo >> "$f"; fi
+        printf '%s\n' "$WIERDR_KEY" >> "$f"
+        """
+        let result = try await c.exec(ExecParams(argv: ["/bin/sh", "-c", script], env: ["WIERDR_KEY": line], timeout: 20))
+        if result.code != 0 {
+            let err = String(decoding: result.stderr, as: UTF8.self)
+            throw SessionError.failed("Could not install the key (exit \(result.code.map(String.init) ?? "?")): \(err)")
+        }
+    }
+
     func answerHostKey(_ ok: Bool) {
         hostKeyQuestion?.answer(ok)
     }

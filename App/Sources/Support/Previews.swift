@@ -65,5 +65,5 @@ private struct PreviewHost<Content: View>: View {
 }
 
 #Preview("Settings") {
-    SettingsView(hostName: "Studio", isDemo: false, onDisconnect: {})
+    SettingsView(hostName: "Studio", isDemo: false, onDisconnect: {}).environment(AppModel())
 }

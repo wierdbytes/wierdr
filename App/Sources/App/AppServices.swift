@@ -31,6 +31,10 @@ struct AppServices {
     /// start in the folder of the focused pane of their tab).
     var bindScreen: @MainActor (_ workspace: Workspace, _ screen: ScreenState) -> Void = { _, _ in }
 
+    /// Adds this device's public key to `~/.ssh/authorized_keys` on the
+    /// connected computer (so the next login needs no password).
+    var installKey: @MainActor () async throws -> Void = { throw AppError.notImplemented("Not connected") }
+
     /// Placeholders: connect throws "not implemented", no key, no Keychain,
     /// the drawn demo terminal.
     static let placeholder = AppServices(

@@ -9,6 +9,9 @@ struct SettingsView: View {
     @AppStorage("appearance") private var appearance: AppearanceOverride = .system
     @AppStorage("terminalFontSize") private var fontSize: Double = 14
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var app
+    @State private var keyStatus: String?
+    @State private var installing = false
 
     var body: some View {
         NavigationStack {
@@ -32,6 +35,27 @@ struct SettingsView: View {
                 }
                 Section("Connection") {
                     LabeledContent("Connected to", value: isDemo ? "Demo" : (hostName ?? "—"))
+                    if case .live(let host) = app.mode, host.auth == .password {
+                        Button {
+                            installing = true
+                            Task {
+                                do {
+                                    try await app.installKeyAndSwitch()
+                                    keyStatus = "Key installed. Next time Wierdr logs in with it, no password needed."
+                                } catch {
+                                    keyStatus = error.localizedDescription
+                                }
+                                installing = false
+                            }
+                        } label: {
+                            HStack {
+                                Text("Install This iPad\u{2019}s Key on \(host.displayName)")
+                                if installing { Spacer(); ProgressView() }
+                            }
+                        }
+                        .disabled(installing)
+                    }
+                    if let keyStatus { Text(keyStatus).font(.footnote).foregroundStyle(.secondary) }
                     Button(isDemo ? "Leave Demo" : "Disconnect", role: .destructive) {
                         dismiss()
                         onDisconnect()

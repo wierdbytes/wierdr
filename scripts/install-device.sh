@@ -12,9 +12,11 @@ if [ -z "$DEVICE" ]; then
 import json, sys
 d = json.load(open(sys.argv[1]))
 devs = d.get("result", {}).get("devices", [])
-def kind(x): return (x.get("hardwareProperties", {}).get("deviceType") or "").lower()
+def hw(x): return x.get("hardwareProperties", {})
+def kind(x): return (hw(x).get("deviceType") or "").lower()
+def physical(x): return (hw(x).get("reality") or "physical") == "physical"
 def ok(x): return x.get("connectionProperties", {}).get("tunnelState") != "unavailable"
-ipads = [x for x in devs if kind(x) == "ipad"]
+ipads = [x for x in devs if kind(x) == "ipad" and physical(x)]
 pick = [x for x in ipads if ok(x)] or ipads
 if pick: print(pick[0]["identifier"])
 PY

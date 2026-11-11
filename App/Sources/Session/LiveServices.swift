@@ -39,7 +39,13 @@ final class LiveConnector {
                 }
                 return AnyView(DemoTerminalView(context: ctx))
             },
-            bindScreen: { [weak self] _, screen in self?.active?.bind(screen: screen) }
+            bindScreen: { [weak self] _, screen in self?.active?.bind(screen: screen) },
+            installKey: { [weak self] in
+                guard let session = self?.active else { throw SessionError.failed("Not connected") }
+                _ = try AppStores.keys.loadOrCreateIdentity()
+                guard let line = Self.publicKeyLine() else { throw SessionError.failed("No key") }
+                try await session.installPublicKey(line)
+            }
         )
     }
 
