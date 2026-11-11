@@ -2,10 +2,10 @@
 # Drive Wierdr on the physical iPad: screenshots, taps, typing, UI tree,
 # orientation. See docs/BUILD.md.
 #
-#   scripts/ipad.sh start              build (once) and launch WebDriverAgent, forward :8100 over USB
+#   scripts/ipad.sh start              build (once) and launch WebDriverAgent (USB or network)
 #   scripts/ipad.sh stop               stop WebDriverAgent and the port forward
-#   scripts/ipad.sh status             is WDA up
-#   scripts/ipad.sh shot [file.png]    iPad screenshot (devicectl, 2x pixels)
+#   scripts/ipad.sh status             is WDA up, and over which link
+#   scripts/ipad.sh shot [file.png]    iPad screenshot, 2x pixels (devicectl; off USB via WDA)
 #   scripts/ipad.sh tree               accessibility tree of the foreground app (points)
 #   scripts/ipad.sh tap <label>        tap an element by accessibility label/id
 #   scripts/ipad.sh tap-xy <x> <y>     tap at a point (points: 1600x1200 landscape)
@@ -16,11 +16,20 @@
 #   scripts/ipad.sh launch | kill      (re)start / stop Wierdr
 #
 # Env: DEVICE (udid or name; default: first physical iPad), WDA_DIR
-# (default ~/.local/share/WebDriverAgent), TEAM (default AUL4CCB2XY), WDA_PORT (8100).
+# (default ~/.local/share/WebDriverAgent), TEAM (default AUL4CCB2XY), WDA_PORT (8100),
+# WDA_HOST (Tailscale IP/name of the iPad; default: first iOS peer named ipad*).
 # One-time on the iPad: Settings › Developer › Enable UI Automation.
 #
 # Workflow: `make install`, then `start`, act (tap/type/swipe), then `shot` and look
 # at the result. Find targets with `tree`: labels for `tap`, frames in points for `tap-xy`.
+#
+# Link: if the iPad is on USB, WDA goes through `iproxy` on localhost:$WDA_PORT.
+# Otherwise the script talks to WDA directly at the iPad's Tailscale address, port 8100.
+# WDA has no auth, so only use it over USB or Tailscale. Over Tailscale, `start`
+# needs Xcode to reach the iPad, either on the same LAN or with "Connect via network".
+# Once WDA is up, taps, typing and `shot` work from anywhere on the tailnet. Off USB,
+# `shot` goes through WDA, or falls back to devicectl if WDA is down. `orient` and
+# `launch` always use devicectl, so they need USB or the LAN.
 #
 # Notes:
 # - `start` may make the iPad ask for its passcode. This can't be disabled
@@ -37,7 +46,8 @@ BUNDLE_ID=pw.xff.wierdr
 TEAM="${TEAM:-AUL4CCB2XY}"
 WDA_DIR="${WDA_DIR:-$HOME/.local/share/WebDriverAgent}"
 PORT="${WDA_PORT:-8100}"
-URL="http://localhost:$PORT"
+URL=""
+VIA=""
 STATE="${TMPDIR:-/tmp}/wierdr-wda"
 mkdir -p "$STATE"
 
@@ -63,6 +73,40 @@ PY
   cat "$STATE/device"
 }
 
+usb() { idevice_id -l 2>/dev/null | grep -qx "$(device)"; }
+
+ts_host() {
+  if [ -n "${WDA_HOST:-}" ]; then echo "$WDA_HOST"; return; fi
+  local ts=/Applications/Tailscale.app/Contents/MacOS/Tailscale
+  [ -x "$ts" ] || ts=tailscale
+  { "$ts" status --json 2>/dev/null || echo '{}'; } | python3 -c '
+import json, sys
+peers = json.load(sys.stdin).get("Peer") or {}
+ipads = [p for p in peers.values() if p.get("OS") == "iOS" and p.get("TailscaleIPs")
+         and p.get("DNSName", "").lower().startswith("ipad")]
+ipads.sort(key=lambda p: not p.get("Online"))
+if ipads: print(ipads[0]["TailscaleIPs"][0])'
+}
+
+ensure_iproxy() {
+  if [ -s "$STATE/iproxy.pid" ] && kill -0 "$(cat "$STATE/iproxy.pid")" 2>/dev/null; then return; fi
+  iproxy "$PORT:8100" -u "$(device)" > "$STATE/iproxy.log" 2>&1 < /dev/null &
+  echo $! > "$STATE/iproxy.pid"
+  sleep 0.5
+}
+
+# Pick the link: USB via iproxy if the iPad is plugged in, else its Tailscale address.
+resolve() {
+  if usb; then
+    ensure_iproxy
+    URL="http://localhost:$PORT"; VIA=usb
+  else
+    local h; h=$(ts_host)
+    [ -n "$h" ] || die "iPad is not on USB and not found in tailscale status (set WDA_HOST)"
+    URL="http://$h:8100"; VIA="tailscale $h"
+  fi
+}
+
 up() { curl -sf -m 3 "$URL/status" >/dev/null 2>&1; }
 
 xcb() {
@@ -73,7 +117,7 @@ xcb() {
 }
 
 start() {
-  if up; then echo "WDA already up on $URL"; return; fi
+  if up; then echo "WDA already up on $URL ($VIA)"; return; fi
   [ -d "$WDA_DIR" ] || git clone --depth 1 https://github.com/appium/WebDriverAgent.git "$WDA_DIR"
   if ! ls "$WDA_DIR"/build/DD/Build/Products/*.xctestrun >/dev/null 2>&1; then
     echo "Building WebDriverAgent…"
@@ -83,11 +127,10 @@ start() {
   local dev; dev=$(device)
   DEVICE="$dev" xcb test-without-building > "$STATE/wda.log" 2>&1 < /dev/null &
   echo $! > "$STATE/wda.pid"
-  iproxy "$PORT:8100" -u "$dev" > "$STATE/iproxy.log" 2>&1 < /dev/null &
-  echo $! > "$STATE/iproxy.pid"
+  resolve
   for _ in $(seq 1 60); do
     sleep 2
-    if up; then echo "WDA up on $URL (log: $STATE/wda.log)"; return; fi
+    if up; then echo "WDA up on $URL ($VIA, log: $STATE/wda.log)"; return; fi
     if ! kill -0 "$(cat "$STATE/wda.pid")" 2>/dev/null; then
       tail -20 "$STATE/wda.log" >&2; die "WebDriverAgent exited"
     fi
@@ -118,6 +161,12 @@ d = json.load(sys.stdin)
 s = d.get("sessionId")
 if not s: sys.exit("WDA: " + json.dumps(d.get("value"))[:300] + "\n(on the iPad: Settings › Developer › Enable UI Automation, then: ipad.sh stop && ipad.sh start)")
 print(s)' > "$STATE/session"
+  # Don't wait for the app to go idle before each query and action: a live terminal
+  # never goes idle, so every tap/tree would sit out WDA's 10 s default (twice per tap).
+  curl -sf -m 10 -X POST "$URL/session/$(cat "$STATE/session")/appium/settings" \
+    -H 'Content-Type: application/json' \
+    -d '{"settings":{"waitForIdleTimeout":0,"animationCoolOffTimeout":0}}' >/dev/null ||
+    echo "ipad.sh: warning: could not set WDA idle timeouts" >&2
   cat "$STATE/session"
 }
 
@@ -147,13 +196,23 @@ PY
 }
 
 cmd="${1:-help}"; shift || true
+case "$cmd" in start|status|tree|tap|tap-xy|long-press|swipe|type|kill) resolve ;; esac
 case "$cmd" in
   start) start ;;
   stop) stop_quiet; echo stopped ;;
-  status) if up; then echo "up ($URL, device $(device))"; else echo down; exit 1; fi ;;
+  status) if up; then echo "up ($URL via $VIA, device $(device))"; else echo down; exit 1; fi ;;
   shot)
     out="${1:-ipad-shot.png}"
-    xcrun devicectl device capture screenshot --device "$(device)" --destination "$out" -q
+    # USB: devicectl. Otherwise WDA, which also works over Tailscale; devicectl if WDA is down.
+    if ! usb && [ -n "$(ts_host)" ] && { resolve; up; }; then
+      curl -sf -m 60 "$URL/screenshot" | python3 -c '
+import base64, json, sys
+v = json.load(sys.stdin).get("value")
+if not isinstance(v, str): sys.exit("WDA screenshot failed: " + json.dumps(v)[:300])
+open(sys.argv[1], "wb").write(base64.b64decode(v))' "$out" || die "WDA screenshot failed ($VIA)"
+    else
+      xcrun devicectl device capture screenshot --device "$(device)" --destination "$out" -q --timeout 30
+    fi
     echo "$(cd "$(dirname "$out")" && pwd)/$(basename "$out")" ;;
   tree)
     s=$(session)
