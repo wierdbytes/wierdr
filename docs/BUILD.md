@@ -8,7 +8,12 @@ iPhone 13 Pro Max уже зарегистрированы в
 
 ## Установка на iPhone
 
-На iPhone уже включён Режим разработчика (iOS 27.2.1). Три способа, любой:
+На iPhone уже включён Режим разработчика (iOS 27.2.1). Способы, любой:
+
+0. **Одной командой, откуда угодно в tailnet**: `make ipa && scripts/iphone.sh install`.
+   Если devicectl видит iPhone (USB или та же Wi‑Fi) — ставит через него; иначе WebDriverAgent
+   на iPhone (`scripts/iphone.sh start`, см. ниже) сам открывает страницу установки из п. 1 и
+   жмёт «Установить». Потом запускает Wierdr. iPhone должен быть разблокирован.
 
 1. **По воздуху, без кабеля** (iPhone в tailnet, Mac включён):
    ```sh
@@ -74,40 +79,57 @@ Debug‑сборка: `make install CONFIG=Debug` (парсинг вывода �
    (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`).
 5. iOS спросит разрешение на доступ к локальной сети — разреши (для адресов в LAN).
 
-## Проверка на iPad: скриншоты и управление
+## Проверка на iPad и iPhone: скриншоты и управление
 
-`scripts/ipad.sh` снимает экран физического iPad, тапает, печатает и читает дерево
-доступности Wierdr. Окно Herdr на Mac для сравнения снимает `herdr-app shot <file.png>`
-(см. `~/.config/herdr-app/AGENTS.md`); скрипт к Herdr не привязан.
+`scripts/ipad.sh` и `scripts/iphone.sh` (обёртки над `scripts/device.sh`, там же все команды
+и заметки) снимают экран физического устройства, тапают, печатают, читают дерево доступности
+Wierdr, поворачивают экран и ставят сборку. Окно Herdr на Mac для сравнения снимает
+`herdr-app shot <file.png>` (см. `~/.config/herdr-app/AGENTS.md`); скрипты к Herdr не привязаны.
+WDA на iPad и на iPhone могут работать одновременно (у каждого своё состояние и порт).
 
-Один раз на iPad: **Настройки › Разработчик › Enable UI Automation**. Если включить уже
-после `start`, перезапусти WDA: `scripts/ipad.sh stop && scripts/ipad.sh start`.
+Один раз на устройстве: **Настройки › Разработчик › Enable UI Automation** (на iPad и
+на iPhone уже включено). Если включить уже после `start`, перезапусти WDA: `stop && start`.
 
 ```sh
-make install                        # свежая сборка на iPad
-scripts/ipad.sh start               # WebDriverAgent на iPad + проброс :8100 по USB (iproxy)
-scripts/ipad.sh shot /tmp/ipad.png  # скриншот iPad (devicectl)
-scripts/ipad.sh tree                # дерево элементов с рамками в точках (1600×1200 в landscape)
-scripts/ipad.sh tap "Quick Switcher" # тап по accessibility label
-scripts/ipad.sh tap-xy 800 336      # тап по точке; long-press, swipe x1 y1 x2 y2
-scripts/ipad.sh type lazy           # ввод в поле/терминал с фокусом клавиатуры
-scripts/ipad.sh orient portrait     # повернуть экран (devicectl)
+make install                          # свежая сборка на iPad (make install-iphone — на iPhone)
+scripts/ipad.sh start                 # WebDriverAgent на iPad (USB: проброс :8100, иначе Tailscale)
+scripts/ipad.sh shot /tmp/ipad.png    # скриншот (devicectl по USB, иначе через WDA)
+scripts/ipad.sh tree                  # дерево элементов с рамками в точках (1600×1200 в landscape)
+scripts/ipad.sh tap "Quick Switcher"  # тап по accessibility label
+scripts/ipad.sh tap-xy 800 336        # тап по точке; long-press, swipe x1 y1 x2 y2
+scripts/ipad.sh type lazy             # ввод в поле/терминал с фокусом клавиатуры
+scripts/ipad.sh orient portrait       # повернуть экран
 scripts/ipad.sh stop
+
+scripts/iphone.sh start               # то же для iPhone (USB-проброс на :8101)
+scripts/iphone.sh shot /tmp/iphone.png  # 1284×2778 px; точки 428×926 в портрете
+make ipa && scripts/iphone.sh install # поставить dist/Wierdr.ipa и запустить (см. ниже)
 ```
 
 - WebDriverAgent (appium) клонируется и собирается при первом `start` в
   `~/.local/share/WebDriverAgent` с командой `AUL4CCB2XY` и bundle id
-  `pw.xff.WebDriverAgentRunner`. Логи и pid лежат в `$TMPDIR/wierdr-wda/`.
+  `pw.xff.WebDriverAgentRunner`; одна сборка на оба устройства (профиль команды включает
+  оба). Логи и pid: `$TMPDIR/wierdr-wda/` (iPad), `$TMPDIR/wierdr-wda-iphone/` (iPhone).
+- Связь: по USB — через `iproxy`, иначе напрямую с WDA по адресу устройства в Tailscale
+  (порт 8100 на устройстве). Сам `start` требует, чтобы Xcode видел устройство: USB, одна
+  Wi‑Fi‑сеть или «Connect via network». Когда WDA поднят, `shot`, `tree`, тапы, ввод, `orient`,
+  `launch`, `kill` и `install` работают из любой точки tailnet (там, где devicectl достаёт
+  устройство, `orient`/`launch`/`install` идут через него).
+- **`install` по tailnet**, когда devicectl устройство не видит: WDA открывает
+  `itms-services://…/wierdr/manifest.plist` (страница из `scripts/ota.sh`, поднимается сама),
+  нажимает «Установить» в системном алерте и запускает Wierdr. Нужен поднятый WDA и
+  разблокированное устройство. Ставится только `dist/Wierdr.ipa`.
 - Сессия WDA цепляется к приложению на переднем плане и не перезапускает Wierdr.
-  Перезапуск приложения: `scripts/ipad.sh launch`.
-- Скриншот iPad — 3200×2400 px (2× от точек).
-- При запуске WDA iPadOS может спросить код-пароль iPad: так система подтверждает UI
+  Перезапуск приложения: `launch`.
+- Скриншот iPad — 3200×2400 px (2× от точек), iPhone — 1284×2778 (3×).
+- При запуске WDA система может спросить код-пароль устройства: так она подтверждает UI
   Automation. Отключить запрос можно только вместе с код-паролем. Разрешение живёт
   от нескольких часов до нескольких дней, а запрос появляется только на `start`: запросы к
   уже запущенному WDA пароль не спрашивают. Запускай WDA один раз на рабочую сессию и
   останавливай `stop`, когда закончил.
-- `type` печатает туда, где фокус клавиатуры. Если фокус в терминале, текст уйдёт
-  в живую сессию.
+- `type`, `tap`, `launch`, `orient`, `install` действуют на живое устройство: если человек в
+  этот момент им пользуется (iPhone — почти всегда), спроси сначала. `type` печатает туда,
+  где фокус клавиатуры; если фокус в терминале, текст уйдёт в живую сессию.
 
 ## Проверка в симуляторе iPhone
 

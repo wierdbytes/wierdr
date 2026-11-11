@@ -49,5 +49,6 @@ Packages/WierdrKit/     HerdrCore · HerdrSSH · WierdrModel · wierdr-cli (+ т
 Design/icons/           SVG-иконки Herdr → App/Resources/Icons.xcassets (scripts/gen-assets.py)
 project.yml             XcodeGen → Wierdr.xcodeproj
 Makefile                project · test · sim · sim-iphone · device · install · install-iphone · ipa
-scripts/                ipad.sh / iphone-sim.sh (скриншоты, тапы), ota.sh (установка по воздуху)
+scripts/                ipad.sh / iphone.sh (физические устройства: скриншоты, тапы, install по tailnet),
+                        iphone-sim.sh (симулятор), ota.sh (установка по воздуху)
 ```
