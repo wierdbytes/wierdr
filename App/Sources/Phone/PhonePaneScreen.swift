@@ -44,7 +44,11 @@ struct PhonePaneScreen: View {
                     onDrag: { panelDrag = $0 },
                     onEnd: { finishPanelDrag(projected: $0) },
                     // The panel first; then the message field (its keyboard goes, the terminal doesn't get one).
-                    onTapOutside: { if panelOpen { setPanel(open: false) } else { controller.composing = nil } }
+                    onTapOutside: { if panelOpen { setPanel(open: false) } else { controller.closeCompose() } },
+                    onDoubleTap: {
+                        if panelOpen { setPanel(open: false) }
+                        controller.composing = pane?.terminal
+                    }
                 )
             }
             .background(theme.background)
@@ -61,12 +65,11 @@ struct PhonePaneScreen: View {
                     .padding(.bottom, 10)
             }
             if let address = pane?.terminal, controller.composing == address {
+                // No transition: it comes and goes with its keyboard, at once.
                 PhoneComposeBar(address: address)
                     .id(address)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.snappy(duration: 0.25), value: controller.composing)
         // Another pane, or back to the list: the message field closes (its draft stays).
         .onChange(of: pane?.terminal) { controller.composing = nil }
         .onDisappear { controller.composing = nil }

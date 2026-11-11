@@ -1,13 +1,14 @@
 import SwiftUI
+import UIKit
 import WierdrModel
 
 /// The iPhone's message field, opened by Type in the key panel: right above
 /// the system keyboard (dictation, autocorrect, any language), a field and a
 /// send button. The text goes to the program as one paste (bracketed when it
 /// asked, so line breaks stay in the message), then Return; an empty field
-/// sends just Return. The field closes with the keyboard (send, Hide in the
-/// key panel, a tap on the terminal, which types there instead); its text
-/// stays as the terminal's draft. Photo, Image and Paste in the key panel
+/// sends just Return. Opened also by a double tap on the terminal. It closes
+/// at once, with its keyboard and no animation (send, Hide in the key panel,
+/// a tap on the terminal); its text stays as the terminal's draft. Photo, Image and Paste in the key panel
 /// add to the message while it is open.
 struct PhoneComposeBar: View {
     var address: String
@@ -88,7 +89,7 @@ struct PhoneComposeBar: View {
         controller.drafts[address] = nil
         sent += 1
         // Sent: the keyboard goes, to watch the answer.
-        if !message.isEmpty { focused = false }
+        if !message.isEmpty { controller.closeCompose() }
     }
 
     /// Undoes the keyboard's smart punctuation, which breaks commands and
@@ -103,5 +104,19 @@ struct PhoneComposeBar: View {
         if !prose { pairs += [("\u{00AB}", "\""), ("\u{00BB}", "\""), ("\u{2014}", "--"), ("\u{2013}", "--")] }
         for (from, to) in pairs { out = out.replacingOccurrences(of: from, with: to) }
         return out.replacingOccurrences(of: "\u{2014}(?=[^\\s\u{2014}])", with: "--", options: .regularExpression)
+    }
+}
+
+extension WorkspaceController {
+    /// Closes the iPhone's message field at once: its keyboard goes without
+    /// sliding, the field without a transition (its text stays as the draft).
+    func closeCompose() {
+        guard composing != nil else { return }
+        UIView.performWithoutAnimation {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { composing = nil }
     }
 }
