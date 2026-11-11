@@ -43,10 +43,11 @@ struct PhonePaneScreen: View {
                     isComposing: pane?.terminal != nil && controller.composing == pane?.terminal,
                     onDrag: { panelDrag = $0 },
                     onEnd: { finishPanelDrag(projected: $0) },
-                    // The panel first; then the message field (its keyboard goes, the terminal doesn't get one).
-                    onTapOutside: { if panelOpen { setPanel(open: false) } else { controller.closeCompose() } },
-                    onDoubleTap: {
-                        if panelOpen { setPanel(open: false) }
+                    // The panel first; then the message field (its keyboard goes, the terminal
+                    // doesn't get one); else (a tap on the right half) the field opens.
+                    onTap: {
+                        if panelOpen { return setPanel(open: false) }
+                        if controller.composing != nil { return controller.closeCompose() }
                         controller.composing = pane?.terminal
                     }
                 )
