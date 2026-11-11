@@ -4,9 +4,9 @@ import WierdrModel
 /// One pane on the whole iPhone screen: a bar with back, what runs here and
 /// the next agent waiting for you; the other panes of the space; the
 /// terminal edge to edge, and over it, from the right edge, the key panel
-/// (`PhoneKeyPanel`, with or without the keyboard). Nothing under the
-/// terminal: typing is the terminal's own keyboard (a tap on it), with its
-/// key bar.
+/// (`PhoneKeyPanel`, with or without the keyboard). Under the terminal only
+/// the message field while it is open (Type in the panel), above the
+/// keyboard; a tap on the terminal types straight into it, with its key bar.
 struct PhonePaneScreen: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -58,7 +58,16 @@ struct PhonePaneScreen: View {
                     .padding(.trailing, panelOpen ? PhoneKeyPanel.width + 6 : 12)
                     .padding(.bottom, 10)
             }
+            if let address = pane?.terminal, controller.composing == address {
+                PhoneComposeBar(address: address)
+                    .id(address)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.snappy(duration: 0.25), value: controller.composing)
+        // Another pane, or back to the list: the message field closes (its draft stays).
+        .onChange(of: pane?.terminal) { controller.composing = nil }
+        .onDisappear { controller.composing = nil }
         .background(theme.chrome.ignoresSafeArea())
         // Safe area included: the keyboard's inset moves with it, so the sum is the window's height.
         .onGeometryChange(for: CGFloat.self) { $0.size.height + $0.safeAreaInsets.top + $0.safeAreaInsets.bottom } action: {

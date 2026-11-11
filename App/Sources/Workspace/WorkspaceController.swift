@@ -24,6 +24,10 @@ final class WorkspaceController {
     var singlePane = false
     /// A new space/tab/pane opens in front of the person (iPhone: the pane screen).
     var revealsNewPanes = false
+    /// The terminal whose message field (iPhone) is open, above the keyboard.
+    var composing: String?
+    /// Unsent message text per terminal address (iPhone message field).
+    var drafts: [String: String] = [:]
 
     // MARK: Dialogs
     struct RenameRequest: Identifiable {

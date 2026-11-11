@@ -9,14 +9,14 @@ import WierdrModel
 /// (then above it). The column has no backing and the keys are translucent,
 /// so it hides as little of the terminal as it can. It scrolls past its
 /// ends, so the first and the last key can come to the thumb: about a third
-/// of the screen up from its bottom (with the keyboard up, the middle of
-/// the column above it);
+/// of the screen up from its bottom (with the keyboard up, the first one to
+/// the middle of the column above it, and ⏎ no higher than its bottom);
 /// each time it opens with ⏎ at its bottom, where the keys an agent asks
 /// for are (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys, the keyboard
 /// and inserting (text, a photo, a copied image) above. Keys don't close
 /// it, so ↓ ↓ ⏎ is three taps; a swipe to the right or a tap on the terminal
-/// does. Typing is the terminal's own: a tap on the terminal brings the
-/// keyboard with its key bar.
+/// does. Type opens the message field above the keyboard (`PhoneComposeBar`);
+/// a tap on the terminal types straight into it, with its key bar.
 struct PhoneKeyPanel: View {
     var address: String
     /// On screen (even partly): each time it comes out, it starts at its bottom.
@@ -31,6 +31,8 @@ struct PhoneKeyPanel: View {
     @State private var pressed = 0
     @State private var picking = false
     @State private var picked: PhotosPickerItem?
+    /// The photo being picked goes into the message (it was open when Photo was tapped).
+    @State private var pickIntoMessage = false
     @State private var uploading = false
     /// The column's top and height in the window: how far past its ends it scrolls.
     @State private var frame: CGRect = .zero
@@ -41,11 +43,12 @@ struct PhoneKeyPanel: View {
 
     var body: some View {
         let session = services.terminalSession(address)
-        let typing = session?.hasKeyboardFocus == true
+        let typing = session?.hasKeyboardFocus == true || composing
         // Room past either end, so the first or the last key can come to the thumb.
+        // With the keyboard up, none below: ⏎ stops at the column's bottom, just above it.
         let rest = restLine(typing: typing)
         let top = max(12, rest - Self.keyHeight / 2)
-        let bottom = max(12, frame.height - rest - Self.keyHeight / 2)
+        let bottom = typing ? 12 : max(12, frame.height - rest - Self.keyHeight / 2)
         ScrollViewReader { proxy in
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 14) {
@@ -53,22 +56,28 @@ struct PhoneKeyPanel: View {
                     PanelButton(icon: "doc.on.clipboard", caption: "Paste", a11y: "Paste Text") { pasteText(session) }
                     PanelButton(icon: "photo.on.rectangle", caption: "Photo", a11y: "Attach a Photo", busy: uploading) {
                         guard session != nil else { return controller.toast(unavailable) }
+                        // The picker takes the keyboard away: remember where the path goes.
+                        pickIntoMessage = composing
                         picking = true
                     }
                     PanelButton(icon: "photo.badge.plus", caption: "Image", a11y: "Paste an Image", busy: uploading) {
                         // Asking first doesn't trigger the paste prompt.
                         guard UIPasteboard.general.hasImages else { return controller.toast("No image on the clipboard") }
-                        Task { await attach(UIPasteboard.general.image.flatMap { $0.pngData() }, session, missing: "Couldn't read that image") }
+                        let intoMessage = composing
+                        Task {
+                            await attach(UIPasteboard.general.image.flatMap { $0.pngData() }, session,
+                                         intoMessage: intoMessage, missing: "Couldn't read that image")
+                        }
                     }
                     if typing {
                         PanelButton(icon: "keyboard.chevron.compact.down", caption: "Hide", a11y: "Hide the Keyboard") {
+                            if composing { controller.composing = nil }
                             session?.releaseKeyboard()
                         }
                     } else {
-                        PanelButton(icon: "keyboard", caption: "Type", a11y: "Type in the Terminal") {
+                        PanelButton(icon: "keyboard", caption: "Type", a11y: "Write a Message") {
                             close()
-                            guard let session else { return controller.toast(unavailable) }
-                            session.takeKeyboard()
+                            controller.composing = address
                         }
                     }
                 }
@@ -136,7 +145,7 @@ struct PhoneKeyPanel: View {
             picked = nil
             Task {
                 let data = try? await item.loadTransferable(type: Data.self)
-                await attach(data, session, missing: "Couldn't read that image")
+                await attach(data, session, intoMessage: pickIntoMessage, missing: "Couldn't read that image")
             }
         }
         .accessibilityElement(children: .contain)
@@ -168,6 +177,19 @@ struct PhoneKeyPanel: View {
         controller.isDemo ? "Not available in the demo" : "The terminal is not connected yet"
     }
 
+    /// The message field is open (`PhoneComposeBar`): text and image paths go into it.
+    private var composing: Bool { controller.composing == address }
+
+    /// Adds to the message (a space before, unless at a line's start) and opens it again
+    /// if something (the paste prompt, the photo picker) took the keyboard away.
+    private func addToMessage(_ s: String) {
+        var text = controller.drafts[address] ?? ""
+        if let last = text.last, !last.isWhitespace { text += " " }
+        controller.drafts[address] = text + s
+        controller.composing = address
+        pressed += 1
+    }
+
     private func live(_ session: TerminalSession?) -> TerminalSession? {
         guard let session else { controller.toast(unavailable); return nil }
         guard session.acceptsInput else { controller.toast("The terminal is not connected yet"); return nil }
@@ -180,19 +202,23 @@ struct PhoneKeyPanel: View {
         pressed += 1
     }
 
-    /// The clipboard's text into the program, as a paste (bracketed when it asked), no Return.
+    /// The clipboard's text into the message while it is open; otherwise into
+    /// the program, as a paste (bracketed when it asked), no Return.
     private func pasteText(_ session: TerminalSession?) {
-        guard let session = live(session) else { return }
+        let intoMessage = composing
+        guard intoMessage || live(session) != nil else { return }
         guard UIPasteboard.general.hasStrings, let text = UIPasteboard.general.string, !text.isEmpty else {
             return controller.toast("No text on the clipboard")
         }
-        session.send(text: text, submit: false)
+        if intoMessage { return addToMessage(text) }
+        session?.send(text: text, submit: false)
         pressed += 1
     }
 
     /// Puts the image beside the terminal on its machine (`terminal.put`, like
-    /// pasting an image on the desktop) and types its path into the program.
-    private func attach(_ data: Data?, _ session: TerminalSession?, missing: String) async {
+    /// pasting an image on the desktop) and adds its path to the message, or
+    /// types it into the program.
+    private func attach(_ data: Data?, _ session: TerminalSession?, intoMessage: Bool, missing: String) async {
         guard let session = live(session) else { return }
         guard let data else { return controller.toast(missing) }
         uploading = true
@@ -203,6 +229,7 @@ struct PhoneKeyPanel: View {
         }
         do {
             let path = try await session.put(image.data, name: image.name)
+            if intoMessage { return addToMessage(path + " ") }
             session.send(text: path + " ", submit: false)
             pressed += 1
         } catch {
