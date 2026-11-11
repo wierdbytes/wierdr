@@ -7,29 +7,51 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1B05101B71E742280AB023DD /* WierdrTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90B1F34C74D7CADD79F2C52 /* WierdrTerminalView.swift */; };
+		1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */; };
 		2603EB8A5D761C502BED791F /* HerdrSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 8129A5BF2F3516F166B530D1 /* HerdrSSH */; };
+		281ACDB6C96A9C6546DFB23D /* TerminalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B698C0B918748FB60826385 /* TerminalSurface.swift */; };
 		293313B9597429F72BDC4358 /* JetBrainsMono-Italic-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */; };
 		2A3D21E671673CE9B484D247 /* SymbolsNerdFont-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C08C4C79EED0725EFF2BDA7 /* SymbolsNerdFont-Regular.ttf */; };
 		2C98A2A2E414AC5E23D584D7 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 5414B4EB3559CA74F9238D6D /* SwiftTerm */; };
+		32C255CFEF873AE041940D6E /* TerminalSessionPool.swift in Sources */ = {isa = PBXBuildFile; fileRef = F859D6049AABA66F33A95A82 /* TerminalSessionPool.swift */; };
+		37C4F8FC0E6A74F9D18F5DCC /* TerminalLabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A26A269D22F1730952287B9 /* TerminalLabView.swift */; };
+		3DC5E946BB41856BBC6EED50 /* OFL-Geist.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8089262433D04F1C14D569AE /* OFL-Geist.txt */; };
 		3E7FF8899E7032CB014CC131 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3FDE13B0AE2E033B2732E515 /* Assets.xcassets */; };
+		47BF8AAE6DBDAC87A6FE6A20 /* programs.json in Resources */ = {isa = PBXBuildFile; fileRef = 60C13DE55007AF44DEA645DC /* programs.json */; };
 		57035D2E92266855712F81FF /* WierdrModel in Frameworks */ = {isa = PBXBuildFile; productRef = FAD500E79D2A09A7B26072EE /* WierdrModel */; };
+		63C26ED88B9251D6B612E00B /* Icons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B31D6E8D3C59D052EA1953BB /* Icons.xcassets */; };
 		663DD5DB3F4E821E4CBC1689 /* OFL-JetBrainsMono.txt in Resources */ = {isa = PBXBuildFile; fileRef = 01C3406FAFCF5644EFEE9E8C /* OFL-JetBrainsMono.txt */; };
 		6906CB2012BEE68B90983619 /* LICENSE-SymbolsNerdFont.txt in Resources */ = {isa = PBXBuildFile; fileRef = DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */; };
+		89C240BF74E4B861F2FEE59A /* Geist-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 96816409D750DAB4ECFE03B8 /* Geist-Variable.ttf */; };
 		B643253F51979CBEAB68A2E0 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */; };
 		EC18DDA987FF0473A49F2D7E /* WierdrApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12BEB38073DA12C77FA628AC /* WierdrApp.swift */; };
 		F247CF5AF89B8F79CB38DA41 /* HerdrCore in Frameworks */ = {isa = PBXBuildFile; productRef = D4DFE261604A49E49A1A80AC /* HerdrCore */; };
+		FA794EAE57AB99AD1B479A7B /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BA0F685C194597C14F60C3 /* TerminalTheme.swift */; };
+		FE68228E3BC4FFF12901741C /* TerminalSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3970FD27B3DF671D83DC038E /* TerminalSession.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		01C3406FAFCF5644EFEE9E8C /* OFL-JetBrainsMono.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-JetBrainsMono.txt"; sourceTree = "<group>"; };
 		0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Variable.ttf"; sourceTree = "<group>"; };
 		12BEB38073DA12C77FA628AC /* WierdrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WierdrApp.swift; sourceTree = "<group>"; };
+		14BA0F685C194597C14F60C3 /* TerminalTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTheme.swift; sourceTree = "<group>"; };
+		14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalKeyBar.swift; sourceTree = "<group>"; };
+		1A26A269D22F1730952287B9 /* TerminalLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalLabView.swift; sourceTree = "<group>"; };
+		3970FD27B3DF671D83DC038E /* TerminalSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSession.swift; sourceTree = "<group>"; };
 		3F148D55F4969B78423C1E75 /* Wierdr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Wierdr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3FDE13B0AE2E033B2732E515 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		60C13DE55007AF44DEA645DC /* programs.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = programs.json; sourceTree = "<group>"; };
+		6B698C0B918748FB60826385 /* TerminalSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurface.swift; sourceTree = "<group>"; };
+		8089262433D04F1C14D569AE /* OFL-Geist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-Geist.txt"; sourceTree = "<group>"; };
 		95F98EDA00D58F322E07186C /* WierdrKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WierdrKit; path = Packages/WierdrKit; sourceTree = SOURCE_ROOT; };
+		96816409D750DAB4ECFE03B8 /* Geist-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Variable.ttf"; sourceTree = "<group>"; };
 		9C08C4C79EED0725EFF2BDA7 /* SymbolsNerdFont-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SymbolsNerdFont-Regular.ttf"; sourceTree = "<group>"; };
 		A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Italic-Variable.ttf"; sourceTree = "<group>"; };
+		B31D6E8D3C59D052EA1953BB /* Icons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Icons.xcassets; sourceTree = "<group>"; };
+		B90B1F34C74D7CADD79F2C52 /* WierdrTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WierdrTerminalView.swift; sourceTree = "<group>"; };
 		DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "LICENSE-SymbolsNerdFont.txt"; sourceTree = "<group>"; };
+		F859D6049AABA66F33A95A82 /* TerminalSessionPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionPool.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,8 +73,18 @@
 			isa = PBXGroup;
 			children = (
 				12BEB38073DA12C77FA628AC /* WierdrApp.swift */,
+				3D9AD108B8047EE3DC8CC847 /* Debug */,
+				72CA4FD3120D381C9AB8DAE3 /* Terminal */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		3D9AD108B8047EE3DC8CC847 /* Debug */ = {
+			isa = PBXGroup;
+			children = (
+				1A26A269D22F1730952287B9 /* TerminalLabView.swift */,
+			);
+			path = Debug;
 			sourceTree = "<group>";
 		};
 		4836B7413E1D1381BD8B7F74 /* Products */ = {
@@ -72,12 +104,27 @@
 			);
 			sourceTree = "<group>";
 		};
+		72CA4FD3120D381C9AB8DAE3 /* Terminal */ = {
+			isa = PBXGroup;
+			children = (
+				14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */,
+				3970FD27B3DF671D83DC038E /* TerminalSession.swift */,
+				F859D6049AABA66F33A95A82 /* TerminalSessionPool.swift */,
+				6B698C0B918748FB60826385 /* TerminalSurface.swift */,
+				14BA0F685C194597C14F60C3 /* TerminalTheme.swift */,
+				B90B1F34C74D7CADD79F2C52 /* WierdrTerminalView.swift */,
+			);
+			path = Terminal;
+			sourceTree = "<group>";
+		};
 		C31BACBD440CB6BC0A75178C /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
+				96816409D750DAB4ECFE03B8 /* Geist-Variable.ttf */,
 				A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */,
 				0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */,
 				DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */,
+				8089262433D04F1C14D569AE /* OFL-Geist.txt */,
 				01C3406FAFCF5644EFEE9E8C /* OFL-JetBrainsMono.txt */,
 				9C08C4C79EED0725EFF2BDA7 /* SymbolsNerdFont-Regular.ttf */,
 			);
@@ -105,6 +152,8 @@
 			isa = PBXGroup;
 			children = (
 				3FDE13B0AE2E033B2732E515 /* Assets.xcassets */,
+				B31D6E8D3C59D052EA1953BB /* Icons.xcassets */,
+				60C13DE55007AF44DEA645DC /* programs.json */,
 				C31BACBD440CB6BC0A75178C /* Fonts */,
 			);
 			path = Resources;
@@ -180,11 +229,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				3E7FF8899E7032CB014CC131 /* Assets.xcassets in Resources */,
+				89C240BF74E4B861F2FEE59A /* Geist-Variable.ttf in Resources */,
+				63C26ED88B9251D6B612E00B /* Icons.xcassets in Resources */,
 				293313B9597429F72BDC4358 /* JetBrainsMono-Italic-Variable.ttf in Resources */,
 				B643253F51979CBEAB68A2E0 /* JetBrainsMono-Variable.ttf in Resources */,
 				6906CB2012BEE68B90983619 /* LICENSE-SymbolsNerdFont.txt in Resources */,
+				3DC5E946BB41856BBC6EED50 /* OFL-Geist.txt in Resources */,
 				663DD5DB3F4E821E4CBC1689 /* OFL-JetBrainsMono.txt in Resources */,
 				2A3D21E671673CE9B484D247 /* SymbolsNerdFont-Regular.ttf in Resources */,
+				47BF8AAE6DBDAC87A6FE6A20 /* programs.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -195,7 +248,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */,
+				37C4F8FC0E6A74F9D18F5DCC /* TerminalLabView.swift in Sources */,
+				FE68228E3BC4FFF12901741C /* TerminalSession.swift in Sources */,
+				32C255CFEF873AE041940D6E /* TerminalSessionPool.swift in Sources */,
+				281ACDB6C96A9C6546DFB23D /* TerminalSurface.swift in Sources */,
+				FA794EAE57AB99AD1B479A7B /* TerminalTheme.swift in Sources */,
 				EC18DDA987FF0473A49F2D7E /* WierdrApp.swift in Sources */,
+				1B05101B71E742280AB023DD /* WierdrTerminalView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
