@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 
 /// The sidebar slid over the panel while the docked one is hidden: a swipe from
-/// the left edge pulls it out with the finger, a swipe left (outside rows, whose
-/// swipe actions win) or a tap on the dimmed panel puts it back. Its width is
+/// the left edge pulls it out with the finger, a swipe left (anywhere, rows
+/// included) or a tap on the dimmed panel puts it back. Its width is
 /// its own, set by its edge like the docked one.
 ///
 /// Ours rather than the split view's: that one slides at the width the system
@@ -172,17 +172,14 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
             return x < parent.width - 20 || x > parent.width + 4
         }
 
-        // The edge swipe goes first, as the system's does.
+        // The edge swipe goes first, as the system's does. Closing goes before a row's
+        // own swipe: leftward it closes, rightward it fails and the row's actions come.
         func gestureRecognizer(_ g: UIGestureRecognizer,
                                shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            g === open
+            g === open || (isInList(other) && !isScrollPan(other))
         }
 
-        // A row's own swipe (its actions) goes before closing; scrolling may run along.
-        func gestureRecognizer(_ g: UIGestureRecognizer,
-                               shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
-            g === close && isInList(other) && !isScrollPan(other)
-        }
+        // Scrolling may run along with closing.
 
         func gestureRecognizer(_ g: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {

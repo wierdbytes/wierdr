@@ -1,7 +1,7 @@
 import SwiftUI
 import WierdrModel
 
-/// The iPhone's first screen: every agent by what it needs from you
+/// The iPhone's list, slid over the pane (`PhoneWorkspaceView`): every agent by what it needs from you
 /// (`AgentsInbox`), or the spaces as on the desktop's sidebar (`SpacesList`).
 struct PhoneHome: View {
     enum Mode: String { case agents, spaces }

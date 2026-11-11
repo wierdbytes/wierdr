@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import WierdrModel
 
-/// One pane on the whole iPhone screen: a bar with back, what runs here and
+/// One pane on the whole iPhone screen: a bar with the list's button, what runs here and
 /// the next agent waiting for you; the other panes of the space; the
 /// terminal edge to edge, and over it, from the right edge, the key panel
 /// (`PhoneKeyPanel`, with or without the keyboard). The keyboards come from
@@ -11,7 +11,11 @@ import WierdrModel
 /// go on one and it comes (`KeyboardChoice`). Under the terminal only the
 /// message field while it is open, above the keyboard. Taps on the terminal
 /// are clicks for the program; while a keyboard is up, a tap hides it.
+/// The list (`PhoneHome`) slides over it; while it is out (`covered`), the
+/// panel and the keyboards go and the edge swipes rest.
 struct PhonePaneScreen: View {
+    var covered = false
+
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.services) private var services
     @Environment(\.theme) private var theme
@@ -49,7 +53,7 @@ struct PhonePaneScreen: View {
             .background {
                 // Behind the terminal, its size: where the panel's swipes start.
                 PhoneKeyPanelGestures(
-                    enabled: pane?.terminal != nil,
+                    enabled: pane?.terminal != nil && !covered,
                     isOpen: panelOpen,
                     keyboardUp: keyboardUp,
                     onDrag: { x, p in panelMoved(x, at: p) },
@@ -87,17 +91,23 @@ struct PhonePaneScreen: View {
                     .id(address)
             }
         }
-        // Another pane, or back to the list: the message field closes (its draft stays).
+        // Another pane, or the list out: the message field closes (its draft stays).
         .onChange(of: pane?.terminal) { controller.composing = nil }
+        .onChange(of: covered) { _, covered in
+            guard covered else { return }
+            setPanel(open: false)
+            hideKeyboards()
+        }
         .onDisappear { controller.composing = nil }
         .background(theme.chrome.ignoresSafeArea())
         // Safe area included: the keyboard's inset moves with it, so the sum is the window's height.
         .onGeometryChange(for: CGFloat.self) { $0.size.height + $0.safeAreaInsets.top + $0.safeAreaInsets.bottom } action: {
             screenHeight = $0
         }
-        .overlay(alignment: .top) { ConnectionBanner(top: 56) }
+        // Under the list, its own banner shows.
+        .overlay(alignment: .top) { if !covered { ConnectionBanner(top: 56) } }
         // Watching an agent work: the screen stays on (a locked iPhone drops the connection).
-        .onChange(of: keepsAwake, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
+        .onChange(of: keepsAwake && !covered, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
     }
 
@@ -295,7 +305,7 @@ private struct PhoneEmptyPane: View {
     var body: some View {
         VStack(spacing: 12) {
             Text("Nothing here").font(.ui(16, .semibold)).foregroundStyle(theme.foreground)
-            Button("Back to the List") { controller.showSidebar() }
+            Button("Show the List") { controller.showSidebar() }
                 .buttonStyle(.borderedProminent)
                 .tint(theme.accent)
         }
@@ -304,7 +314,7 @@ private struct PhoneEmptyPane: View {
 
 // MARK: - Top bar
 
-/// Back, the space avatar, what runs here (title + model or folder), the
+/// The list's button, the space avatar, what runs here (title + model or folder), the
 /// next agent waiting for you, the pane menu. 52 pt.
 private struct PhonePaneTopBar: View {
     var space: Space?
@@ -318,12 +328,12 @@ private struct PhonePaneTopBar: View {
         let terminal = controller.workspace.terminal(pane?.terminal)
         HStack(spacing: 0) {
             Button { controller.showSidebar() } label: {
-                Icon("chevron-left", size: 22, color: theme.foreground)
+                Icon("sidebar", size: 20, color: theme.foreground)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Back")
+            .accessibilityLabel("Show the List")
             if let space {
                 SpaceAvatar(space: space, size: 26)
                     .padding(.trailing, 10)

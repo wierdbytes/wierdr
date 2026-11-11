@@ -2,59 +2,80 @@ import SwiftUI
 import UIKit
 import WierdrModel
 
-/// The iPhone layout: the list of agents/spaces (`PhoneHome`) and, pushed over
-/// it, one pane at a time (`PhonePaneScreen`). Tapping a row pushes its pane;
-/// the back button or a swipe from the left edge (with the finger) goes back.
+/// The iPhone layout: one pane on the whole screen (`PhonePaneScreen`) and,
+/// slid over it from the left, the list of agents/spaces (`PhoneHome`). The
+/// list takes the screen's width but a dimmed strip at the right, as wide as
+/// the key panel; a tap there, or a swipe left, puts it back; a swipe from the
+/// left edge (with the finger) or the bar's sidebar button brings it out.
+/// Tapping a row shows its pane.
 ///
-/// Which one shows is `controller.compactColumn` (`.sidebar` = the list,
-/// `.detail` = the pane), the same state the collapsed split view used, so
-/// focusing a pane from anywhere (rows, quick switcher, status jumps) opens it.
+/// Whether the list is out is `controller.compactColumn` (`.sidebar` = out,
+/// `.detail` = the pane alone), the same state the collapsed split view used,
+/// so focusing a pane from anywhere (rows, quick switcher, status jumps) shows it.
 struct PhoneWorkspaceView: View {
     @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
-    /// How far a back swipe has moved the pane screen to the right.
-    @State private var backDrag: CGFloat?
-    @State private var width: CGFloat = 430
+    /// How much of the list shows while a finger moves it, 0...listWidth.
+    @State private var dragged: CGFloat?
+    @State private var size: CGSize = CGSize(width: 430, height: 900)
+    @State private var leadingInset: CGFloat = 0
+
+    /// The list's width: the screen's but the strip at the right (fixed, unlike the iPad's).
+    private var listWidth: CGFloat { max(1, size.width - PhoneKeyPanel.width) }
 
     var body: some View {
-        let showing = controller.compactColumn == .detail
-        let progress = showing ? 1 - (backDrag ?? 0) / max(width, 1) : 0
-        ZStack {
+        let open = controller.compactColumn == .sidebar
+        let width = listWidth
+        let progress = dragged.map { min(max($0, 0), width) / width } ?? (open ? 1 : 0)
+        ZStack(alignment: .leading) {
+            PhonePaneScreen(covered: open)
+                .accessibilityHidden(open)
+            Color.black.opacity(0.35 * progress)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { controller.showPanel() }
+                .allowsHitTesting(open)
+                .accessibilityLabel("Close the List")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHidden(!open)
             PhoneHome()
-                .offset(x: -width * 0.28 * progress)
-                .overlay {
-                    Color.black.opacity(0.18 * progress)
-                        .ignoresSafeArea()
-                        .allowsHitTesting(false)
-                }
-                .allowsHitTesting(!showing)
-                .accessibilityHidden(showing)
-            if showing {
-                PhonePaneScreen()
-                    .offset(x: backDrag ?? 0)
-                    .shadow(color: .black.opacity(backDrag == nil ? 0 : 0.25), radius: 14)
-                    .transition(.move(edge: .trailing))
-                    .zIndex(1)
-            }
+                .frame(width: width)
+                .ignoresSafeArea(.keyboard)
+                .overlay(alignment: .trailing) { Hairline(axis: .vertical).ignoresSafeArea() }
+                .compositingGroup()
+                .shadow(color: .black.opacity(progress > 0 ? 0.25 : 0), radius: 16)
+                // Hidden: past the left edge, its backing (into the safe area) and shadow too.
+                .offset(x: -(1 - progress) * (width + leadingInset + 24))
+                .allowsHitTesting(open)
+                .accessibilityHidden(!open)
+                .accessibilityAddTraits(.isModal)
+                .accessibilityAction(.escape) { controller.showPanel() }
         }
-        .animation(.snappy(duration: 0.3), value: showing)
-        .overlay(alignment: .top) { AttentionBanner(showing: showing) }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .animation(.snappy(duration: 0.3), value: open)
+        .overlay(alignment: .top) { AttentionBanner(showing: !open) }
         .background {
-            BackSwipeGesture(
-                enabled: showing,
-                onDrag: { backDrag = max(0, $0) },
-                onEnd: { projected in finishBackSwipe(projected: projected) }
+            PhoneListGestures(
+                isOpen: open,
+                width: width,
+                onDrag: { dragged = min(max($0, 0), width) },
+                onEnd: { projected in
+                    withAnimation(.snappy(duration: 0.25)) {
+                        controller.compactColumn = projected > width * 0.4 ? .sidebar : .detail
+                        dragged = nil
+                    }
+                }
             )
             .frame(width: 0, height: 0)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        .onChange(of: showing, initial: true) { _, showing in
-            if showing { controller.workspace.refreshLaunchers(machine: controller.activeSpace?.machine) }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.leading } action: { leadingInset = $0 }
+        .onChange(of: open, initial: true) { _, open in
+            if !open { controller.workspace.refreshLaunchers(machine: controller.activeSpace?.machine) }
         }
         .onChange(of: controller.workspace.spaces) { old, new in
             // The pane on screen was closed (here, on the desktop, or its program
-            // exited): back to the list rather than showing some other pane.
-            guard showing, let id = Self.shownPane(controller.screen.snapshot, in: old),
+            // exited): the list comes out rather than some other pane showing.
+            guard !open, let id = Self.shownPane(controller.screen.snapshot, in: old),
                   !new.contains(where: { $0.tabs.contains { $0.panes.contains { $0.id == id } } }) else { return }
             controller.showSidebar()
         }
@@ -67,35 +88,22 @@ struct PhoneWorkspaceView: View {
         let panes = tab.panes
         return (panes.first { $0.id == s.focusByTab[tab.id] } ?? panes.first { $0.terminal != nil } ?? panes.first)?.id
     }
-
-    private func finishBackSwipe(projected: CGFloat) {
-        if projected > width * 0.4 {
-            withAnimation(.easeOut(duration: 0.2)) {
-                backDrag = width
-            } completion: {
-                var t = Transaction()
-                t.disablesAnimations = true
-                withTransaction(t) {
-                    controller.showSidebar()
-                    backDrag = nil
-                }
-            }
-        } else {
-            withAnimation(.snappy(duration: 0.25)) { backDrag = nil }
-        }
-    }
 }
 
-/// A swipe from the left edge, on the window's root view so it sees touches
-/// over the terminal too; it goes before the terminal's own pans.
+/// The list's pans, on the window's root view so they see touches over the
+/// terminal too: the swipe from the left edge that pulls the list out (before
+/// the terminal's own pans) and, while it is out, the swipe left that puts it
+/// back (anywhere on it, rows included: before a row's own swipe). Both report
+/// how much of the list shows.
 ///
-/// A pan that only takes touches starting in the leftmost 24 pt (rather than
-/// `UIScreenEdgePanGestureRecognizer`): same feel, and synthesized touches
-/// (UI automation) drive it too.
-private struct BackSwipeGesture: UIViewRepresentable {
-    var enabled: Bool
+/// The edge one is a pan that only takes touches starting in the leftmost 24 pt
+/// (rather than `UIScreenEdgePanGestureRecognizer`): same feel, and synthesized
+/// touches (UI automation) drive it too.
+private struct PhoneListGestures: UIViewRepresentable {
+    var isOpen: Bool
+    var width: CGFloat
     var onDrag: (CGFloat) -> Void
-    /// Where the screen would come to rest at the finger's speed.
+    /// Where the list's edge would come to rest at the finger's speed.
     var onEnd: (CGFloat) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -107,8 +115,10 @@ private struct BackSwipeGesture: UIViewRepresentable {
     }
 
     func updateUIView(_ anchor: Anchor, context: Context) {
-        context.coordinator.parent = self
-        if context.coordinator.pan.isEnabled != enabled { context.coordinator.pan.isEnabled = enabled }
+        let c = context.coordinator
+        c.parent = self
+        if c.open.isEnabled != !isOpen { c.open.isEnabled = !isOpen }
+        if c.close.isEnabled != isOpen { c.close.isEnabled = isOpen }
     }
 
     static func dismantleUIView(_ anchor: Anchor, coordinator: Coordinator) {
@@ -133,56 +143,88 @@ private struct BackSwipeGesture: UIViewRepresentable {
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         static let edgeWidth: CGFloat = 24
-        var parent: BackSwipeGesture?
-        let pan = UIPanGestureRecognizer()
-        /// The current touch began at the edge (only then do others wait for us).
+        var parent: PhoneListGestures?
+        let open = UIPanGestureRecognizer()
+        let close = UIPanGestureRecognizer()
+        /// The current touch began at the edge (only then do others wait for `open`).
         private var atEdge = false
 
         override init() {
             super.init()
-            pan.maximumNumberOfTouches = 1
-            pan.addTarget(self, action: #selector(moved(_:)))
-            pan.delegate = self
+            for pan in [open, close] {
+                pan.maximumNumberOfTouches = 1
+                pan.delegate = self
+            }
+            open.addTarget(self, action: #selector(opening(_:)))
+            close.addTarget(self, action: #selector(closing(_:)))
         }
 
         func attach(to view: UIView?) {
-            guard let view, pan.view !== view else { return }
+            guard let view, open.view !== view else { return }
             detach()
-            view.addGestureRecognizer(pan)
+            view.addGestureRecognizer(open)
+            view.addGestureRecognizer(close)
         }
 
         func detach() {
-            pan.view?.removeGestureRecognizer(pan)
+            open.view?.removeGestureRecognizer(open)
+            close.view?.removeGestureRecognizer(close)
         }
 
-        @objc private func moved(_ g: UIPanGestureRecognizer) {
-            guard let parent, let view = g.view else { return }
-            let x = g.translation(in: view).x
-            switch g.state {
+        @objc private func opening(_ pan: UIPanGestureRecognizer) { track(pan, from: 0) }
+        @objc private func closing(_ pan: UIPanGestureRecognizer) { track(pan, from: parent?.width ?? 0) }
+
+        private func track(_ pan: UIPanGestureRecognizer, from start: CGFloat) {
+            guard let parent, let view = pan.view else { return }
+            let x = start + pan.translation(in: view).x
+            switch pan.state {
             case .began, .changed: parent.onDrag(x)
-            case .ended: parent.onEnd(x + g.velocity(in: view).x * 0.25)
-            case .cancelled, .failed: parent.onEnd(0)
+            case .ended: parent.onEnd(x + pan.velocity(in: view).x * 0.25)
+            case .cancelled, .failed: parent.onEnd(start)
             default: break
             }
         }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard g === open else { return true }
             guard let view = g.view else { return false }
-            let p = touch.location(in: view)
-            atEdge = p.x <= view.safeAreaInsets.left + Self.edgeWidth
+            atEdge = touch.location(in: view).x <= view.safeAreaInsets.left + Self.edgeWidth
             return atEdge
         }
 
-        // Only a rightward, mostly horizontal move.
+        // Opening: only a rightward, mostly horizontal move; closing: a leftward one.
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-            guard let view = g.view else { return false }
+            guard let pan = g as? UIPanGestureRecognizer, let view = g.view else { return false }
             let v = pan.velocity(in: view)
-            return v.x > 0 && v.x > abs(v.y)
+            return g === open ? v.x > 0 && v.x > abs(v.y) : v.x < 0 && -v.x > abs(v.y)
         }
 
-        // From the edge it goes first, as the system's back swipe does.
+        // From the edge it goes first, as the system's back swipe does. Closing goes
+        // before a row's own swipe: leftward it closes (the row's trailing actions are
+        // in its long-press menu), rightward it fails and the row's leading ones come.
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            atEdge
+            if g === open { return atEdge }
+            return isInList(other) && !isScrollPan(other)
+        }
+
+        // Scrolling may run along with closing.
+
+        func gestureRecognizer(_ g: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            g === close && isScrollPan(other)
+        }
+
+        private func isScrollPan(_ g: UIGestureRecognizer) -> Bool {
+            (g.view as? UIScrollView)?.panGestureRecognizer === g
+        }
+
+        private func isInList(_ g: UIGestureRecognizer) -> Bool {
+            var view = g.view
+            while let v = view {
+                if v is UICollectionView { return true }
+                view = v.superview
+            }
+            return false
         }
     }
 }

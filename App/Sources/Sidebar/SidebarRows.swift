@@ -30,8 +30,9 @@ struct SidebarRowView: View {
             .contentShape(Rectangle())
             .onTapGesture { controller.focus(pane: row.paneID) }
             .contextMenu { menu }
+            // Only to the right: a swipe left closes the overlaid sidebar / the iPhone's list
+            // (Unread/Idle and Close are in the long-press menu).
             .swipeActions(edge: .leading, allowsFullSwipe: true) { leadingSwipes }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) { trailingSwipes }
             .accessibilityAddTraits(focused ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -78,27 +79,6 @@ struct SidebarRowView: View {
                 Label(t.pinned ? "Unpin" : "Pin", systemImage: t.pinned ? "pin.slash" : "pin")
             }
             .tint(theme.accent)
-        }
-    }
-
-    @ViewBuilder
-    private var trailingSwipes: some View {
-        Button(role: .destructive) { controller.closePane(row.paneID) } label: { Label("Close", systemImage: "xmark") }
-            .tint(theme.blocked)
-        if let t = row.terminal, t.isAgent {
-            switch t.status {
-            case .idle:
-                Button { controller.markUnread(t.address) } label: { Label("Unread", systemImage: "circle.fill") }
-                    .tint(theme.done)
-            case .done:
-                Button { controller.markRead(t.address) } label: {
-                    // Swipe actions fill their symbols; the idle mark is a ring.
-                    Label { Text("Idle") } icon: { Image(uiImage: UIImage(systemName: "circle") ?? UIImage()) }
-                }
-                .tint(theme.idle)
-            default:
-                EmptyView()
-            }
         }
     }
 }
