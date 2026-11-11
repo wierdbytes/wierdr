@@ -15,9 +15,9 @@
 #   type <text>        type into the focused field / terminal
 #   orient <portrait|landscapeLeft|landscapeRight>
 #   launch | kill      (re)start / stop Wierdr
-#   install [ipa]      install dist/Wierdr.ipa (or a .app/.ipa) and launch it: devicectl when
-#                      the device is reachable (USB/LAN), else over the tailnet: the install
-#                      page (scripts/ota.sh) opened by WDA, its Install alert accepted
+#   install [--ota] [ipa]  install dist/Wierdr.ipa (or a .app/.ipa) and launch it: devicectl
+#                      when the device is reachable (USB/LAN), else (or with --ota) over the
+#                      tailnet: the install page (scripts/ota.sh) opened by WDA, Install tapped
 #
 # Env: DEVICE (udid or name; default: first physical device of the kind), WDA_DIR
 # (default ~/.local/share/WebDriverAgent), TEAM (default AUL4CCB2XY), WDA_PORT (local
@@ -309,9 +309,10 @@ open(sys.argv[1], "wb").write(base64.b64decode(v))' "$out" || die "WDA screensho
   launch) launch ;;
   kill) wda POST /wda/apps/terminate "{\"bundleId\":\"$BUNDLE_ID\"}" ;;
   install)
+    ota=; if [ "${1:-}" = "--ota" ]; then ota=1; shift; fi
     src="${1:-$ROOT/dist/Wierdr.ipa}"
     [ -e "$src" ] || die "no $src (make ipa)"
-    if coredevice; then
+    if [ -z "$ota" ] && coredevice; then
       xcrun devicectl device install app --device "$(device)" "$src" >/dev/null
       launch
       echo "Installed and launched (devicectl)"
