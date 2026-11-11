@@ -53,7 +53,7 @@ private struct PhoneHomeHeader: View {
         .padding(.leading, 18)
         .padding(.trailing, 8)
         .frame(height: 50)
-        .overlay(alignment: .bottom) { Hairline() }
+        .overlay(alignment: .bottom) { Hairline().ignoresSafeArea(edges: .horizontal) }
     }
 
     private func modeButton(_ m: PhoneHome.Mode, _ title: String) -> some View {
@@ -107,7 +107,7 @@ private struct PhoneHomeFooter: View {
         .frame(height: 54)
         .frame(maxWidth: .infinity)
         .background(theme.chrome.ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) { Hairline() }
+        .overlay(alignment: .top) { Hairline().ignoresSafeArea(edges: .horizontal) }
     }
 }
 

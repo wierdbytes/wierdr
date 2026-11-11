@@ -45,6 +45,11 @@ struct WierdrApp: App {
                     try? await Task.sleep(for: .milliseconds(600))
                     if open == "switcher" { s.showSwitcher = true }
                     if open == "settings" { s.showSettings = true }
+                    // iPhone: the first agent's pane (also before `banner`).
+                    if open == "pane" || open == "banner",
+                       let pane = s.workspace.spaces.first(where: { $0.status == .done })?.tabs.first?.panes.first {
+                        s.focus(pane: pane.id)
+                    }
                     if open.hasPrefix("space:"), let sp = s.workspace.space(String(open.dropFirst(6))),
                        let pane = sp.tabs.first?.panes.first { s.focus(pane: pane.id, reveal: false) }
                 }

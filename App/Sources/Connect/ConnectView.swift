@@ -141,6 +141,9 @@ private struct HostRow: View {
                 Text(host.target)
                     .font(.subheadline.monospaced())
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .minimumScaleFactor(0.8)
             }
             Spacer()
             if connecting {

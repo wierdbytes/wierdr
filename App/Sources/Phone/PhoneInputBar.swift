@@ -27,7 +27,7 @@ struct PhoneInputBar: View {
                 compose(session)
             }
             .background(theme.chrome.ignoresSafeArea(edges: .bottom))
-            .overlay(alignment: .top) { Hairline() }
+            .overlay(alignment: .top) { Hairline().ignoresSafeArea(edges: .horizontal) }
             .sensoryFeedback(.impact(weight: .light), trigger: sent)
             .onAppear { text = controller.drafts[address] ?? "" }
             .onChange(of: text) { _, t in controller.drafts[address] = t.isEmpty ? nil : t }
@@ -95,6 +95,18 @@ struct PhoneInputBar: View {
         .padding(.bottom, 8)
     }
 
+    /// Undoes the keyboard's smart punctuation, which breaks commands and
+    /// flags: curly quotes become straight, and an em dash glued to a word
+    /// (`—verbose`, typed as `--verbose`) becomes `--` again.
+    static func plain(_ s: String) -> String {
+        var out = s
+        for (from, to) in [("\u{201C}", "\""), ("\u{201D}", "\""), ("\u{201E}", "\""),
+                           ("\u{2018}", "'"), ("\u{2019}", "'"), ("\u{201A}", "'")] {
+            out = out.replacingOccurrences(of: from, with: to)
+        }
+        return out.replacingOccurrences(of: "\u{2014}(?=[^\\s\u{2014}])", with: "--", options: .regularExpression)
+    }
+
     private func send(_ key: TerminalSession.Key, _ session: TerminalSession?) {
         guard let session else { return controller.toast("Not available in the demo") }
         guard session.acceptsInput else { return controller.toast("The terminal is not connected yet") }
@@ -105,7 +117,7 @@ struct PhoneInputBar: View {
     private func submit(_ session: TerminalSession?, pressReturn: Bool) {
         guard let session else { return controller.toast("Not available in the demo") }
         guard session.acceptsInput else { return controller.toast("The terminal is not connected yet") }
-        let message = text.trimmingCharacters(in: .newlines)
+        let message = Self.plain(text.trimmingCharacters(in: .newlines))
         session.send(text: message, submit: pressReturn)
         text = ""
         sent += 1

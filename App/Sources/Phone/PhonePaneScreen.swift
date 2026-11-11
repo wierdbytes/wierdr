@@ -143,7 +143,7 @@ private struct PhonePaneTopBar: View {
         .frame(height: 52)
         .frame(maxWidth: .infinity)
         .background(theme.chrome)
-        .overlay(alignment: .bottom) { Hairline() }
+        .overlay(alignment: .bottom) { Hairline().ignoresSafeArea(edges: .horizontal) }
     }
 
     private func title(_ t: TerminalInfo?) -> String {
@@ -243,7 +243,7 @@ private struct PhonePaneStrip: View {
         }
         .frame(height: 42)
         .background(theme.chrome)
-        .overlay(alignment: .bottom) { Hairline() }
+        .overlay(alignment: .bottom) { Hairline().ignoresSafeArea(edges: .horizontal) }
     }
 
     private func chip(_ pane: Pane, selected: Bool) -> some View {
@@ -337,11 +337,13 @@ private struct PhonePaneMenu: View {
                     Button { controller.beginRename(space: space.id) } label: { Label("Rename Space…", image: "ui.square-pen") }
                 }
             }
-            Section("Text Size \(Int(fontSize)) pt") {
+            Section {
                 ControlGroup {
-                    Button { step(-1) } label: { Label("Smaller", systemImage: "textformat.size.smaller") }
+                    Button { step(-1) } label: { Label("Smaller Text", systemImage: "minus") }
                         .disabled(fontSize <= Double(TerminalFonts.sizeRange.lowerBound))
-                    Button { step(1) } label: { Label("Larger", systemImage: "textformat.size.larger") }
+                    Button {} label: { Text("\(Int(fontSize)) pt") }
+                        .disabled(true)
+                    Button { step(1) } label: { Label("Larger Text", systemImage: "plus") }
                         .disabled(fontSize >= Double(TerminalFonts.sizeRange.upperBound))
                 }
                 .controlGroupStyle(.compactMenu)

@@ -38,6 +38,7 @@ struct PhoneWorkspaceView: View {
             }
         }
         .animation(.snappy(duration: 0.3), value: showing)
+        .overlay(alignment: .top) { AttentionBanner(showing: showing) }
         .background {
             BackSwipeGesture(
                 enabled: showing,
@@ -180,5 +181,138 @@ private struct BackSwipeGesture: UIViewRepresentable {
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             atEdge
         }
+    }
+}
+
+// MARK: - Attention banner
+
+/// While you are in a pane, another agent that starts waiting for you
+/// ("needs you") or finishes ("done") slides a banner in from the top, with
+/// a tap to go there. The list shows these changes by itself, so no banner there.
+private struct AttentionBanner: View {
+    var showing: Bool
+
+    @Environment(WorkspaceController.self) private var controller
+    @Environment(\.theme) private var theme
+    @State private var last: [String: AgentStatus] = [:]
+    @State private var banner: Banner?
+    @State private var hide: Task<Void, Never>?
+
+    struct Banner: Equatable {
+        var id = UUID()
+        var paneID: String
+        var status: AgentStatus
+        var title: String
+        var space: Space
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            if let banner {
+                card(banner)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .id(banner.id)
+            }
+        }
+        .animation(.snappy(duration: 0.3), value: banner)
+        .sensoryFeedback(trigger: banner?.id) { _, _ in
+            guard let banner else { return nil }
+            return banner.status == .blocked ? .warning : .success
+        }
+        .onChange(of: statusKey, initial: true) { _, _ in update() }
+        #if DEBUG
+        .task(id: showing) {
+            // `-open banner`: show one for the first agent that needs you (screenshots).
+            guard showing, UserDefaults.standard.string(forKey: "open") == "banner" else { return }
+            try? await Task.sleep(for: .seconds(1))
+            let ws = controller.workspace
+            if let t = ws.terminals.values.first(where: { $0.status == .blocked }), let l = ws.pane(showing: t.address) {
+                show(Banner(paneID: l.pane.id, status: .blocked, title: Format.agentTitle(t, tab: l.tab), space: l.space))
+            }
+        }
+        #endif
+    }
+
+    /// Changes when any agent's status changes.
+    private var statusKey: String {
+        controller.workspace.terminals.values
+            .compactMap { t in t.status.map { "\(t.address)=\($0.rawValue)" } }
+            .sorted().joined(separator: ",")
+    }
+
+    private func update() {
+        let ws = controller.workspace
+        var now: [String: AgentStatus] = [:]
+        for (address, t) in ws.terminals { if let s = t.status { now[address] = s } }
+        defer { last.merge(now) { _, new in new } }
+        // Only fresh changes on a live connection (not the first snapshot or a reconnect's refill).
+        guard ws.phase == .live, !last.isEmpty, showing else { return }
+        let onScreen = Set(controller.onScreenPanes.compactMap(\.terminal))
+        let fresh = now.filter { address, status in
+            (status == .blocked || status == .done) && last[address].map { $0 != status } == true
+                && !onScreen.contains(address)
+        }
+        // Needs you beats done; then the most recent.
+        guard let pick = fresh.max(by: { a, b in
+            if a.value != b.value { return a.value < b.value }
+            let ta = ws.terminals[a.key]?.statusChangedAt ?? .distantPast
+            let tb = ws.terminals[b.key]?.statusChangedAt ?? .distantPast
+            return ta < tb
+        }), let location = ws.pane(showing: pick.key), let t = ws.terminals[pick.key] else { return }
+        show(Banner(paneID: location.pane.id, status: pick.value,
+                    title: Format.agentTitle(t, tab: location.tab), space: location.space))
+    }
+
+    private func show(_ b: Banner) {
+        banner = b
+        hide?.cancel()
+        hide = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            banner = nil
+        }
+    }
+
+    private func card(_ b: Banner) -> some View {
+        Button {
+            banner = nil
+            controller.focus(pane: b.paneID)
+        } label: {
+            HStack(spacing: 10) {
+                SpaceAvatar(space: b.space, size: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        StatusMark(status: b.status)
+                        Text(b.status == .blocked ? "Needs you" : "Done")
+                            .font(.ui(12, .semibold))
+                            .foregroundStyle(b.status == .blocked ? theme.blocked : theme.done)
+                        Text(b.space.displayName)
+                            .font(.ui(12))
+                            .foregroundStyle(theme.dim)
+                            .lineLimit(1)
+                    }
+                    Text(b.title)
+                        .font(.ui(14.5, .medium))
+                        .foregroundStyle(theme.foreground)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Icon("chevron-right", size: 14, color: theme.dim)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(theme.popover, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(theme.border, lineWidth: 1))
+            .shadow(color: .black.opacity(theme.isDark ? 0.4 : 0.15), radius: 14, y: 4)
+            .contentShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(PressStyle())
+        .simultaneousGesture(DragGesture(minimumDistance: 8).onEnded { v in
+            if v.translation.height < -10 { banner = nil }
+        })
+        .padding(.horizontal, 10)
+        .padding(.top, 4)
+        .accessibilityLabel("\(b.status == .blocked ? "Needs you" : "Done"): \(b.title), \(b.space.displayName)")
+        .accessibilityHint("Opens it")
     }
 }
