@@ -70,7 +70,15 @@ final class WierdrTerminalView: TerminalView {
     /// the keyboard without popping the on-screen one.
     static var hardwareKeyboardConnected: Bool { GCKeyboard.coalesced != nil }
 
-    @objc private func touched() { onTap?() }
+    /// A tap always takes the keyboard. SwiftTerm spends the first tap of an
+    /// unfocused terminal only on focus, except when the program tracks the
+    /// mouse (pi, vim with `mouse=a`, ...): then it forwards the click and
+    /// stays unfocused, so the keyboard never shows. The click still reaches
+    /// the program either way.
+    @objc private func touched() {
+        if !isFirstResponder { _ = becomeFirstResponder() }
+        onTap?()
+    }
 
     // MARK: Metal scale
 
