@@ -42,3 +42,48 @@ make sim            # build + run in the iPad Pro 13" simulator
 make device         # signed Debug build for a real device
 make install        # build + install on the connected iPad (devicectl)
 ```
+
+## WierdrModel internals
+
+Public surface: `Workspace` (observable state + commands), `ScreenState`
+(per-screen selection), the value types in `Types.swift`, and the live driver
+`WorkspaceEngine` (+ `EngineOptions`, `ProgramTable`). Everything else is
+internal to `Sources/WierdrModel/Engine`:
+
+| File | What |
+|---|---|
+| `WorkspaceEngine.swift` | `@MainActor` driver. `run(on:)`: `events.subscribe` first, `machine.list`, `doc.get` per machine slot (`""` = connected computer, else machine name), then the event loop. Re-reads a slot on its `doc` event (skipped when the version is already known) and on `missed`; polls `machine.list` every 5 s (and soon after remote `created` events). Rebuilds the published state at most 10×/s and assigns only what changed. Implements `WorkspaceBackend`. |
+| `LayoutDoc.swift` | Ids (`qualify`/`local`/`fresh`), raw-JSON lookups, the strict validator (`LayoutValidator.decode` mirrors herdr-app's serde types; `checkWrite` refuses null, >1 MiB, and any invariant violation the base document did not already have). |
+| `LayoutEdits.swift` | Pure intents `(JSONValue) -> JSONValue?` mirroring herdr-app's model: new space/tab, `Node::split` (same axis halves the share in f32; cross axis wraps in an `s…` container taking the slot's size), `Node::remove` (share to the previous sibling, else the next; collapse single-child rows/columns; the root never collapses), last pane → tab close → space close, rename, move. Nil = the intent no longer applies. Unknown fields, key order, number kinds and mod panes are preserved. |
+| `LayoutParser.swift` | Raw doc → `Space`/`Tab`/`PaneNode` with machine-qualified ids. |
+| `TerminalFacts.swift` | Record → `TerminalInfo` (`shown_title`, process name, program, status per §6.2 with shared `<prefix>.seen`, `agent.*` meta with the pid trust rule, provider marks, model shortening), space naming (`folder_name`), avatar colors, agent launch argv (`remote_shell::launch`) and the installed-agents check (`remote_shell::check`). |
+| `Programs.swift` | `programs.json` (package resource) + `programs::resolve`. |
+
+Writes: every command is an intent applied to the freshest raw document of
+its machine and written with `doc.set` CAS, one writer per machine. On a
+conflict the slot is re-read, the intent re-applied (≤ 5 tries, jittered
+100–400 ms); nothing is written when the intent no longer applies, when the
+result equals the document, when the slot is not `ready`, or when validation
+fails. Creating commands start the terminal first (labels `<prefix>.space`,
+`.tab`, `.seen=0`, `keep`, `no_parent`), then insert it; if the desktop
+adopted it meanwhile only the leftover (a name) is written. Closing commands
+remove first, then kill the removed terminals and their non-kept
+descendants. Panes whose terminal ended (`exited`/`killed`, or `not_found`)
+are removed like the desktop does (3 s after the event, or after two machine
+polls for panes whose terminal is missing). `allowWrites: false` makes the
+engine a pure mirror (the CLI's `ws` uses that).
+
+Facts fetched with `machine.exec`/`file.read`: home per machine
+(`printf %s "$HOME"`), git per (machine, first-terminal folder) every 60 s
+(`rev-parse --show-toplevel --abbrev-ref HEAD`, `--git-common-dir`,
+`rev-list --left-right --count HEAD...@{upstream}`), `space.colors` from
+`~/.config/herdr-app/shared.json` on the connected computer every 60 s, and
+installed agents (login-shell check, cached 60 s, on connect and on
+`refreshLaunchers`). Space names use the connected computer's home for `~`,
+exactly like herdr-app (so a remote space in its home shows its folder name).
+
+Tests: `swift test --filter WierdrModelTests` (pure layers + the engine
+against an in-memory `FakeCore`); `WIERDR_LIVE=1` adds a read-only run
+against the real `herdr-app` document and a full write path on the scratch
+document `wierdr-test-layout` with label prefix `wierdrtest`.
+`wierdr-cli ws [--watch]` prints what the engine builds from the local core.

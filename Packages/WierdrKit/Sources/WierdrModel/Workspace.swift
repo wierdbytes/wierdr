@@ -26,7 +26,7 @@ public final class Workspace {
     public internal(set) var machines: [Machine] = []
     /// All spaces in Herdr's order (connected computer first, then machines by name; doc order inside).
     public internal(set) var spaces: [Space] = []
-    /// Every live terminal by qualified address.
+    /// Every live terminal by qualified address (plus ended ones still shown in a pane).
     public internal(set) var terminals: [String: TerminalInfo] = [:]
     /// Agents people can start, per machine id (`""` = connected computer).
     public internal(set) var launchers: [String: [AgentLauncher]] = [:]

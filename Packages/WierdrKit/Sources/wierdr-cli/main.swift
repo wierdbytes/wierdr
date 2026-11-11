@@ -5,6 +5,7 @@
 //   wierdr-cli [--hc PATH] events [--terminal T] [--label K=V]... [--json]
 //   wierdr-cli [--hc PATH] attach T [--interactive] [--history N]
 //   wierdr-cli [--hc PATH] call METHOD [JSON]
+//   wierdr-cli [--hc PATH] ws [--watch] [--doc NAME] [--prefix P]
 import Foundation
 import HerdrCore
 
@@ -24,6 +25,7 @@ let usageText = """
       events [--terminal T] [--label K=V] [--json]   print events live
       attach T [--interactive] [--history N]     raw terminal output to stdout (observe unless --interactive)
       call METHOD [JSON]                         any API call; prints the result
+      ws [--watch] [--doc NAME] [--prefix P] [--settle S]   the workspace WierdrModel builds (read-only)
     """
 
 func run() async throws {
@@ -36,6 +38,7 @@ func run() async throws {
     case "events": try await eventsCommand(options, args)
     case "attach": try await attachCommand(options, args)
     case "call": try await callCommand(options, args)
+    case "ws": try await workspaceCommand(options, args)
     case "help", "-h", "--help": print(usageText)
     default: throw CLIError.usage("unknown command \(command)")
     }

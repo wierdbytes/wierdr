@@ -49,6 +49,7 @@ let package = Package(
         .target(
             name: "WierdrModel",
             dependencies: ["HerdrCore"],
+            resources: [.copy("Resources/programs.json")],
             swiftSettings: swift5
         ),
         .executableTarget(
