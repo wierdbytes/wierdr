@@ -20,6 +20,9 @@ public final class WorkspaceEngine: WorkspaceBackend {
     public var focusedPaneProvider: ((_ tabID: String) -> String?)?
     /// Diagnostics (write failures, retries, cleanups).
     public var log: ((String) -> Void)?
+    /// Every core event, after the engine handled it (e.g. the app reattaches
+    /// terminal views on `restarted`).
+    public var onEvent: ((CoreEvent) -> Void)?
 
     // MARK: Session state
 
@@ -148,6 +151,7 @@ public final class WorkspaceEngine: WorkspaceBackend {
         for await event in sub.events {
             guard session == me else { break }
             handle(event)
+            onEvent?(event)
         }
         sub.cancel()
         guard session == me else { return }

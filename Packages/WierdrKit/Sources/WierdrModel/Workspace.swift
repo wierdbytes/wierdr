@@ -21,7 +21,7 @@ public final class Workspace {
         case failed(String)
     }
 
-    public internal(set) var phase: Phase = .connecting
+    public var phase: Phase = .connecting
     /// Connected computer first, then added machines by name.
     public internal(set) var machines: [Machine] = []
     /// All spaces in Herdr's order (connected computer first, then machines by name; doc order inside).

@@ -57,6 +57,7 @@ final class AppModel {
             let ws = try await services.connect(host, pw)
             let screen = ScreenState(snapshot: Self.loadScreen(for: host.id))
             screen.onChange = { snapshot in Self.saveScreen(snapshot, for: host.id) }
+            services.bindScreen(ws, screen)
             session = WorkspaceController(workspace: ws, screen: screen, isDemo: false)
             mode = .live(host)
         } catch {

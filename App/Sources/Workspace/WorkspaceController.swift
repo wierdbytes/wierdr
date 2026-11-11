@@ -181,8 +181,10 @@ final class WorkspaceController {
     /// ⌘N: a new space on the active space's machine (or `machine`).
     func newSpace(machine: String?? = nil, launch: Launch = .shell) {
         let target: String? = machine ?? activeSpace?.machine
+        // Like the desktop: start where the focused pane is, when it is on that machine.
+        let folder: String? = activeSpace?.machine == target ? workspace.terminal(focusedPane?.terminal)?.cwd : nil
         run("New space") { [workspace] in
-            let id = try await workspace.newSpace(machine: target, launch: launch)
+            let id = try await workspace.newSpace(machine: target, folder: folder, launch: launch)
             self.selectWhenReady(.space(id))
         }
     }

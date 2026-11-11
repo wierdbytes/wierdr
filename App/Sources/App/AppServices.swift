@@ -27,6 +27,10 @@ struct AppServices {
     /// The terminal view for a pane (SwiftTerm + attach stream when live).
     var terminalViews: TerminalViewProvider
 
+    /// Called once the live workspace's screen state exists (new terminals
+    /// start in the folder of the focused pane of their tab).
+    var bindScreen: @MainActor (_ workspace: Workspace, _ screen: ScreenState) -> Void = { _, _ in }
+
     /// Placeholders: connect throws "not implemented", no key, no Keychain,
     /// the drawn demo terminal.
     static let placeholder = AppServices(
