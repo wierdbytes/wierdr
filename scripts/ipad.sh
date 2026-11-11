@@ -1,13 +1,11 @@
 #!/bin/bash
 # Drive Wierdr on the physical iPad: screenshots, taps, typing, UI tree,
-# plus a matching screenshot of Herdr on the Mac. See docs/BUILD.md.
+# orientation. See docs/BUILD.md.
 #
 #   scripts/ipad.sh start              build (once) and launch WebDriverAgent, forward :8100 over USB
 #   scripts/ipad.sh stop               stop WebDriverAgent and the port forward
 #   scripts/ipad.sh status             is WDA up
 #   scripts/ipad.sh shot [file.png]    iPad screenshot (devicectl, 2x pixels)
-#   scripts/ipad.sh mac-shot [file]    Herdr window on the Mac (herdr-app shot)
-#   scripts/ipad.sh both [prefix]      <prefix>-ipad.png and <prefix>-mac.png
 #   scripts/ipad.sh tree               accessibility tree of the foreground app (points)
 #   scripts/ipad.sh tap <label>        tap an element by accessibility label/id
 #   scripts/ipad.sh tap-xy <x> <y>     tap at a point (points: 1600x1200 landscape)
@@ -20,6 +18,19 @@
 # Env: DEVICE (udid or name; default: first physical iPad), WDA_DIR
 # (default ~/.local/share/WebDriverAgent), TEAM (default AUL4CCB2XY), WDA_PORT (8100).
 # One-time on the iPad: Settings › Developer › Enable UI Automation.
+#
+# Workflow: `make install`, then `start`, act (tap/type/swipe), then `shot` and look
+# at the result. Find targets with `tree`: labels for `tap`, frames in points for `tap-xy`.
+#
+# Notes:
+# - `start` may make the iPad ask for its passcode. This can't be disabled
+#   while the iPad has a passcode. It only happens when WDA launches, so leave
+#   WDA running: if `status` says up, don't restart it. If the iPad asks,
+#   ask the person to enter the passcode.
+# - The session attaches to the foreground app. It doesn't relaunch Wierdr.
+# - `type` goes to whatever has keyboard focus. A terminal is someone's live
+#   session, so tap the intended field first.
+# - Don't open a screenshot while the command taking it is still running.
 set -euo pipefail
 
 BUNDLE_ID=pw.xff.wierdr
@@ -144,10 +155,6 @@ case "$cmd" in
     out="${1:-ipad-shot.png}"
     xcrun devicectl device capture screenshot --device "$(device)" --destination "$out" -q
     echo "$(cd "$(dirname "$out")" && pwd)/$(basename "$out")" ;;
-  mac-shot) herdr-app shot "${1:-mac-shot.png}" ;;
-  both)
-    p="${1:-compare}"
-    "$0" shot "$p-ipad.png" & herdr-app shot "$p-mac.png"; wait ;;
   tree)
     s=$(session)
     curl -s -m 60 "$URL/session/$s/source?format=description" |
@@ -166,5 +173,5 @@ case "$cmd" in
   orient) xcrun devicectl device orientation set --device "$(device)" "${1:?portrait|landscapeLeft|landscapeRight}" -q ;;
   launch) xcrun devicectl device process launch --device "$(device)" --terminate-existing "$BUNDLE_ID" -q ;;
   kill) wda POST /wda/apps/terminate "{\"bundleId\":\"$BUNDLE_ID\"}" ;;
-  *) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0" ;;
 esac
