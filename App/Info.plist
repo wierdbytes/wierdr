@@ -24,6 +24,7 @@
 	</array>
 	<key>UIAppFonts</key>
 	<array>
+		<string>Geist-Variable.ttf</string>
 		<string>JetBrainsMono-Variable.ttf</string>
 		<string>JetBrainsMono-Italic-Variable.ttf</string>
 		<string>SymbolsNerdFont-Regular.ttf</string>
