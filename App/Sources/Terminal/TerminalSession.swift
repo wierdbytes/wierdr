@@ -504,6 +504,10 @@ extension TerminalSession {
     func takeKeyboard() {
         if !terminalView.isFirstResponder { _ = terminalView.becomeFirstResponder() }
     }
+
+    func releaseKeyboard() {
+        if terminalView.isFirstResponder { _ = terminalView.resignFirstResponder() }
+    }
 }
 
 // MARK: - TerminalViewDelegate

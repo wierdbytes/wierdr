@@ -4,16 +4,18 @@ import WierdrModel
 /// One pane on the whole iPhone screen: a bar with back, what runs here and
 /// the next agent waiting for you; the other panes of the space; the
 /// terminal edge to edge, and over it, from the right edge, the key panel
-/// (`PhoneKeyPanel`). Nothing under the terminal: typing is the terminal's
-/// own keyboard (a tap on it), with its key bar.
+/// (`PhoneKeyPanel`, with or without the keyboard). Nothing under the
+/// terminal: typing is the terminal's own keyboard (a tap on it), with its
+/// key bar.
 struct PhonePaneScreen: View {
     @Environment(WorkspaceController.self) private var controller
-    @Environment(\.services) private var services
     @Environment(\.theme) private var theme
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var panelOpen = false
     /// The finger's horizontal travel while it moves the panel.
     @State private var panelDrag: CGFloat?
+    /// The window's height (the key panel's keys come to rest a third of it up from the bottom).
+    @State private var screenHeight: CGFloat = 0
 
     var body: some View {
         let space = controller.activeSpace
@@ -36,7 +38,7 @@ struct PhonePaneScreen: View {
             .background {
                 // Behind the terminal, its size: where the panel's swipes start.
                 PhoneKeyPanelGestures(
-                    enabled: pane?.terminal != nil && !keyboardUp,
+                    enabled: pane?.terminal != nil,
                     isOpen: panelOpen,
                     onDrag: { panelDrag = $0 },
                     onEnd: { finishPanelDrag(projected: $0) },
@@ -45,7 +47,7 @@ struct PhonePaneScreen: View {
             }
             .background(theme.background)
             .overlay(alignment: .trailing) {
-                if let address = pane?.terminal, !keyboardUp {
+                if let address = pane?.terminal {
                     keyPanel(address)
                 }
             }
@@ -58,16 +60,14 @@ struct PhonePaneScreen: View {
             }
         }
         .background(theme.chrome.ignoresSafeArea())
-        .onChange(of: keyboardUp) { _, up in if up { panelOpen = false; panelDrag = nil } }
+        // Safe area included: the keyboard's inset moves with it, so the sum is the window's height.
+        .onGeometryChange(for: CGFloat.self) { $0.size.height + $0.safeAreaInsets.top + $0.safeAreaInsets.bottom } action: {
+            screenHeight = $0
+        }
         .overlay(alignment: .top) { ConnectionBanner(top: 56) }
         // Watching an agent work: the screen stays on (a locked iPhone drops the connection).
         .onChange(of: keepsAwake, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
-    }
-
-    /// The terminal has the keyboard (its key bar is above it): no panel meanwhile.
-    private var keyboardUp: Bool {
-        services.terminalSession(controller.focusedPane?.terminal ?? "")?.hasKeyboardFocus == true
     }
 
     /// How far out the panel is: 0 hidden, 1 open.
@@ -86,7 +86,8 @@ struct PhonePaneScreen: View {
                 PhoneKeyPanelGrip { setPanel(open: true) }
                     .transition(.opacity)
             }
-            PhoneKeyPanel(address: address, shown: progress > 0, close: { setPanel(open: false) })
+            PhoneKeyPanel(address: address, shown: progress > 0, screenHeight: screenHeight,
+                          close: { setPanel(open: false) })
                 .id(address)
                 .offset(x: (1 - progress) * PhoneKeyPanel.width)
                 .allowsHitTesting(progress > 0)

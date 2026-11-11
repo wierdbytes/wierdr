@@ -2,7 +2,8 @@ import UIKit
 import SwiftTerm
 
 /// The key bar above the on-screen keyboard: Esc, sticky Ctrl and Alt, Tab,
-/// common shell symbols, arrows (auto-repeat) and a hide-keyboard key.
+/// common shell symbols, arrows (auto-repeat; iPad only: the iPhone's are in
+/// its key panel, `PhoneKeyPanel`) and a hide-keyboard key.
 /// Styled with the terminal theme.
 final class TerminalKeyBar: UIInputView, UIInputViewAudioFeedback {
     private weak var terminalView: WierdrTerminalView?
@@ -87,10 +88,12 @@ final class TerminalKeyBar: UIInputView, UIInputViewAudioFeedback {
             leading.addArrangedSubview(key(s) { $0.typeSymbol(s) })
         }
 
-        trailing.addArrangedSubview(key("left", symbol: "arrow.left", repeats: true) { $0.arrow(altBytes: [0x1b, 0x62]) { $0.sendKeyLeft() } })
-        trailing.addArrangedSubview(key("down", symbol: "arrow.down", repeats: true) { $0.arrow(altBytes: nil) { $0.sendKeyDown() } })
-        trailing.addArrangedSubview(key("up", symbol: "arrow.up", repeats: true) { $0.arrow(altBytes: nil) { $0.sendKeyUp() } })
-        trailing.addArrangedSubview(key("right", symbol: "arrow.right", repeats: true) { $0.arrow(altBytes: [0x1b, 0x66]) { $0.sendKeyRight() } })
+        if UIDevice.current.userInterfaceIdiom != .phone {
+            trailing.addArrangedSubview(key("left", symbol: "arrow.left", repeats: true) { $0.arrow(altBytes: [0x1b, 0x62]) { $0.sendKeyLeft() } })
+            trailing.addArrangedSubview(key("down", symbol: "arrow.down", repeats: true) { $0.arrow(altBytes: nil) { $0.sendKeyDown() } })
+            trailing.addArrangedSubview(key("up", symbol: "arrow.up", repeats: true) { $0.arrow(altBytes: nil) { $0.sendKeyUp() } })
+            trailing.addArrangedSubview(key("right", symbol: "arrow.right", repeats: true) { $0.arrow(altBytes: [0x1b, 0x66]) { $0.sendKeyRight() } })
+        }
         trailing.addArrangedSubview(key("hide", symbol: "keyboard.chevron.compact.down") { bar in
             _ = bar.terminalView?.resignFirstResponder()
         })

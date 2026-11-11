@@ -5,17 +5,24 @@ import WierdrModel
 
 /// The iPhone's keys, at the right edge: a swipe from the right edge (or a
 /// tap on the grip there) slides out a narrow column of large keys over the
-/// terminal, within the right thumb's reach. The column has no backing and
-/// the keys are translucent, so it hides as little of the terminal as it can. It scrolls; it opens at its
-/// bottom (every time), where the keys an agent asks for are (⏎, esc, arrows, tab, 1 2 3,
-/// y n), with ctrl keys, the keyboard and inserting (text, a photo, a copied
-/// image) above. Keys don't close it, so ↓ ↓ ⏎ is three taps; a swipe to the
-/// right or a tap on the terminal does. Typing is the terminal's own: a tap
-/// on the terminal brings the keyboard with its key bar.
+/// terminal, within the right thumb's reach, with or without the keyboard
+/// (then above it). The column has no backing and the keys are translucent,
+/// so it hides as little of the terminal as it can. It scrolls past its
+/// ends, so the first and the last key can come to the thumb: about a third
+/// of the screen up from its bottom (with the keyboard up, the middle of
+/// the column above it);
+/// each time it opens with ⏎ at its bottom, where the keys an agent asks
+/// for are (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys, the keyboard
+/// and inserting (text, a photo, a copied image) above. Keys don't close
+/// it, so ↓ ↓ ⏎ is three taps; a swipe to the right or a tap on the terminal
+/// does. Typing is the terminal's own: a tap on the terminal brings the
+/// keyboard with its key bar.
 struct PhoneKeyPanel: View {
     var address: String
     /// On screen (even partly): each time it comes out, it starts at its bottom.
     var shown: Bool
+    /// The window's height (where a third of the screen from the bottom is).
+    var screenHeight: CGFloat
     var close: () -> Void
 
     @Environment(WorkspaceController.self) private var controller
@@ -25,12 +32,21 @@ struct PhoneKeyPanel: View {
     @State private var picking = false
     @State private var picked: PhotosPickerItem?
     @State private var uploading = false
-    @State private var position = ScrollPosition(edge: .bottom)
+    /// The column's top and height in the window: how far past its ends it scrolls.
+    @State private var frame: CGRect = .zero
 
     static let width: CGFloat = 96
+    fileprivate static let keyHeight: CGFloat = 52
+    private static let bottomID = "bottom"
 
     var body: some View {
         let session = services.terminalSession(address)
+        let typing = session?.hasKeyboardFocus == true
+        // Room past either end, so the first or the last key can come to the thumb.
+        let rest = restLine(typing: typing)
+        let top = max(12, rest - Self.keyHeight / 2)
+        let bottom = max(12, frame.height - rest - Self.keyHeight / 2)
+        ScrollViewReader { proxy in
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 14) {
                 group {
@@ -44,16 +60,23 @@ struct PhoneKeyPanel: View {
                         guard UIPasteboard.general.hasImages else { return controller.toast("No image on the clipboard") }
                         Task { await attach(UIPasteboard.general.image.flatMap { $0.pngData() }, session, missing: "Couldn't read that image") }
                     }
-                    PanelButton(icon: "keyboard", caption: "Type", a11y: "Type in the Terminal") {
-                        close()
-                        guard let session else { return controller.toast(unavailable) }
-                        session.takeKeyboard()
+                    if typing {
+                        PanelButton(icon: "keyboard.chevron.compact.down", caption: "Hide", a11y: "Hide the Keyboard") {
+                            session?.releaseKeyboard()
+                        }
+                    } else {
+                        PanelButton(icon: "keyboard", caption: "Type", a11y: "Type in the Terminal") {
+                            close()
+                            guard let session else { return controller.toast(unavailable) }
+                            session.takeKeyboard()
+                        }
                     }
                 }
                 group {
                     key("^R", .control(0x12), a11y: "Control R")
                     key("^L", .control(0x0c), a11y: "Control L")
                     key("^D", .control(0x04), a11y: "Control D")
+                    key("^J", .control(0x0a), a11y: "Control J")
                     key("^C", .control(0x03), a11y: "Control C")
                 }
                 group {
@@ -82,13 +105,28 @@ struct PhoneKeyPanel: View {
                     key("esc", .escape, a11y: "Escape")
                     key("⏎", .enter, symbol: "return", prominent: true, a11y: "Return")
                 }
+                .padding(.bottom, 12)
+                .id(Self.bottomID)
             }
             .padding(.horizontal, 7)
-            .padding(.vertical, 12)
+            .padding(.top, top)
+            .padding(.bottom, bottom - 12)
         }
-        .scrollPosition($position)
-        .defaultScrollAnchor(.bottom)
-        .onChange(of: shown) { _, shown in if shown { position.scrollTo(edge: .bottom) } }
+        .onChange(of: shown) { _, shown in if shown { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
+        .task(id: frame.height) {
+            // The keyboard came or went (or the screen turned): ⏎ back at the
+            // bottom, once the scroll view has finished growing or shrinking.
+            guard shown else { return }
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+        }
+        }
+        // Only the top and height (not x, which the back swipe moves every frame).
+        .onGeometryChange(for: CGRect.self) { p in
+            let f = p.frame(in: .global)
+            return CGRect(x: 0, y: f.minY, width: 0, height: f.height)
+        } action: { frame = $0 }
         .frame(width: Self.width)
         // No backing: only the keys cover the terminal, and they let it show through.
         .sensoryFeedback(.impact(weight: .light), trigger: pressed)
@@ -103,6 +141,14 @@ struct PhoneKeyPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Key Panel")
+    }
+
+    /// Where the first or the last key comes to rest at the end of the
+    /// scroll, from the column's top: a third of the screen up from its
+    /// bottom; with the keyboard up, the middle of the column (above it).
+    private func restLine(typing: Bool) -> CGFloat {
+        guard !typing, screenHeight > 0 else { return frame.height / 2 }
+        return min(max(screenHeight * 2 / 3 - frame.minY, Self.keyHeight), frame.height - Self.keyHeight)
     }
 
     private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -211,7 +257,7 @@ private struct PanelButton: View {
             }
             .foregroundStyle(color)
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .frame(height: PhoneKeyPanel.keyHeight)
             .background {
                 // Translucent, unblurred: the terminal stays readable under the keys.
                 shape.fill(prominent ? theme.accent.opacity(0.75) : theme.raised.opacity(0.55))
