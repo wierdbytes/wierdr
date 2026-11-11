@@ -39,8 +39,37 @@ Rules:
 make project        # xcodegen → Wierdr.xcodeproj
 make test           # swift test in Packages/WierdrKit
 make sim            # build + run in the iPad Pro 13" simulator
-make device         # signed Debug build for a real device
+make device         # signed Release build for a real device (CONFIG=Debug for debug)
 make install        # build + install on the connected iPad (devicectl)
+make ipa            # dist/Wierdr.ipa (development signing)
+```
+
+## App layer (App/Sources)
+
+| Folder | What |
+|---|---|
+| `App/` | `AppModel` (mode none/demo/live, hosts, per-host screen state), `AppServices` (seams the UI calls), `Host`/`HostStore`. |
+| `Session/` | `HostSession` (SSH → `CoreConnection` → `WorkspaceEngine` + `TerminalSessionPool`, reconnect loop with backoff, foreground health check, TOFU host-key question), `LiveConnector` (implements `AppServices`: connect/disconnect, key, passwords in Keychain, live terminal views, install key), host-key alert. |
+| `Connect/` | Host list, host editor (public key, password). |
+| `Workspace/` | `WorkspaceView` (NavigationSplitView), `WorkspaceController` (commands for buttons/menus/shortcuts, pending selection, dialogs, toasts), `WorkspaceCommands` (menu bar / ⌘ shortcuts). |
+| `Sidebar/` | Brand bar, machine headers, space cards, agent/terminal/sub-agent rows, quick switcher. |
+| `Panel/` | Tab bar + new menu, pane tree with weights, pane cards/headers, status bar, terminal view seam (`TerminalViewProvider`), demo terminal. |
+| `Terminal/` | SwiftTerm integration: `TerminalSession` (one attach stream ↔ one emulator, grid/FACTS/RESIZE/FOCUS/credit, reattach), `TerminalSessionPool` (per-address sessions, detach when hidden), `TerminalSurface` (SwiftUI), key bar, theme, keymap. |
+| `Theme/` | Atom One Dark / Paper colors, Geist + JetBrains Mono, icon assets. |
+| `Debug/` | DEBUG-only: terminal lab (`-terminal-lab YES`), simulator auto-connect hooks (`WIERDR_AUTOCONNECT`, `WIERDR_IMPORT_KEY`, `WIERDR_TRUST_HOSTKEY`, `WIERDR_DEBUG_STEPS`). |
+
+### End-to-end test in the simulator
+
+```sh
+scripts/test-sshd.sh start            # throwaway sshd on 127.0.0.1:2222 (test key only)
+make sim-build
+SIM="Wierdr iPad Pro 13 (M4)"
+xcrun simctl install "$SIM" build/DerivedData/Build/Products/Debug-iphonesimulator/Wierdr.app
+SIMCTL_CHILD_WIERDR_IMPORT_KEY=/tmp/wierdr-sshd/client_ed25519 \
+SIMCTL_CHILD_WIERDR_AUTOCONNECT="$(id -un)@127.0.0.1:2222" \
+SIMCTL_CHILD_WIERDR_TRUST_HOSTKEY=1 \
+SIMCTL_CHILD_WIERDR_DEBUG_STEPS='sleep 3;newSpace;sleep 4;renameSpace e2e;newTab;sleep 3;split right;sleep 20;closeSpace' \
+  xcrun simctl launch "$SIM" pw.xff.wierdr
 ```
 
 ## WierdrModel internals
