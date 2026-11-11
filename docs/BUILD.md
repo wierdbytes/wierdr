@@ -46,6 +46,41 @@ Debug‑сборка: `make install CONFIG=Debug` (парсинг вывода �
    (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`).
 5. iOS спросит разрешение на доступ к локальной сети — разреши (для адресов в LAN).
 
+## Проверка на iPad: скриншоты и управление
+
+`scripts/ipad.sh` снимает экран физического iPad, тапает, печатает и читает дерево
+доступности Wierdr. Для сравнения он же снимает окно Herdr на Mac.
+
+Один раз на iPad: **Настройки › Разработчик › Enable UI Automation**. Если включить уже
+после `start`, перезапусти WDA: `scripts/ipad.sh stop && scripts/ipad.sh start`.
+
+```sh
+make install                        # свежая сборка на iPad
+scripts/ipad.sh start               # WebDriverAgent на iPad + проброс :8100 по USB (iproxy)
+scripts/ipad.sh both /tmp/cmp       # /tmp/cmp-ipad.png (devicectl) и /tmp/cmp-mac.png (herdr-app shot)
+scripts/ipad.sh tree                # дерево элементов с рамками в точках (1600×1200 в landscape)
+scripts/ipad.sh tap "Quick Switcher" # тап по accessibility label
+scripts/ipad.sh tap-xy 800 336      # тап по точке; long-press, swipe x1 y1 x2 y2
+scripts/ipad.sh type lazy           # ввод в поле/терминал с фокусом клавиатуры
+scripts/ipad.sh orient portrait     # повернуть экран (devicectl)
+scripts/ipad.sh stop
+```
+
+- WebDriverAgent (appium) клонируется и собирается при первом `start` в
+  `~/.local/share/WebDriverAgent` с командой `AUL4CCB2XY` и bundle id
+  `pw.xff.WebDriverAgentRunner`. Логи и pid лежат в `$TMPDIR/wierdr-wda/`.
+- Сессия WDA цепляется к приложению на переднем плане и не перезапускает Wierdr.
+  Перезапуск приложения: `scripts/ipad.sh launch`.
+- Скриншот iPad — 3200×2400 px (2× от точек), Herdr на Mac — в физических пикселях окна.
+  `herdr-app shot` работает без разрешения на запись экрана, даже если окно перекрыто.
+- При запуске WDA iPadOS может спросить код-пароль iPad: так система подтверждает UI
+  Automation. Отключить запрос можно только вместе с код-паролем. Разрешение живёт
+  от нескольких часов до нескольких дней, а запрос появляется только на `start`: запросы к
+  уже запущенному WDA пароль не спрашивают. Запускай WDA один раз на рабочую сессию и
+  останавливай `stop`, когда закончил.
+- `type` печатает туда, где фокус клавиатуры. Если фокус в терминале, текст уйдёт
+  в живую сессию.
+
 ## Другие цели
 
 ```sh
