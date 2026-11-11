@@ -10,12 +10,12 @@ iPhone 13 Pro Max уже зарегистрированы в
 
 На iPhone уже включён Режим разработчика (iOS 27.2.1). Способы, любой:
 
-0. **Одной командой, откуда угодно в tailnet**: `make ipa && scripts/iphone.sh install`.
-   Если devicectl видит iPhone (USB или та же Wi‑Fi) — ставит через него; иначе WebDriverAgent
-   на iPhone (`scripts/iphone.sh start`, см. ниже) сам открывает страницу установки из п. 1 и
-   жмёт «Установить». Потом запускает Wierdr. iPhone должен быть разблокирован.
+0. **Одной командой**: `make ipa && scripts/iphone.sh install`. Дома (USB или та же Wi‑Fi)
+   ставит через devicectl и запускает Wierdr. Вне дома devicectl iPhone не видит: команда
+   обновит страницу из п. 1 и напечатает ссылку — открой её на iPhone и нажми «Установить».
 
-1. **По воздуху, без кабеля** (iPhone в tailnet, Mac включён):
+1. **По воздуху, откуда угодно** (iPhone в tailnet, Mac включён; проверено с iPhone вне
+   домашней сети, через relay Tailscale):
    ```sh
    make ipa && scripts/ota.sh   # dist/Wierdr.ipa + страница установки
    ```
@@ -103,7 +103,7 @@ scripts/ipad.sh stop
 
 scripts/iphone.sh start               # то же для iPhone (USB-проброс на :8101)
 scripts/iphone.sh shot /tmp/iphone.png  # 1284×2778 px; точки 428×926 в портрете
-make ipa && scripts/iphone.sh install # поставить dist/Wierdr.ipa и запустить (см. ниже)
+make ipa && scripts/iphone.sh install # поставить dist/Wierdr.ipa и запустить (вне дома — ссылка)
 ```
 
 - WebDriverAgent (appium) клонируется и собирается при первом `start` в
@@ -111,14 +111,12 @@ make ipa && scripts/iphone.sh install # поставить dist/Wierdr.ipa и з
   `pw.xff.WebDriverAgentRunner`; одна сборка на оба устройства (профиль команды включает
   оба). Логи и pid: `$TMPDIR/wierdr-wda/` (iPad), `$TMPDIR/wierdr-wda-iphone/` (iPhone).
 - Связь: по USB — через `iproxy`, иначе напрямую с WDA по адресу устройства в Tailscale
-  (порт 8100 на устройстве). Сам `start` требует, чтобы Xcode видел устройство: USB, одна
-  Wi‑Fi‑сеть или «Connect via network». Когда WDA поднят, `shot`, `tree`, тапы, ввод, `orient`,
-  `launch`, `kill` и `install` работают из любой точки tailnet (там, где devicectl достаёт
-  устройство, `orient`/`launch`/`install` идут через него).
-- **`install` по tailnet**, когда devicectl устройство не видит: WDA открывает
-  `itms-services://…/wierdr/manifest.plist` (страница из `scripts/ota.sh`, поднимается сама),
-  нажимает «Установить» в системном алерте и запускает Wierdr. Нужен поднятый WDA и
-  разблокированное устройство. Ставится только `dist/Wierdr.ipa`.
+  (порт 8100 на устройстве).
+- **Управление работает только дома.** WDA живёт, пока Xcode видит устройство (USB или та же
+  Wi‑Fi: CoreDevice находит его по Bonjour, а Bonjour не ходит через Tailscale) — тест WDA
+  держит `xcodebuild`. Когда iPhone ушёл из домашней сети, сессия рвётся и WDA умирает
+  (проверено); `start` издалека невозможен. Вне дома остаётся установка по ссылке (п. 1),
+  нажатием на самом iPhone.
 - Сессия WDA цепляется к приложению на переднем плане и не перезапускает Wierdr.
   Перезапуск приложения: `launch`.
 - Скриншот iPad — 3200×2400 px (2× от точек), iPhone — 1284×2778 (3×).

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Drive Wierdr on the physical iPhone: screenshots, taps, typing, UI tree, orientation,
-# install (also over the tailnet). Commands and notes: the header of scripts/device.sh.
+# install. Control works while the iPhone is home (USB/same Wi-Fi); from elsewhere only the
+# install page (scripts/ota.sh) does. Commands and notes: the header of scripts/device.sh.
 #
 #   scripts/iphone.sh start | status | shot [f] | tree | tap <label> | tap-xy <x> <y> | swipe …
 #   scripts/iphone.sh type <text> | orient <…> | launch | kill | install [ipa] | stop

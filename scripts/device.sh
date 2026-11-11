@@ -15,9 +15,9 @@
 #   type <text>        type into the focused field / terminal
 #   orient <portrait|landscapeLeft|landscapeRight>
 #   launch | kill      (re)start / stop Wierdr
-#   install [--ota] [ipa]  install dist/Wierdr.ipa (or a .app/.ipa) and launch it: devicectl
-#                      when the device is reachable (USB/LAN), else (or with --ota) over the
-#                      tailnet: the install page (scripts/ota.sh) opened by WDA, Install tapped
+#   install [ipa]      install dist/Wierdr.ipa (or a .app/.ipa) with devicectl and launch it
+#                      (USB/LAN); off the LAN it refreshes the install page (scripts/ota.sh)
+#                      and prints its link: open it on the device and tap Install
 #
 # Env: DEVICE (udid or name; default: first physical device of the kind), WDA_DIR
 # (default ~/.local/share/WebDriverAgent), TEAM (default AUL4CCB2XY), WDA_PORT (local
@@ -31,10 +31,12 @@
 #
 # Link: if the device is on USB, WDA goes through `iproxy` on localhost:$WDA_PORT.
 # Otherwise the script talks to WDA directly at the device's Tailscale address, port
-# 8100. WDA has no auth, so only use it over USB or Tailscale. `start` needs Xcode to
-# reach the device: USB, the same LAN, or "Connect via network". Once WDA is up,
-# taps, typing, `shot`, `orient`, `launch` and `install` work from anywhere on the
-# tailnet (devicectl is used instead whenever it can reach the device).
+# 8100. WDA has no auth, so only use it over USB or Tailscale.
+# WDA lives only while Xcode reaches the device (USB or the same LAN: CoreDevice
+# finds devices by Bonjour, which doesn't cross Tailscale): xcodebuild hosts its
+# test session, and when the device leaves the LAN the session ends and WDA with it
+# (seen on the iPhone). So remote control works at home, not from elsewhere; installs
+# from elsewhere go through the install page (scripts/ota.sh), tapped on the device.
 #
 # Notes:
 # - `start` may make the device ask for its passcode. This can't be disabled
@@ -147,6 +149,7 @@ xcb() {
 
 start() {
   if up; then echo "WDA already up on $URL ($VIA)"; return; fi
+  coredevice || die "Xcode can't reach the $NAME (needs USB or the same Wi-Fi); WDA can't start from afar"
   [ -d "$WDA_DIR" ] || git clone --depth 1 https://github.com/appium/WebDriverAgent.git "$WDA_DIR"
   if ! ls "$WDA_DIR"/build/DD/Build/Products/*iphoneos*.xctestrun >/dev/null 2>&1; then
     echo "Building WebDriverAgent…"
@@ -233,37 +236,6 @@ launch() {
   fi
 }
 
-# Install over the tailnet without Xcode: WDA opens the install page's
-# itms-services link and taps Install in the system alert.
-install_ota() {
-  local ipa="$1"
-  [ "$(cd "$(dirname "$ipa")" && pwd)/$(basename "$ipa")" = "$ROOT/dist/Wierdr.ipa" ] ||
-    die "over the tailnet only dist/Wierdr.ipa can be installed (make ipa)"
-  resolve
-  up || die "$NAME is not reachable by devicectl and WDA is not up (start it on USB/LAN once)"
-  "$ROOT/scripts/ota.sh" >/dev/null
-  local host; host=$(/Applications/Tailscale.app/Contents/MacOS/Tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')
-  local link="itms-services://?action=download-manifest&url=https://$host/wierdr/manifest.plist"
-  echo "Installing over the tailnet ($VIA)…"
-  wda POST /url "{\"url\":\"$link\"}" >/dev/null
-  local accepted=
-  for _ in $(seq 1 20); do
-    sleep 1
-    if wda POST /alert/accept '{"name":"Install"}' >/dev/null 2>&1 || wda POST /alert/accept '{}' >/dev/null 2>&1; then
-      accepted=1; break
-    fi
-  done
-  [ -n "$accepted" ] || die "no Install alert appeared (is the device unlocked? see: scripts/$SCRIPT shot)"
-  # The download and install take a few seconds; launch once it runs.
-  for _ in $(seq 1 30); do
-    sleep 3
-    if wda POST /wda/apps/launch "{\"bundleId\":\"$BUNDLE_ID\"}" >/dev/null 2>&1; then
-      echo "Installed and launched"; return
-    fi
-  done
-  die "installed? Wierdr did not launch within 90 s"
-}
-
 cmd="${1:-help}"; shift || true
 case "$cmd" in start|status|tree|tap|tap-xy|long-press|swipe|type|kill) resolve ;; esac
 case "$cmd" in
@@ -309,15 +281,17 @@ open(sys.argv[1], "wb").write(base64.b64decode(v))' "$out" || die "WDA screensho
   launch) launch ;;
   kill) wda POST /wda/apps/terminate "{\"bundleId\":\"$BUNDLE_ID\"}" ;;
   install)
-    ota=; if [ "${1:-}" = "--ota" ]; then ota=1; shift; fi
     src="${1:-$ROOT/dist/Wierdr.ipa}"
     [ -e "$src" ] || die "no $src (make ipa)"
-    if [ -z "$ota" ] && coredevice; then
+    if coredevice; then
       xcrun devicectl device install app --device "$(device)" "$src" >/dev/null
       launch
       echo "Installed and launched (devicectl)"
     else
-      install_ota "$src"
+      [ "$(cd "$(dirname "$src")" && pwd)/$(basename "$src")" = "$ROOT/dist/Wierdr.ipa" ] ||
+        die "$NAME is off the LAN: only dist/Wierdr.ipa can go through the install page"
+      "$ROOT/scripts/ota.sh" | tail -1
+      echo "$NAME is not reachable by devicectl (not on USB/LAN): open that link on it and tap Install."
     fi ;;
   *) awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0" ;;
 esac
