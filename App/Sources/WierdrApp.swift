@@ -40,6 +40,9 @@ struct WierdrApp: App {
                 if UserDefaults.standard.bool(forKey: "demo"), app.mode == .none { app.startDemo() }
                 #if DEBUG
                 await DebugAutoConnect.run(app)
+                #endif
+                if !UserDefaults.standard.bool(forKey: "demo") { await app.reconnectLastHost() }
+                #if DEBUG
                 // `-open switcher|settings|space:<id>` (screenshots).
                 if let open = UserDefaults.standard.string(forKey: "open"), let s = app.session {
                     try? await Task.sleep(for: .milliseconds(600))
@@ -76,7 +79,7 @@ struct RootView: View {
         Group {
             if let session = app.session {
                 WorkspaceView(controller: session, hostName: hostName) {
-                    Task { await app.disconnect() }
+                    Task { await app.disconnectByUser() }
                 }
                 .id(ObjectIdentifier(session))
             } else {

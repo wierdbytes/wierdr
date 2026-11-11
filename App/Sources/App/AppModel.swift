@@ -60,6 +60,7 @@ final class AppModel {
             services.bindScreen(ws, screen)
             session = WorkspaceController(workspace: ws, screen: screen, isDemo: false)
             mode = .live(host)
+            UserDefaults.standard.set(host.id.uuidString, forKey: Self.lastHostKey)
         } catch {
             connectionError = error.localizedDescription
             failedHost = host
@@ -69,6 +70,25 @@ final class AppModel {
     func retry() async {
         guard let host = failedHost else { return }
         await connect(to: host)
+    }
+
+    /// The host of the last session, until the person disconnects on purpose.
+    private static let lastHostKey = "lastHost"
+
+    /// iPhone: back into the last session at launch (iOS ends apps in the
+    /// background often, and the list of agents is what you open it for).
+    /// Not after a deliberate Disconnect; a failure lands on the host list as usual.
+    func reconnectLastHost() async {
+        guard Device.isPhone, mode == .none, connecting == nil,
+              let id = UserDefaults.standard.string(forKey: Self.lastHostKey).flatMap(UUID.init(uuidString:)),
+              let host = hosts.hosts.first(where: { $0.id == id }) else { return }
+        await connect(to: host)
+    }
+
+    /// Disconnect on purpose: no reconnect at the next launch.
+    func disconnectByUser() async {
+        if case .live = mode { UserDefaults.standard.removeObject(forKey: Self.lastHostKey) }
+        await disconnect()
     }
 
     func disconnect() async {
