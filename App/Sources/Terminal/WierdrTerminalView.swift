@@ -43,8 +43,21 @@ final class WierdrTerminalView: TerminalView {
 
     private var keyBar: TerminalKeyBar?
 
+    /// Emulator options. Kitty graphics get Ghostty's image storage (320 MB per
+    /// screen, as the desktop's libghostty) instead of SwiftTerm's 10 MB: pi's
+    /// screenshots are up to 2000 px, i.e. up to 16 MB decoded each, so with
+    /// 10 MB a larger one is refused (ENOMEM) and each new one evicts the
+    /// previous. pi keeps up to 64 MB of off-screen images uploaded and, when
+    /// its view scrolls back, only re-places them by id (`a=p`), so evicted
+    /// ones never come back.
+    static var emulatorOptions: TerminalOptions {
+        var o = TerminalOptions.default
+        o.kittyGraphics.storageLimitBytesPerScreen = 320_000_000
+        return o
+    }
+
     override init(frame: CGRect, font: UIFont?) {
-        super.init(frame: frame, font: font)
+        super.init(frame: frame, font: font, options: Self.emulatorOptions)
         let bar = TerminalKeyBar(terminalView: self)
         keyBar = bar
         // Shown with a hardware keyboard too (iPadOS puts it at the bottom):
