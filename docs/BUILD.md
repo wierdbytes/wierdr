@@ -2,8 +2,36 @@
 
 Требования: Xcode 27 (проект генерируется XcodeGen и уже лежит в репозитории как
 `Wierdr.xcodeproj`), сертификат Apple Development команды `AUL4CCB2XY` —
-есть в связке ключей этого Mac. iPad Pro 13" M4 уже
-зарегистрирован в команде и входит в профиль, которым подписывается сборка.
+есть в связке ключей этого Mac. iPad Pro 13" M4 и
+iPhone 13 Pro Max уже зарегистрированы в
+команде и входят в профиль, которым подписывается сборка (один `.ipa` для обоих).
+
+## Установка на iPhone
+
+На iPhone уже включён Режим разработчика (iOS 27.2.1). Три способа, любой:
+
+1. **По воздуху, без кабеля** (iPhone в tailnet, Mac включён):
+   ```sh
+   make ipa && scripts/ota.sh   # dist/Wierdr.ipa + страница установки
+   ```
+   На iPhone открой в Safari **https://<mac>.<tailnet>.ts.net/wierdr/** → «Установить» →
+   приложение появится на экране «Домой». Страницу раздаёт `tailscale serve` (путь `/wierdr`,
+   только tailnet) через локальный `python3 http.server` на 127.0.0.1:8791.
+   Выключить: `scripts/ota.sh off`.
+2. **Кабелем или по Wi‑Fi** (iPhone в Xcode › Devices, разблокирован):
+   ```sh
+   make install-iphone          # Release-сборка, установка через devicectl и запуск
+   ```
+   или `xcrun devicectl device install app --device <UDID> dist/Wierdr.ipa`.
+3. Xcode: открыть `Wierdr.xcodeproj`, выбрать iPhone, Run.
+
+Если iOS пишет, что разработчик не доверенный: **Настройки › Основные › VPN и управление
+устройством › Apple Development: … › Доверять**.
+
+Дальше в Wierdr на iPhone: **Add Host** → дома `mentoair.local`, вне дома по Tailscale
+`mentoair-1` (или `100.x.y.z`), пользователь `mentor`, вход **Password** → Connect,
+подтвердить отпечаток (см. «Подготовка Mac»), потом **Settings → Install This iPhone’s Key on …**.
+iOS спросит доступ к локальной сети — разреши (для `mentoair.local`).
 
 ## Установка на iPad
 
@@ -81,12 +109,36 @@ scripts/ipad.sh stop
 - `type` печатает туда, где фокус клавиатуры. Если фокус в терминале, текст уйдёт
   в живую сессию.
 
+## Проверка в симуляторе iPhone
+
+`scripts/iphone-sim.sh` — то же, что `ipad.sh`, для симулятора «Wierdr iPhone 13 Pro Max»
+(создаётся при первом `boot`): сборка и установка, запуск с аргументами, скриншоты,
+WebDriverAgent на порту 8200 (iPad‑овский остаётся на 8100) для тапов/свайпов/ввода.
+
+```sh
+make sim-iphone                         # сборка + симулятор + демо
+scripts/iphone-sim.sh start             # WebDriverAgent в симуляторе (один раз за сессию)
+scripts/iphone-sim.sh launch -demo YES  # (-open pane|banner|switcher|settings — сразу туда)
+scripts/iphone-sim.sh tap "Agents"      # по accessibility label; tap-xy в точках (428×926)
+scripts/iphone-sim.sh swipe 2 500 300 500   # свайп назад от края
+scripts/iphone-sim.sh type "echo hi"
+scripts/iphone-sim.sh shot /tmp/iphone.png
+scripts/iphone-sim.sh orient landscape; scripts/iphone-sim.sh appearance dark
+```
+
+Живое подключение из симулятора — как в `docs/architecture.md` (тестовый sshd на
+127.0.0.1:2222, `SIMCTL_CHILD_WIERDR_AUTOCONNECT=…`), с `SIM` = «Wierdr iPhone 13 Pro Max».
+Осторожно: открытая на iPhone панель забирает размер своего терминала и на Mac; для проверок
+создавай свой спейс (`WIERDR_DEBUG_STEPS='sleep 4;newSpace'`) и закрывай его после.
+
 ## Другие цели
 
 ```sh
 make test       # unit-тесты WierdrKit на macOS
 make sim        # симулятор iPad Pro 13" (M4)
-make ipa        # dist/Wierdr.ipa
+make sim-iphone # симулятор iPhone 13 Pro Max, демо
+make install-iphone  # Release на подключённый iPhone
+make ipa        # dist/Wierdr.ipa (iPad и iPhone); scripts/ota.sh — страница установки по воздуху
 make project    # перегенерировать Wierdr.xcodeproj из project.yml
 python3 scripts/gen-assets.py   # пересобрать Icons.xcassets из Design/icons
 ```

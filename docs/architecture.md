@@ -1,6 +1,6 @@
 # Wierdr architecture
 
-Wierdr is a native iPadOS client of **herdr-core** (`hc`). It shows the same
+Wierdr is a native iPadOS/iOS client of **herdr-core** (`hc`). It shows the same
 spaces, tabs, panes and agents as the Herdr desktop app (`herdr-app`) and lets
 you work in their live terminals.
 
@@ -54,6 +54,7 @@ make ipa            # dist/Wierdr.ipa (development signing)
 | `Workspace/` | `WorkspaceView` (NavigationSplitView), `WorkspaceController` (commands for buttons/menus/shortcuts, pending selection, dialogs, toasts), `WorkspaceCommands` (menu bar / ⌘ shortcuts). |
 | `Sidebar/` | Brand bar, machine headers, space cards, agent/terminal/sub-agent rows, quick switcher. |
 | `Panel/` | Tab bar + new menu, pane tree with weights, pane cards/headers, status bar, terminal view seam (`TerminalViewProvider`), demo terminal. |
+| `Phone/` | The iPhone (and narrow iPad window) layout: `PhoneWorkspaceView` (list ↔ one pane, back swipe, attention banner), `PhoneHome` (Agents inbox by status / Spaces list, footer counts, new-space menu), `PhonePaneScreen` (top bar, attention pill, panes strip, pane menu), `PhoneInputBar` (quick keys, compose → `TerminalSession.send(text:submit:)`). `WorkspaceView` picks it when `Device.isPhone` or the width is compact; `WorkspaceController.singlePane` makes "seen" follow the one pane on screen. |
 | `Terminal/` | SwiftTerm integration: `TerminalSession` (one attach stream ↔ one emulator, grid/FACTS/RESIZE/FOCUS/credit, reattach), `TerminalSessionPool` (per-address sessions, detach when hidden), `TerminalSurface` (SwiftUI), key bar, theme, keymap. |
 | `Theme/` | Atom One Dark / Paper colors, Geist + JetBrains Mono, icon assets. |
 | `Debug/` | DEBUG-only: terminal lab (`-terminal-lab YES`), simulator auto-connect hooks (`WIERDR_AUTOCONNECT`, `WIERDR_IMPORT_KEY`, `WIERDR_TRUST_HOSTKEY`, `WIERDR_DEBUG_STEPS`). |

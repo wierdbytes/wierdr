@@ -38,6 +38,13 @@ struct PhonePaneScreen: View {
         }
         .background(theme.chrome.ignoresSafeArea())
         .overlay(alignment: .top) { ConnectionBanner(top: 56) }
+        // Watching an agent work: the screen stays on (a locked iPhone drops the connection).
+        .onChange(of: keepsAwake, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+    }
+
+    private var keepsAwake: Bool {
+        controller.workspace.terminal(controller.focusedPane?.terminal)?.status == .working
     }
 
     /// The space's panes in tab order, then pane order (stable, unlike the

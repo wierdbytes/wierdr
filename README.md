@@ -1,10 +1,18 @@
 # Wierdr
 
-Нативное iPadOS‑приложение для работы с агентами через **herdr-core**: сайдбар со спейсами и
-агентами и терминальная панель — как в твоём десктопном Herdr (`wierd-layout`), живые
-терминалы, создание спейсов/табов/сплитов. Подключение — по SSH к Mac, без серверов.
+Нативное приложение для iPad и iPhone для работы с агентами через **herdr-core**: сайдбар со
+спейсами и агентами и терминальная панель — как в твоём десктопном Herdr (`wierd-layout`),
+живые терминалы, создание спейсов/табов/сплитов. Подключение — по SSH к Mac, без серверов.
+На iPhone — список агентов по тому, что им нужно от тебя, и одна панель на экран с быстрыми
+клавишами и полем ввода (диктовка, вставка + Return) — см. [FEATURES §7](docs/FEATURES.md#7-iphone).
 
 ![Wierdr](docs/screenshots/ipad-landscape-dark.png)
+
+<img src="docs/screenshots/iphone-agents-dark.png" width="260"> <img src="docs/screenshots/iphone-pane-dark.png" width="260"> <img src="docs/screenshots/iphone-compose-live.png" width="260">
+
+**iPhone:** `make ipa && scripts/ota.sh`, затем на iPhone открыть
+https://<mac>.<tailnet>.ts.net/wierdr/ → «Установить» (или `make install-iphone` по кабелю).
+Подробно: [docs/BUILD.md](docs/BUILD.md#установка-на-iphone).
 
 ## Быстрый старт
 
@@ -36,9 +44,10 @@
 ## Структура
 
 ```
-App/                    SwiftUI-приложение (iPad, универсальная сборка)
+App/                    SwiftUI-приложение (iPad + iPhone, одна сборка; App/Sources/Phone — раскладка iPhone)
 Packages/WierdrKit/     HerdrCore · HerdrSSH · WierdrModel · wierdr-cli (+ тесты)
 Design/icons/           SVG-иконки Herdr → App/Resources/Icons.xcassets (scripts/gen-assets.py)
 project.yml             XcodeGen → Wierdr.xcodeproj
-Makefile                project · test · sim · device · install · ipa
+Makefile                project · test · sim · sim-iphone · device · install · install-iphone · ipa
+scripts/                ipad.sh / iphone-sim.sh (скриншоты, тапы), ota.sh (установка по воздуху)
 ```

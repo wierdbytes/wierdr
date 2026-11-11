@@ -37,6 +37,8 @@ struct PhoneInputBar: View {
 
     private func compose(_ session: TerminalSession?) -> some View {
         let empty = text.isEmpty
+        // Prose for agents (capitals, corrections); commands for shells (as typed).
+        let prose = controller.workspace.terminal(address)?.isAgent ?? true
         return HStack(alignment: .bottom, spacing: 6) {
             Button {
                 composing = false
@@ -57,6 +59,8 @@ struct PhoneInputBar: View {
                 .foregroundStyle(theme.foreground)
                 .tint(theme.accent)
                 .lineLimit(1...6)
+                .textInputAutocapitalization(prose ? .sentences : .never)
+                .autocorrectionDisabled(!prose)
                 .focused($composing)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
