@@ -52,7 +52,8 @@ Wierdr (`pw.xff.wierdr`) — нативное iPadOS‑приложение (Swi
 - **Сабагенты** (терминалы, запущенные агентом без своей панели) — раскрываются из бейджа.
 - **Порядок** — как в `wierd-agents`: табы с агентами вперёд; внутри — закреплённые → по
   срочности (blocked > done > working > idle) → по свежести.
-- Свайпы/контекстное меню строк: Pin/Unpin (`herdr.pinned`), Mark Unread, Close Pane.
+- Свайпы/контекстное меню строк: Pin/Unpin (`herdr.pinned`), Mark Unread (только idle, `herdr.seen=turn-1`) /
+  Mark Idle (только done, `herdr.seen=turn`), Close Pane.
 - **«Прочитано» синхронизировано с десктопом**: когда агент на экране iPad, Wierdr поднимает
   общую метку `herdr.seen` — «done» гаснет и на Mac, как между двумя окнами Herdr.
 - Footer: **Settings** (тема: системная/светлая/тёмная, размер шрифта терминала, отключиться,

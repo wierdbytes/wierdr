@@ -53,7 +53,14 @@ struct SidebarRowView: View {
             Button { controller.setPinned(t.address, !t.pinned) } label: {
                 Label(t.pinned ? "Unpin" : "Pin", image: t.pinned ? "ui.pin-off" : "ui.pin")
             }
-            Button { controller.markUnread(t.address) } label: { Label("Mark Unread", systemImage: "circle.fill") }
+            switch t.status {
+            case .idle:
+                Button { controller.markUnread(t.address) } label: { Label("Mark Unread", systemImage: "circle.fill") }
+            case .done:
+                Button { controller.markRead(t.address) } label: { Label("Mark Idle", systemImage: "circle") }
+            default:
+                EmptyView()
+            }
             Divider()
         }
         Button { controller.focus(pane: row.paneID); controller.split(.right, pane: row.paneID) } label: {
@@ -77,8 +84,19 @@ struct SidebarRowView: View {
         Button(role: .destructive) { controller.closePane(row.paneID) } label: { Label("Close", systemImage: "xmark") }
             .tint(theme.blocked)
         if let t = row.terminal, t.isAgent {
-            Button { controller.markUnread(t.address) } label: { Label("Unread", systemImage: "circle.fill") }
-                .tint(theme.done)
+            switch t.status {
+            case .idle:
+                Button { controller.markUnread(t.address) } label: { Label("Unread", systemImage: "circle.fill") }
+                    .tint(theme.done)
+            case .done:
+                Button { controller.markRead(t.address) } label: {
+                    // Swipe actions fill their symbols; the idle mark is a ring.
+                    Label { Text("Idle") } icon: { Image(uiImage: UIImage(systemName: "circle") ?? UIImage()) }
+                }
+                .tint(theme.idle)
+            default:
+                EmptyView()
+            }
         }
     }
 }

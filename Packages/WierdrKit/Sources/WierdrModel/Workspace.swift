@@ -165,8 +165,10 @@ public final class Workspace {
         try await backend.moveTab(tabID, to: index)
     }
 
-    /// The person is looking at these agents now: raise their shared `herdr.seen`
-    /// to their current turn (clears "done" on every Herdr client).
+    /// The person is looking at these agents now, and only these (pass all of
+    /// them each time; `[]` when nothing is on screen or the app is in the
+    /// background): raise their shared `herdr.seen` to their current turn
+    /// (clears "done" on every Herdr client).
     public func markSeen(_ addresses: [String]) {
         backend?.markSeen(addresses)
     }
@@ -174,6 +176,11 @@ public final class Workspace {
     /// "Mark unread": `herdr.seen = turn - 1`.
     public func markUnread(_ address: String) {
         backend?.markUnread(address)
+    }
+
+    /// "Mark idle" (done → idle without looking): `herdr.seen = turn`.
+    public func markRead(_ address: String) {
+        backend?.markRead(address)
     }
 
     /// Pin/unpin an agent to the top of the lists (`herdr.pinned`).
@@ -202,6 +209,7 @@ protocol WorkspaceBackend: AnyObject {
     func moveTab(_ tabID: String, to index: Int) async throws
     func markSeen(_ addresses: [String])
     func markUnread(_ address: String)
+    func markRead(_ address: String)
     func setPinned(_ address: String, _ pinned: Bool)
     func refreshLaunchers(machine: String?)
 }

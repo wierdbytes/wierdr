@@ -37,8 +37,10 @@ public final class WorkspaceEngine: WorkspaceBackend {
     private var writeTails: [String: Task<Void, Never>] = [:]
     private var machinesRefresh: Task<Void, Never>?
 
-    // Seen (docs/labels.md): what we wrote, what we looked at, the local flag.
+    // Seen (docs/labels.md): what we wrote (until the core shows it), the agents
+    // on screen, the turn each was shared as seen at while it stays there, the local flag.
     private var writtenSeen: [String: UInt64] = [:]
+    private var onScreen: Set<String> = []
     private var looked: [String: UInt64] = [:]
     private var localSeen: [String: Bool] = [:]
     private var lastWord: [String: String?] = [:]
@@ -200,6 +202,7 @@ public final class WorkspaceEngine: WorkspaceBackend {
             records = Dictionary(fresh.map { ($0.address, $0) }, uniquingKeysWith: { _, b in b })
             seq = e.seq
             for (a, _) in records { noteWord(a) }
+            for a in Array(writtenSeen.keys) { confirmSeen(a) }
             for key in slots.keys { requestRead(key) }
             scheduleMachinesRefresh()
             scheduleRebuild()
@@ -215,9 +218,10 @@ public final class WorkspaceEngine: WorkspaceBackend {
             noteWord(t.address)
             if LayoutID.machine(of: t.address) != nil { scheduleMachinesRefresh() }
         case .removed:
-            if let a = e.terminal { records[a] = nil }
+            if let a = e.terminal { records[a] = nil; writtenSeen[a] = nil }
         case .labels(_, let record?):
             records[record.address] = record
+            confirmSeen(record.address)
         case .doc(let name, let version):
             guard name == options.documentName else { return }
             let key = e.machine ?? ""
@@ -233,6 +237,7 @@ public final class WorkspaceEngine: WorkspaceBackend {
             if let a = e.terminal {
                 records[a]?.apply(e.kind)
                 if case .status = e.kind { noteWord(a) }
+                if case .labels = e.kind { confirmSeen(a) }
             }
         }
         scheduleRebuild()
@@ -667,7 +672,14 @@ public final class WorkspaceEngine: WorkspaceBackend {
         }
     }
 
+    /// `addresses` is everything on screen now (empty: nothing, or the app is
+    /// in the background). Shares each as seen once per turn while it stays
+    /// there; an agent that left the screen is shared again when it comes
+    /// back (herdr-app `share_seen`), so a "mark unread" made while it was
+    /// away doesn't stick once the person looks at it.
     func markSeen(_ addresses: [String]) {
+        onScreen = Set(addresses)
+        looked = looked.filter { onScreen.contains($0.key) }
         var changed = false
         for addr in addresses {
             guard let t = records[addr], t.isLive, StatusRule.word(t) != nil else { continue }
@@ -675,32 +687,57 @@ public final class WorkspaceEngine: WorkspaceBackend {
             let turn = t.turn
             if looked[addr] == turn { continue }
             looked[addr] = turn
-            if let s = seenTurn(t), s >= turn { continue }
-            guard options.allowWrites, let c = connection else { continue }
-            writtenSeen[addr] = turn
-            changed = true
-            let key = label("seen")
-            Task { [weak self] in
-                do {
-                    try await c.labelTerminal(addr, [key: String(turn)])
-                } catch {
-                    guard let self else { return }
-                    self.emit("seen label for \(addr): \(error)")
-                    if self.writtenSeen[addr] == turn {
-                        self.writtenSeen[addr] = nil
-                        self.looked[addr] = nil
-                        self.scheduleRebuild()
-                    }
+            if shareSeen(t) { changed = true }
+        }
+        if changed { scheduleRebuild() }
+    }
+
+    /// Raises the shared `herdr.seen` to the terminal's turn, shown at once.
+    /// False when it's already there or writes are off.
+    private func shareSeen(_ t: Terminal) -> Bool {
+        let addr = t.address, turn = t.turn
+        if let s = seenTurn(t), s >= turn { return false }
+        guard options.allowWrites, let c = connection else { return false }
+        writtenSeen[addr] = turn
+        let key = label("seen")
+        Task { [weak self] in
+            do {
+                try await c.labelTerminal(addr, [key: String(turn)])
+            } catch {
+                guard let self else { return }
+                self.emit("seen label for \(addr): \(error)")
+                if self.writtenSeen[addr] == turn {
+                    self.writtenSeen[addr] = nil
+                    self.looked[addr] = nil
+                    self.scheduleRebuild()
                 }
             }
         }
-        if changed { scheduleRebuild() }
+        return true
+    }
+
+    /// Our pending `herdr.seen` write is done once the core shows it (or more);
+    /// from then on the label alone decides, so another client's "mark unread"
+    /// shows here too.
+    private func confirmSeen(_ address: String) {
+        guard let pending = writtenSeen[address] else { return }
+        let shown = records[address]?.labels[label("seen")].flatMap { UInt64($0) }
+        if records[address] == nil || shown.map({ $0 >= pending }) == true { writtenSeen[address] = nil }
+    }
+
+    /// "Mark idle" (the reverse of mark unread): `herdr.seen = turn`, as if the person had looked.
+    func markRead(_ address: String) {
+        guard let t = records[address], StatusRule.word(t) != nil else { return }
+        localSeen[address] = true
+        _ = shareSeen(t)
+        scheduleRebuild()
     }
 
     func markUnread(_ address: String) {
         guard let t = records[address], StatusRule.word(t) != nil else { return }
         localSeen[address] = false
-        looked[address] = t.turn
+        // On screen it stays unread until the person looks away and back.
+        looked[address] = onScreen.contains(address) ? t.turn : nil
         writtenSeen[address] = nil
         if t.turn > 0, options.allowWrites, let c = connection {
             let value = String(t.turn - 1)

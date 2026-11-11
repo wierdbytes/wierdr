@@ -51,15 +51,21 @@ struct WorkspaceView: View {
             Text(request.message)
         }
         .onChange(of: controller.workspace.spaces) { _, _ in controller.applyPending() }
-        .onChange(of: seenKey) { _, _ in if scenePhase == .active { controller.markVisibleSeen() } }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { controller.markVisibleSeen() } }
-        .onAppear { controller.markVisibleSeen() }
+        .onChange(of: seenKey) { _, _ in controller.markVisibleSeen(looking: looking) }
+        .onAppear { controller.markVisibleSeen(looking: looking) }
     }
 
-    /// Changes when the agents on screen or their turns change.
+    /// The panel is in front of the person: the app is active and, when the
+    /// split view is collapsed, it shows the panel rather than the sidebar.
+    private var looking: Bool {
+        scenePhase == .active && !(sizeClass == .compact && controller.compactColumn == .sidebar)
+    }
+
+    /// Changes when the agents on screen, their turns or `looking` change.
     private var seenKey: String {
-        guard let tab = controller.activeTab else { return "" }
-        return tab.panes.compactMap { p in
+        guard looking, let tab = controller.activeTab else { return "" }
+        let zoomed = controller.screen.zoomedPane(of: tab)
+        return (zoomed.map { [$0] } ?? tab.panes).compactMap { p in
             p.terminal.flatMap { controller.workspace.terminal($0) }.map { "\($0.address):\($0.turn):\($0.status?.rawValue ?? 0)" }
         }.joined(separator: ",")
     }

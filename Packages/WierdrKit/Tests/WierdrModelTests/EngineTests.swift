@@ -241,6 +241,54 @@ struct EngineTests {
         #expect(core.calls("terminal.label").last?["labels"] == ["herdr.pinned": "1"])
     }
 
+    @Test func unreadClearsWhenLookedAtAgain() async throws {
+        let core = makeCore()
+        var agent = terminalJSON("t5", labels: ["herdr.seen": "3"])
+        agent["status"] = ["state": "idle", "app": "pi"]
+        agent["turn"] = 3
+        core.addTerminal(agent)
+        let (ws, _) = try await start(core)
+        #expect(ws.terminal("t5")?.status == .idle)
+        func labelWrites(_ n: Int) -> Bool { core.calls("terminal.label").count == n }
+        func lastWrite() -> JSONValue? { core.calls("terminal.label").last?["labels"] }
+
+        // Marked unread from the sidebar while another tab is on screen; switching to it clears it.
+        ws.markSeen(["t1"])
+        ws.markUnread("t5")
+        try await eventually { labelWrites(1) && ws.terminal("t5")?.status == .done }
+        #expect(lastWrite() == ["herdr.seen": "2"])
+        ws.markSeen(["t5"])
+        try await eventually { labelWrites(2) && ws.terminal("t5")?.status == .idle }
+        #expect(lastWrite() == ["herdr.seen": "3"])
+
+        // Marked unread on screen: it stays until it leaves the screen (here: the app
+        // goes to the background) and comes back.
+        try await eventually { ws.terminal("t5")?.labels["herdr.seen"] == "3" }
+        ws.markUnread("t5")
+        try await eventually { labelWrites(3) && ws.terminal("t5")?.status == .done }
+        ws.markSeen(["t5"])
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(labelWrites(3))
+        ws.markSeen([])
+        ws.markSeen(["t5"])
+        try await eventually { labelWrites(4) && ws.terminal("t5")?.status == .idle }
+
+        // Another client marks it unread after our write came back: shown here too.
+        try await eventually { ws.terminal("t5")?.labels["herdr.seen"] == "3" }
+        ws.markSeen(["t1"])
+        core.state.withLock { $0.terminals["t5"]?["labels"] = ["herdr.seen": "2"] }
+        core.emit("labels", terminal: "t5", ["labels": ["herdr.seen": "2"]])
+        try await eventually { ws.terminal("t5")?.status == .done }
+
+        // "Mark idle" from the sidebar, off screen; again on an idle agent writes nothing.
+        ws.markRead("t5")
+        try await eventually { labelWrites(5) && ws.terminal("t5")?.status == .idle }
+        #expect(lastWrite() == ["herdr.seen": "3"])
+        ws.markRead("t5")
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(labelWrites(5))
+    }
+
     @Test func docEventsReread() async throws {
         let core = makeCore()
         let (ws, _) = try await start(core)

@@ -274,12 +274,23 @@ final class WorkspaceController {
         workspace.markUnread(address)
     }
 
-    /// The agents on screen right now: raise their shared `herdr.seen`.
-    func markVisibleSeen() {
-        guard let tab = activeTab else { return }
+    func markRead(_ address: String) {
+        guard !isDemo else { return toast("Not available in the demo") }
+        workspace.markRead(address)
+    }
+
+    /// The agents on screen right now (none when `looking` is false): raise
+    /// their shared `herdr.seen`. Also called when nothing is on screen, so an
+    /// agent that left it is shared as seen again when it comes back.
+    func markVisibleSeen(looking: Bool) {
+        workspace.markSeen(looking ? visibleAgents : [])
+    }
+
+    /// Agents drawn in the panel: the active tab's (or its zoomed pane's).
+    private var visibleAgents: [String] {
+        guard let tab = activeTab else { return [] }
         let panes = screen.zoomedPane(of: tab).map { [$0] } ?? tab.panes
-        let addresses = panes.compactMap(\.terminal).filter { workspace.terminal($0)?.isAgent == true }
-        if !addresses.isEmpty { workspace.markSeen(addresses) }
+        return panes.compactMap(\.terminal).filter { workspace.terminal($0)?.isAgent == true }
     }
 
     // MARK: - Pending selection
