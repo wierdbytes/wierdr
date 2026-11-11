@@ -517,6 +517,7 @@ final class TerminalContainerView: UIView {
         super.didMoveToWindow()
         if window != nil, wantsMetal, !terminalView.isUsingMetalRenderer {
             try? terminalView.setUseMetal(true)
+            terminalView.matchMetalScale()
         }
         session?.visibilityChanged(window != nil)
     }
@@ -525,6 +526,7 @@ final class TerminalContainerView: UIView {
         wantsMetal = on
         guard window != nil, on != terminalView.isUsingMetalRenderer else { return }
         try? terminalView.setUseMetal(on)
+        terminalView.matchMetalScale()
     }
 
     /// The terminal keymap as key commands with priority over the text system,

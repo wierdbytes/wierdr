@@ -1,4 +1,5 @@
 import UIKit
+import MetalKit
 import GameController
 import Synchronization
 import SwiftTerm
@@ -70,6 +71,42 @@ final class WierdrTerminalView: TerminalView {
     static var hardwareKeyboardConnected: Bool { GCKeyboard.coalesced != nil }
 
     @objc private func touched() { onTap?() }
+
+    // MARK: Metal scale
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        matchMetalScale()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        matchMetalScale()
+    }
+
+    #if DEBUG || WIERDR_LAB
+    /// Lab hook: render the Metal view at this scale instead (`nativeScale` reproduces the bug).
+    static var debugMetalScale: CGFloat?
+    #endif
+
+    /// SwiftTerm's Metal renderer sizes cells and glyphs in pixels of the
+    /// screen's `scale`, but an iOS `MTKView` renders at the screen's
+    /// `nativeScale`. They differ under Display Zoom (an iPad Pro on "More
+    /// Space": scale 2, nativeScale ≈ 1.72): the drawable is smaller than the
+    /// grid, so the picture is magnified and the right columns and the top rows
+    /// (rows are laid out from the bottom) fall outside the view. Render at
+    /// `scale`; the compositor scales it to the panel like any other layer.
+    func matchMetalScale() {
+        guard let mtk = subviews.first(where: { $0 is MTKView }) else { return }
+        var scale = window?.screen.scale ?? traitCollection.displayScale
+        #if DEBUG || WIERDR_LAB
+        if let s = Self.debugMetalScale { scale = s }
+        #endif
+        guard scale > 0, mtk.contentScaleFactor != scale else { return }
+        mtk.contentScaleFactor = scale
+        mtk.setNeedsLayout()
+        mtk.setNeedsDisplay()
+    }
 
     // MARK: Emulator output
 

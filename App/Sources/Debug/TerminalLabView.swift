@@ -1,6 +1,7 @@
 #if DEBUG || WIERDR_LAB
 import SwiftUI
 import UIKit
+import MetalKit
 import HerdrCore
 import HerdrSSH
 
@@ -287,6 +288,18 @@ final class TerminalLab {
                 st = await session.pipe.readStats()
             }
             log("waitbytes \(st.bytes - base) after \(String(format: "%.2f", Date().timeIntervalSince(start)))s, \(st.chunks) chunks")
+        case "@scrolltop":
+            view.scrollTo(row: 0)
+            try? await Task.sleep(for: .milliseconds(300))
+            log(scrollInfo(view))
+        case "@scrollinfo":
+            log(scrollInfo(view))
+        case "@metalscale":
+            // `@metalscale 1.72` renders Metal like an iPad Pro on Display Zoom "More Space"; `@metalscale off`.
+            WierdrTerminalView.debugMetalScale = arg == "off" ? nil : CGFloat(Double(arg) ?? 0)
+            view.matchMetalScale()
+            try? await Task.sleep(for: .milliseconds(300))
+            log("metal scale \(view.subviews.first { $0 is MTKView }?.contentScaleFactor ?? 0) screen \(view.window?.screen.scale ?? 0)/\(view.window?.screen.nativeScale ?? 0)")
         case "@kill":
             if let address { _ = try? await connection?.killTerminal(address) }
         case "@quit":
@@ -294,6 +307,10 @@ final class TerminalLab {
         default:
             log("unknown step \(step)")
         }
+    }
+
+    private func scrollInfo(_ v: WierdrTerminalView) -> String {
+        "scroll offset=\(v.contentOffset.y) size=\(v.contentSize.height) bounds=\(v.bounds) inset=\(v.adjustedContentInset) safe=\(v.safeAreaInsets) pos=\(v.scrollPosition) rows=\(v.terminalDimensions.rows)"
     }
 
     private func splitTimeout(_ arg: String) -> (String, Double) {
