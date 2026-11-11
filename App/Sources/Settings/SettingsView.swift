@@ -7,7 +7,7 @@ struct SettingsView: View {
     var onDisconnect: () -> Void
 
     @AppStorage("appearance") private var appearance: AppearanceOverride = .system
-    @AppStorage("terminalFontSize") private var fontSize: Double = 14
+    @AppStorage(TerminalFonts.sizeKey) private var fontSize = Double(TerminalFonts.defaultSize)
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var app
     @State private var keyStatus: String?
@@ -25,7 +25,7 @@ struct SettingsView: View {
                     LabeledContent("Light", value: "Paper")
                 }
                 Section("Terminal") {
-                    Stepper(value: $fontSize, in: 9...24, step: 1) {
+                    Stepper(value: $fontSize, in: Double(TerminalFonts.sizeRange.lowerBound)...Double(TerminalFonts.sizeRange.upperBound), step: 1) {
                         LabeledContent("Font Size", value: "\(Int(fontSize)) pt")
                     }
                     Text("The quick brown fox jumps over the lazy dog")
@@ -49,7 +49,7 @@ struct SettingsView: View {
                             }
                         } label: {
                             HStack {
-                                Text("Install This iPad\u{2019}s Key on \(host.displayName)")
+                                Text("Install This \(Device.kind)\u{2019}s Key on \(host.displayName)")
                                 if installing { Spacer(); ProgressView() }
                             }
                         }

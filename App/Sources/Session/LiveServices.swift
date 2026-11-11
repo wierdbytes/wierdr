@@ -45,7 +45,8 @@ final class LiveConnector {
                 _ = try AppStores.keys.loadOrCreateIdentity()
                 guard let line = Self.publicKeyLine() else { throw SessionError.failed("No key") }
                 try await session.installPublicKey(line)
-            }
+            },
+            terminalSession: { [weak self] address in self?.active?.terminals.session(for: address) }
         )
     }
 
@@ -55,7 +56,7 @@ final class LiveConnector {
         let endpoint = Endpoint(address: host.address.trimmingCharacters(in: .whitespaces),
                                 port: host.port, user: host.user.trimmingCharacters(in: .whitespaces), auth: auth)
         let dark = UITraitCollection.current.userInterfaceStyle != .light
-        let fontSize = CGFloat(UserDefaults.standard.object(forKey: "terminalFontSize") as? Double ?? 14)
+        let fontSize = CGFloat(UserDefaults.standard.object(forKey: TerminalFonts.sizeKey) as? Double ?? Double(TerminalFonts.defaultSize))
         let session = HostSession(endpoint: endpoint, dark: dark, fontSize: fontSize)
         active = session
         #if DEBUG

@@ -7,6 +7,8 @@ struct SidebarRowView: View {
     var row: SidebarRow
     var space: Space
     var bracket: Bracket
+    /// Agent rows name their space (the iPhone's agents list, where rows of all spaces mix).
+    var showsSpace = false
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -38,7 +40,7 @@ struct SidebarRowView: View {
         switch row.kind {
         case .agent:
             if let t = row.terminal {
-                AgentRow(terminal: t, tab: tab, focused: focused)
+                AgentRow(terminal: t, tab: tab, focused: focused, space: showsSpace ? space : nil)
             }
         case .terminal:
             TerminalRow(terminal: row.terminal, focused: focused)
@@ -107,9 +109,13 @@ struct AgentRow: View {
     var terminal: TerminalInfo
     var tab: Tab?
     var focused: Bool
+    /// Shown before the model (rows of several spaces in one list).
+    var space: Space? = nil
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
+    /// iPhone: a little larger, for fingers and arm's length.
+    @Environment(\.isCompactLayout) private var compact
     @State private var hovering = false
 
     var body: some View {
@@ -143,16 +149,26 @@ struct AgentRow: View {
                 StatusMark(status: status)
                     .frame(width: 18)
                 Text(Format.agentTitle(terminal, tab: tab))
-                    .font(.ui(13, .medium))
+                    .font(.ui(compact ? 14.5 : 13, .medium))
                     .foregroundStyle(theme.foreground)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(height: 20)
+            .frame(height: compact ? 22 : 20)
             HStack(spacing: 9) {
-                providerIcon
-                    .frame(width: 18)
+                Group {
+                    if let space { SpaceAvatar(space: space, size: 15) } else { providerIcon }
+                }
+                .frame(width: 18)
                 HStack(spacing: 4) {
+                    if let space {
+                        Text(space.displayName)
+                            .font(.ui(compact ? 12.5 : 11.5, .medium))
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(1)
+                            .layoutPriority(2)
+                        Text("·").foregroundStyle(theme.dim)
+                    }
                     Text(meta?.model ?? terminal.program.name)
                         .foregroundStyle(status == .idle && !focused ? theme.dim : theme.muted)
                         .lineLimit(1)
@@ -162,7 +178,7 @@ struct AgentRow: View {
                             .layoutPriority(1)
                     }
                 }
-                .font(.mono(10.5))
+                .font(.mono(compact ? 11.5 : 10.5))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 7) {
                     if let machine = terminal.machine {
@@ -178,22 +194,22 @@ struct AgentRow: View {
                         }
                     }
                     Text(Format.context(meta?.ctx) ?? "")
-                        .font(.mono(10.5))
+                        .font(.mono(compact ? 11.5 : 10.5))
                         .foregroundStyle(theme.contextNumberColor(cacheUntil: meta?.cacheUntil, now: now))
-                        .frame(width: 34, alignment: .trailing)
+                        .frame(width: compact ? 38 : 34, alignment: .trailing)
                     Text(Format.age(since: terminal.statusChangedAt, now: now) ?? "")
-                        .font(.mono(10.5))
+                        .font(.mono(compact ? 11.5 : 10.5))
                         .foregroundStyle(theme.dim)
-                        .frame(width: 26, alignment: .trailing)
+                        .frame(width: compact ? 29 : 26, alignment: .trailing)
                         .overlay(alignment: .trailing) { if hovering { pinButton } }
                 }
                 .fixedSize()
             }
-            .frame(height: 18)
+            .frame(height: compact ? 20 : 18)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .frame(height: 52)
+        .frame(height: compact ? 58 : 52)
         .background(background(status), in: RoundedRectangle(cornerRadius: 8))
         .overlay(alignment: .bottom) { contextBar(now: now) }
         .overlay {
@@ -274,6 +290,7 @@ struct AgentRow: View {
 
     private func accessibilityText(now: Date) -> String {
         var parts = [Format.agentTitle(terminal, tab: tab), Format.statusWord(terminal.status)]
+        if let space { parts.append("in \(space.displayName)") }
         if let m = terminal.meta?.model { parts.append(m) }
         if let e = terminal.meta?.effort { parts.append("effort \(e)") }
         if let c = Format.context(terminal.meta?.ctx) { parts.append("\(c) context") }
@@ -315,20 +332,21 @@ struct SubAgentRow: View {
     var terminal: TerminalInfo
     var last: Bool
     @Environment(\.theme) private var theme
+    @Environment(\.isCompactLayout) private var compact
 
     var body: some View {
         HStack(spacing: 8) {
             Path { p in
                 p.move(to: CGPoint(x: 4, y: 0))
-                p.addLine(to: CGPoint(x: 4, y: last ? 7 : 26))
+                p.addLine(to: CGPoint(x: 4, y: last ? 7 : rowHeight))
                 p.move(to: CGPoint(x: 4, y: 7))
                 p.addQuadCurve(to: CGPoint(x: 9, y: 13), control: CGPoint(x: 4, y: 13))
             }
             .stroke(theme.input, lineWidth: 1.5)
-            .frame(width: 9, height: 26)
+            .frame(width: 9, height: rowHeight)
             ProgramIcon(program: terminal.program, size: 14, color: theme.foreground)
             Text(terminal.name ?? terminal.program.name)
-                .font(.ui(12.5))
+                .font(.ui(compact ? 13.5 : 12.5))
                 .foregroundStyle(theme.muted)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -336,8 +354,10 @@ struct SubAgentRow: View {
         }
         .padding(.leading, 17)
         .padding(.trailing, 8)
-        .frame(height: 26)
+        .frame(height: rowHeight)
     }
+
+    private var rowHeight: CGFloat { compact ? 32 : 26 }
 
     /// Child status: core word, `error` → blocked, `done` → idle.
     private var kidStatus: AgentStatus? {
@@ -358,6 +378,7 @@ struct TerminalRow: View {
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
+    @Environment(\.isCompactLayout) private var compact
     @State private var hovering = false
 
     var body: some View {
@@ -372,20 +393,20 @@ struct TerminalRow: View {
             }
             .frame(width: 18)
             Text(terminal.map(Format.processName) ?? "terminal")
-                .font(.ui(13))
+                .font(.ui(compact ? 14.5 : 13))
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)
                 .frame(maxWidth: 150, alignment: .leading)
                 .fixedSize(horizontal: true, vertical: false)
             Text(terminal.map { Format.folder($0, home: home) } ?? "")
-                .font(.mono(10.5))
+                .font(.mono(compact ? 11.5 : 10.5))
                 .foregroundStyle(theme.dim)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 8)
-        .frame(height: 28)
+        .frame(height: compact ? 38 : 28)
         .background(focused ? theme.selected : (hovering ? theme.hover : .clear), in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             if focused { RoundedRectangle(cornerRadius: 8).strokeBorder(theme.accent, lineWidth: 1) }
@@ -401,15 +422,16 @@ struct ModRow: View {
     var name: String
     var focused: Bool
     @Environment(\.theme) private var theme
+    @Environment(\.isCompactLayout) private var compact
 
     var body: some View {
         HStack(spacing: 9) {
             Icon("file-text", size: 14, color: theme.muted).frame(width: 18)
-            Text(name).font(.ui(13)).foregroundStyle(theme.foreground).lineLimit(1)
+            Text(name).font(.ui(compact ? 14.5 : 13)).foregroundStyle(theme.foreground).lineLimit(1)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)
-        .frame(height: 28)
+        .frame(height: compact ? 38 : 28)
         .background(focused ? theme.selected : .clear, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             if focused { RoundedRectangle(cornerRadius: 8).strokeBorder(theme.accent, lineWidth: 1) }

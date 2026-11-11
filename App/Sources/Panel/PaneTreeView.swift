@@ -85,7 +85,7 @@ struct PaneCard: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
     @Environment(\.terminalViewProvider) private var provider
-    @AppStorage("terminalFontSize") private var fontSize: Double = 14
+    @AppStorage(TerminalFonts.sizeKey) private var fontSize = Double(TerminalFonts.defaultSize)
 
     var body: some View {
         let ws = controller.workspace

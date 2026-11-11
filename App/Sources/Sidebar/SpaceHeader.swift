@@ -11,18 +11,19 @@ struct SpaceHeader: View {
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
+    @Environment(\.isCompactLayout) private var compact
     @State private var hovering = false
     @State private var chevronHover = false
 
     var body: some View {
         let isActive = controller.activeSpace?.id == space.id
         HStack(spacing: 9) {
-            SpaceAvatar(space: space)
+            SpaceAvatar(space: space, size: compact ? 20 : 18)
             Text(space.displayName)
-                .font(.ui(13, .semibold))
+                .font(.ui(compact ? 14.5 : 13, .semibold))
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)
-                .frame(maxWidth: 150, alignment: .leading)
+                .frame(maxWidth: compact ? 230 : 150, alignment: .leading)
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)
             gitTail
@@ -34,7 +35,7 @@ struct SpaceHeader: View {
         }
         .padding(.leading, 13)
         .padding(.trailing, 11)
-        .frame(height: 34)
+        .frame(height: compact ? 42 : 34)
         .background {
             let r: CGFloat = 9
             UnevenRoundedRectangle(topLeadingRadius: r, bottomLeadingRadius: bodyShown ? 0 : r,
@@ -84,7 +85,7 @@ struct SpaceHeader: View {
                 if let n = git?.ahead, n > 0 { Text("↑\(n)").foregroundStyle(theme.ansi(2)) }
                 if let n = git?.behind, n > 0 { Text("↓\(n)").foregroundStyle(theme.ansi(1)) }
             }
-            .font(.ui(11.5))
+            .font(.ui(compact ? 12.5 : 11.5))
         } else {
             Color.clear.frame(height: 1)
         }
@@ -94,8 +95,8 @@ struct SpaceHeader: View {
     private var chevron: some View {
         if !rows.isEmpty {
             Button(action: toggle) {
-                Icon(closed ? "chevron-right" : "chevron-down", size: 12, color: chevronHover ? theme.foreground : theme.dim)
-                    .frame(width: 20, height: 20)
+                Icon(closed ? "chevron-right" : "chevron-down", size: compact ? 14 : 12, color: chevronHover ? theme.foreground : theme.dim)
+                    .frame(width: compact ? 32 : 20, height: compact ? 32 : 20)
                     .background(chevronHover ? theme.raised : .clear, in: RoundedRectangle(cornerRadius: 5))
                     .contentShape(RoundedRectangle(cornerRadius: 5))
             }
@@ -105,7 +106,7 @@ struct SpaceHeader: View {
             .padding(.trailing, -4)
             .accessibilityLabel(closed ? "Show tabs" : "Hide tabs")
         } else {
-            Color.clear.frame(width: 20, height: 20).padding(.trailing, -4)
+            Color.clear.frame(width: compact ? 32 : 20, height: 20).padding(.trailing, -4)
         }
     }
 
@@ -120,10 +121,18 @@ struct SpaceHeader: View {
 struct SpaceMenu: View {
     var space: Space
     @Environment(WorkspaceController.self) private var controller
+    @Environment(\.isCompactLayout) private var compact
 
     var body: some View {
         Button { controller.beginRename(space: space.id) } label: { Label("Rename…", image: "ui.square-pen") }
-        Button { controller.newTab(in: space) } label: { Label("New Tab", image: "ui.plus") }
+        if compact {
+            // iPhone: no tab bar with its + menu, so agents start from here too.
+            Menu {
+                LaunchMenuItems(machine: space.machine) { controller.newTab(launch: $0, in: space) }
+            } label: { Label("New Tab", image: "ui.plus") }
+        } else {
+            Button { controller.newTab(in: space) } label: { Label("New Tab", image: "ui.plus") }
+        }
         Divider()
         Button(role: .destructive) { controller.closeSpace(space.id) } label: { Label("Close Space", image: "ui.x") }
     }

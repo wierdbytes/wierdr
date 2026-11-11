@@ -76,7 +76,12 @@ struct TerminalTheme: Hashable, Sendable {
 /// The terminal fonts: JetBrains Mono (variable; bold = wght 700) with
 /// Symbols Nerd Font as the fallback for Nerd Font icons.
 enum TerminalFonts {
-    static let defaultSize: CGFloat = 14
+    /// 14 pt as the desktop; 12 pt on iPhone (about 57 columns in portrait).
+    @MainActor static var defaultSize: CGFloat { Device.isPhone ? 12 : 14 }
+    /// The Settings key for the size (`@AppStorage`), per device.
+    static let sizeKey = "terminalFontSize"
+    /// Sizes Settings and pinch allow.
+    static let sizeRange: ClosedRange<CGFloat> = 9...24
     private static let weightAxis = 0x7767_6874 // 'wght'
 
     struct Set {

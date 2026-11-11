@@ -30,9 +30,9 @@ final class TerminalSessionPool {
     @ObservationIgnored private(set) var connection: CoreConnection?
     @ObservationIgnored private var sweeper: Task<Void, Never>?
 
-    init(dark: Bool = true, fontSize: CGFloat = TerminalFonts.defaultSize, useMetal: Bool = TerminalSessionPool.defaultUseMetal) {
+    init(dark: Bool = true, fontSize: CGFloat? = nil, useMetal: Bool = TerminalSessionPool.defaultUseMetal) {
         isDark = dark
-        self.fontSize = fontSize
+        self.fontSize = fontSize ?? TerminalFonts.defaultSize
         self.useMetal = useMetal
         sweeper = Task { [weak self] in
             while !Task.isCancelled {

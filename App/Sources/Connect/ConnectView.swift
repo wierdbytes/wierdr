@@ -94,7 +94,7 @@ struct ConnectView: View {
             .confirmationDialog("Delete \u{201C}\(deleting?.displayName ?? "")\u{201D}?", isPresented: deleteShown, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) { if let h = deleting { app.delete(h) } }
             } message: {
-                Text("Its saved password and screen layout are removed from this iPad.")
+                Text("Its saved password and screen layout are removed from this \(Device.kind).")
             }
         }
     }
@@ -110,7 +110,7 @@ struct ConnectView: View {
                 .accessibilityHidden(true)
             Text("Wierdr")
                 .font(.largeTitle.bold())
-            Text("Your Herdr spaces, tabs and agents on iPad.")
+            Text("Your Herdr spaces, tabs and agents on \(Device.kind).")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

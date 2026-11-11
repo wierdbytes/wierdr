@@ -14,29 +14,18 @@ struct WorkspaceView: View {
     @State private var windowWidth: CGFloat = 0
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $controller.columnVisibility,
-                            preferredCompactColumn: $controller.compactColumn) {
-            SidebarColumn(range: sidebarRange, resizable: sizeClass != .compact)
-                // Our brand bar has its own toggle; the system one would sit (invisibly) under its buttons.
-                .toolbar(removing: .sidebarToggle)
-                .toolbar(.hidden, for: .navigationBar)
-        } detail: {
-            TerminalPanel()
-                .overlay(alignment: .leading) {
-                    if sizeClass != .compact { DockedSidebarEdge(range: sidebarRange) }
-                }
-                .toolbar(removing: .sidebarToggle)
-                .toolbar(.hidden, for: .navigationBar)
+        let phone = usesPhoneLayout
+        Group {
+            if phone {
+                PhoneWorkspaceView()
+            } else {
+                splitView
+            }
         }
-        .navigationSplitViewStyle(.balanced)
-        .overlay {
-            if sizeClass != .compact { SidebarOverlay(range: sidebarRange) }
-        }
-        .toolbar(removing: .sidebarToggle)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .environment(controller)
         .environment(\.homeFolder, controller.workspace.home)
-        .environment(\.isCompactLayout, sizeClass == .compact)
+        .environment(\.isCompactLayout, phone || sizeClass == .compact)
         .focusedSceneValue(\.workspaceController, controller)
         .sheet(isPresented: $controller.showSwitcher) {
             QuickSwitcher().environment(controller).environment(\.theme, theme)
@@ -57,9 +46,39 @@ struct WorkspaceView: View {
         } message: { request in
             Text(request.message)
         }
+        .onChange(of: phone, initial: true) { _, phone in
+            controller.singlePane = phone
+            controller.revealsNewPanes = phone
+        }
         .onChange(of: controller.workspace.spaces) { _, _ in controller.applyPending() }
         .onChange(of: seenKey) { _, _ in controller.markVisibleSeen(looking: looking) }
         .onAppear { controller.markVisibleSeen(looking: looking) }
+    }
+
+    /// iPhone (any orientation) and narrow iPad windows: the list and one pane
+    /// at a time (`PhoneWorkspaceView`); else the sidebar and the panel side by side.
+    private var usesPhoneLayout: Bool { Device.isPhone || sizeClass == .compact }
+
+    private var splitView: some View {
+        NavigationSplitView(columnVisibility: $controller.columnVisibility,
+                            preferredCompactColumn: $controller.compactColumn) {
+            SidebarColumn(range: sidebarRange, resizable: sizeClass != .compact)
+                // Our brand bar has its own toggle; the system one would sit (invisibly) under its buttons.
+                .toolbar(removing: .sidebarToggle)
+                .toolbar(.hidden, for: .navigationBar)
+        } detail: {
+            TerminalPanel()
+                .overlay(alignment: .leading) {
+                    if sizeClass != .compact { DockedSidebarEdge(range: sidebarRange) }
+                }
+                .toolbar(removing: .sidebarToggle)
+                .toolbar(.hidden, for: .navigationBar)
+        }
+        .navigationSplitViewStyle(.balanced)
+        .overlay {
+            if sizeClass != .compact { SidebarOverlay(range: sidebarRange) }
+        }
+        .toolbar(removing: .sidebarToggle)
     }
 
     /// Sidebar widths: at most 640 pt and 60% of the window, so the panel keeps room.
@@ -70,16 +89,15 @@ struct WorkspaceView: View {
     }
 
     /// The panel is in front of the person: the app is active and, when the
-    /// split view is collapsed, it shows the panel rather than the sidebar.
+    /// split view is collapsed (or on iPhone), it shows the panel rather than the list.
     private var looking: Bool {
-        scenePhase == .active && !(sizeClass == .compact && controller.compactColumn == .sidebar)
+        scenePhase == .active && !((usesPhoneLayout || sizeClass == .compact) && controller.compactColumn == .sidebar)
     }
 
     /// Changes when the agents on screen, their turns or `looking` change.
     private var seenKey: String {
-        guard looking, let tab = controller.activeTab else { return "" }
-        let zoomed = controller.screen.zoomedPane(of: tab)
-        return (zoomed.map { [$0] } ?? tab.panes).compactMap { p in
+        guard looking else { return "" }
+        return controller.onScreenPanes.compactMap { p in
             p.terminal.flatMap { controller.workspace.terminal($0) }.map { "\($0.address):\($0.turn):\($0.status?.rawValue ?? 0)" }
         }.joined(separator: ",")
     }

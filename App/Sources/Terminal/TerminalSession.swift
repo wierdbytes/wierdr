@@ -433,11 +433,66 @@ final class TerminalSession: Identifiable {
     }
 
     /// A touch or typing: take the size back from another viewer (as the desktop does on mouse-down).
-    private func userActivity() {
+    func userActivity() {
         if let stream, let grid = currentGrid() {
             stream.resize(cols: grid.cols, rows: grid.rows)
             sentGrid = grid
         }
+    }
+}
+
+// MARK: - Input from the app (iPhone input bar)
+
+extension TerminalSession {
+    /// A key the app sends on the person's behalf (quick keys, compose).
+    enum Key: Hashable {
+        case escape, enter, tab, backtab, up, down, left, right
+        /// A control character (`0x03` = Ctrl+C).
+        case control(UInt8)
+        /// Plain text typed as keys.
+        case text(String)
+    }
+
+    /// Whether input reaches the program now (a stream is open).
+    var acceptsInput: Bool { state == .live }
+
+    /// Sends a key as typed (arrows follow the program's cursor-key mode).
+    func send(key: Key) {
+        userActivity()
+        let v = terminalView
+        switch key {
+        case .escape: v.send([0x1b])
+        case .enter: v.send([0x0d])
+        case .tab: v.send([0x09])
+        case .backtab: v.send([0x1b, 0x5b, 0x5a])
+        case .up: v.sendKeyUp()
+        case .down: v.sendKeyDown()
+        case .left: v.sendKeyLeft()
+        case .right: v.sendKeyRight()
+        case .control(let byte): v.send([byte])
+        case .text(let s): v.send(Array(s.utf8))
+        }
+    }
+
+    /// Composed text: pasted (bracketed when the program asked for it, so
+    /// line breaks stay in the message), then Return when `submit`.
+    func send(text: String, submit: Bool) {
+        userActivity()
+        if !text.isEmpty { terminalView.pasteText(text) }
+        guard submit else { return }
+        if text.isEmpty {
+            terminalView.send([0x0d])
+        } else {
+            // A separate write a moment later, so no program takes it for part of the paste.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
+                self?.terminalView.send([0x0d])
+            }
+        }
+    }
+
+    /// Gives the terminal the keyboard (typing straight into it, with the key bar).
+    func takeKeyboard() {
+        if !terminalView.isFirstResponder { _ = terminalView.becomeFirstResponder() }
     }
 }
 
@@ -485,7 +540,11 @@ extension TerminalSession: TerminalViewDelegate {
 /// background. The emulator's own cols x rows = the desktop's grid formula:
 /// floor((w - 2·padX) / cellW) x floor((h - 2·padY) / cellH).
 final class TerminalContainerView: UIView {
-    static let padding = UIEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+    /// 14 x 12 as the desktop; tighter on iPhone, where every column counts.
+    static var padding: UIEdgeInsets {
+        Device.isPhone ? UIEdgeInsets(top: 6, left: 8, bottom: 4, right: 8)
+                       : UIEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+    }
 
     weak var session: TerminalSession?
     let terminalView: WierdrTerminalView
@@ -498,6 +557,66 @@ final class TerminalContainerView: UIView {
         super.init(frame: .zero)
         clipsToBounds = true
         addSubview(terminalView)
+        if Device.isPhone {
+            let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
+            addGestureRecognizer(pinch)
+        }
+    }
+
+    // MARK: Pinch: text size (iPhone)
+
+    private var pinchStart: CGFloat = 0
+    private lazy var sizeBadge: UILabel = {
+        let l = UILabel()
+        l.font = .monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
+        l.textAlignment = .center
+        l.layer.cornerRadius = 10
+        l.layer.cornerCurve = .continuous
+        l.clipsToBounds = true
+        l.alpha = 0
+        addSubview(l)
+        return l
+    }()
+
+    /// Two fingers change the terminal text size for every terminal (Settings'
+    /// value); the badge shows the size, the terminals follow when the fingers lift.
+    @objc private func pinched(_ g: UIPinchGestureRecognizer) {
+        let current = session?.fontSize ?? TerminalFonts.defaultSize
+        func target() -> CGFloat {
+            let r = TerminalFonts.sizeRange
+            return min(r.upperBound, max(r.lowerBound, (pinchStart * g.scale).rounded()))
+        }
+        switch g.state {
+        case .began:
+            pinchStart = current
+            showSize(current)
+        case .changed:
+            showSize(target())
+        case .ended:
+            let size = target()
+            hideSize()
+            if size != current {
+                UserDefaults.standard.set(Double(size), forKey: TerminalFonts.sizeKey)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+        default:
+            hideSize()
+        }
+    }
+
+    private func showSize(_ size: CGFloat) {
+        let badge = sizeBadge
+        let theme = session?.theme ?? .atomOneDark
+        badge.backgroundColor = theme.foregroundColor.withAlphaComponent(0.88)
+        badge.textColor = theme.backgroundColor
+        badge.text = "\(Int(size)) pt"
+        badge.frame = CGRect(x: (bounds.width - 84) / 2, y: (bounds.height - 40) / 2, width: 84, height: 40)
+        bringSubviewToFront(badge)
+        badge.alpha = 1
+    }
+
+    private func hideSize() {
+        UIView.animate(withDuration: 0.25, delay: 0.3) { self.sizeBadge.alpha = 0 }
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }

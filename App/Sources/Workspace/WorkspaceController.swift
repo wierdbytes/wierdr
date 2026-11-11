@@ -19,6 +19,14 @@ final class WorkspaceController {
     var showSwitcher = false
     var showSettings = false
 
+    // MARK: Layout (set by `WorkspaceView`)
+    /// The iPhone layout: one pane on screen at a time (the focused one).
+    var singlePane = false
+    /// A new space/tab/pane opens in front of the person (iPhone: the pane screen).
+    var revealsNewPanes = false
+    /// Unsent compose text per terminal address (iPhone input bar).
+    var drafts: [String: String] = [:]
+
     // MARK: Dialogs
     struct RenameRequest: Identifiable {
         enum Target { case space(String), tab(String) }
@@ -300,9 +308,27 @@ final class WorkspaceController {
 
     /// Agents drawn in the panel: the active tab's (or its zoomed pane's).
     private var visibleAgents: [String] {
+        onScreenPanes.compactMap(\.terminal).filter { workspace.terminal($0)?.isAgent == true }
+    }
+
+    /// Panes drawn in the panel: the active tab's, its zoomed pane, or (iPhone) the focused one.
+    var onScreenPanes: [Pane] {
         guard let tab = activeTab else { return [] }
-        let panes = screen.zoomedPane(of: tab).map { [$0] } ?? tab.panes
-        return panes.compactMap(\.terminal).filter { workspace.terminal($0)?.isAgent == true }
+        if singlePane { return screen.focusedPane(of: tab).map { [$0] } ?? [] }
+        return screen.zoomedPane(of: tab).map { [$0] } ?? tab.panes
+    }
+
+    /// Agents other than `paneID`'s that wait for the person, by status.
+    func attention(excluding paneID: String?) -> (blocked: Int, done: Int) {
+        var blocked = 0, done = 0
+        for row in allRows where row.kind == .agent && row.paneID != paneID {
+            switch row.terminal?.status {
+            case .blocked: blocked += 1
+            case .done: done += 1
+            default: break
+            }
+        }
+        return (blocked, done)
     }
 
     // MARK: - Pending selection
@@ -318,13 +344,13 @@ final class WorkspaceController {
         switch p {
         case .space(let id):
             guard let space = workspace.space(id) else { return }
-            if let pane = space.tabs.first?.panes.first { focus(pane: pane.id, reveal: false) } else { select(space: space) }
+            if let pane = space.tabs.first?.panes.first { focus(pane: pane.id, reveal: revealsNewPanes) } else { select(space: space) }
         case .tab(let id):
             guard let tab = workspace.tab(id) else { return }
-            if let pane = tab.panes.first { focus(pane: pane.id, reveal: false) } else { select(tab: tab) }
+            if let pane = tab.panes.first { focus(pane: pane.id, reveal: revealsNewPanes) } else { select(tab: tab) }
         case .pane(let id):
             guard workspace.location(ofPane: id) != nil else { return }
-            focus(pane: id, reveal: false)
+            focus(pane: id, reveal: revealsNewPanes)
         }
         pending = nil
     }

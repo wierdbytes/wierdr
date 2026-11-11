@@ -40,8 +40,8 @@ struct HostEditor: View {
                     Text("Authentication")
                 } footer: {
                     Text(host.auth == .key
-                         ? "Add this iPad's public key to ~/.ssh/authorized_keys on the computer."
-                         : "The password is stored in this iPad's Keychain.")
+                         ? "Add this \(Device.kind)'s public key to ~/.ssh/authorized_keys on the computer."
+                         : "The password is stored in this \(Device.kind)'s Keychain.")
                 }
 
                 if host.auth == .key {
@@ -68,7 +68,7 @@ struct HostEditor: View {
     }
 }
 
-/// "This iPad's key": the public key with Copy and Share, or Generate.
+/// "This iPad's key" ("This iPhone's key"): the public key with Copy and Share, or Generate.
 private struct PublicKeySection: View {
     @Environment(\.services) private var services
     @State private var key: String?
@@ -77,7 +77,7 @@ private struct PublicKeySection: View {
     @State private var copied = false
 
     var body: some View {
-        Section("This iPad's Key") {
+        Section("This \(Device.kind)'s Key") {
             if let key {
                 Text(key)
                     .font(.footnote.monospaced())

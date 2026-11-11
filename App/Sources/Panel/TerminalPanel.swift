@@ -127,7 +127,9 @@ struct ToastStack: View {
 }
 
 /// "Reconnecting…" / failure banner from `Workspace.phase`.
-private struct ConnectionBanner: View {
+struct ConnectionBanner: View {
+    /// Distance from the top (below the bar it hangs from).
+    var top: CGFloat = 48
     @Environment(WorkspaceController.self) private var controller
     @Environment(LiveConnector.self) private var connector: LiveConnector?
     @Environment(\.theme) private var theme
@@ -149,7 +151,7 @@ private struct ConnectionBanner: View {
                         .padding(.horizontal, 12).frame(height: 28)
                         .background(theme.popover, in: Capsule())
                         .overlay(Capsule().strokeBorder(theme.border, lineWidth: 1))
-                        .padding(.top, 48)
+                        .padding(.top, top)
                 }
             }
         }
@@ -163,6 +165,6 @@ private struct ConnectionBanner: View {
         .padding(.horizontal, 12).frame(height: 28)
         .background(theme.popover, in: Capsule())
         .overlay(Capsule().strokeBorder(theme.border, lineWidth: 1))
-        .padding(.top, 48)
+        .padding(.top, top)
     }
 }
