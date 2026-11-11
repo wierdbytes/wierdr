@@ -3,11 +3,17 @@ import WierdrModel
 
 /// One pane on the whole iPhone screen: a bar with back, what runs here and
 /// the next agent waiting for you; the other panes of the space; the
-/// terminal edge to edge; the input bar (quick keys + compose).
+/// terminal edge to edge, and over it, from the right edge, the key panel
+/// (`PhoneKeyPanel`). Nothing under the terminal: typing is the terminal's
+/// own keyboard (a tap on it), with its key bar.
 struct PhonePaneScreen: View {
     @Environment(WorkspaceController.self) private var controller
+    @Environment(\.services) private var services
     @Environment(\.theme) private var theme
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var panelOpen = false
+    /// The finger's horizontal travel while it moves the panel.
+    @State private var panelDrag: CGFloat?
 
     var body: some View {
         let space = controller.activeSpace
@@ -27,20 +33,79 @@ struct PhonePaneScreen: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(theme.background)
-            .overlay(alignment: .bottom) {
-                ToastStack().padding(.horizontal, 12).padding(.bottom, 10)
+            .background {
+                // Behind the terminal, its size: where the panel's swipes start.
+                PhoneKeyPanelGestures(
+                    enabled: pane?.terminal != nil && !keyboardUp,
+                    isOpen: panelOpen,
+                    onDrag: { panelDrag = $0 },
+                    onEnd: { finishPanelDrag(projected: $0) },
+                    onTapOutside: { setPanel(open: false) }
+                )
             }
-            if let address = pane?.terminal {
-                PhoneInputBar(address: address)
-                    .id(address)
+            .background(theme.background)
+            .overlay(alignment: .trailing) {
+                if let address = pane?.terminal, !keyboardUp {
+                    keyPanel(address)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                // Above the panel, and beside it while it is out.
+                ToastStack()
+                    .padding(.leading, 12)
+                    .padding(.trailing, panelOpen ? PhoneKeyPanel.width + 6 : 12)
+                    .padding(.bottom, 10)
             }
         }
         .background(theme.chrome.ignoresSafeArea())
+        .onChange(of: keyboardUp) { _, up in if up { panelOpen = false; panelDrag = nil } }
         .overlay(alignment: .top) { ConnectionBanner(top: 56) }
         // Watching an agent work: the screen stays on (a locked iPhone drops the connection).
         .onChange(of: keepsAwake, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+    }
+
+    /// The terminal has the keyboard (its key bar is above it): no panel meanwhile.
+    private var keyboardUp: Bool {
+        services.terminalSession(controller.focusedPane?.terminal ?? "")?.hasKeyboardFocus == true
+    }
+
+    /// How far out the panel is: 0 hidden, 1 open.
+    private var panelProgress: CGFloat {
+        let w = PhoneKeyPanel.width
+        guard let d = panelDrag else { return panelOpen ? 1 : 0 }
+        return panelOpen ? 1 - min(max(d, 0), w) / w : min(max(-d, 0), w) / w
+    }
+
+    /// Always there while the terminal is (so it slides both ways and an
+    /// upload goes on), just past the edge while hidden.
+    private func keyPanel(_ address: String) -> some View {
+        let progress = panelProgress
+        return ZStack(alignment: .trailing) {
+            if progress == 0 {
+                PhoneKeyPanelGrip { setPanel(open: true) }
+                    .transition(.opacity)
+            }
+            PhoneKeyPanel(address: address, shown: progress > 0, close: { setPanel(open: false) })
+                .id(address)
+                .offset(x: (1 - progress) * PhoneKeyPanel.width)
+                .allowsHitTesting(progress > 0)
+                .accessibilityHidden(progress == 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+        .clipped()
+    }
+
+    private func setPanel(open: Bool) {
+        withAnimation(.snappy(duration: 0.25)) {
+            panelOpen = open
+            panelDrag = nil
+        }
+    }
+
+    private func finishPanelDrag(projected: CGFloat) {
+        let threshold = PhoneKeyPanel.width * 0.4
+        setPanel(open: panelOpen ? projected < threshold : projected < -threshold)
     }
 
     private var keepsAwake: Bool {

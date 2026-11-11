@@ -24,8 +24,6 @@ final class WorkspaceController {
     var singlePane = false
     /// A new space/tab/pane opens in front of the person (iPhone: the pane screen).
     var revealsNewPanes = false
-    /// Unsent compose text per terminal address (iPhone input bar).
-    var drafts: [String: String] = [:]
 
     // MARK: Dialogs
     struct RenameRequest: Identifiable {

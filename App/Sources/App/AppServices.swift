@@ -36,8 +36,8 @@ struct AppServices {
     var installKey: @MainActor () async throws -> Void = { throw AppError.notImplemented("Not connected") }
 
     /// The live terminal session of a terminal address, for input that does
-    /// not come from its own keyboard (the iPhone's quick keys and compose
-    /// field). `nil` when there is none (demo).
+    /// not come from its own keyboard (the iPhone's key panel: keys, pasted
+    /// clipboard text, image paths). `nil` when there is none (demo).
     var terminalSession: @MainActor (_ address: String) -> TerminalSession? = { _ in nil }
 
     /// Placeholders: connect throws "not implemented", no key, no Keychain,

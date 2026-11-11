@@ -443,10 +443,10 @@ final class TerminalSession: Identifiable {
     }
 }
 
-// MARK: - Input from the app (iPhone input bar)
+// MARK: - Input from the app (iPhone key panel)
 
 extension TerminalSession {
-    /// A key the app sends on the person's behalf (quick keys, compose).
+    /// A key the app sends on the person's behalf (the iPhone's key panel).
     enum Key: Hashable {
         case escape, enter, tab, backtab, up, down, left, right
         /// A control character (`0x03` = Ctrl+C).
@@ -476,8 +476,9 @@ extension TerminalSession {
         }
     }
 
-    /// Composed text: pasted (bracketed when the program asked for it, so
-    /// line breaks stay in the message), then Return when `submit`.
+    /// Text as one paste (bracketed when the program asked for it, so line
+    /// breaks stay in it), then Return when `submit`. The iPhone's key panel
+    /// pastes clipboard text and image paths this way, without Return.
     func send(text: String, submit: Bool) {
         userActivity()
         if !text.isEmpty { terminalView.pasteText(text) }
