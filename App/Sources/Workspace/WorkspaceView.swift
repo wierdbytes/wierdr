@@ -63,11 +63,13 @@ struct WorkspaceView: View {
         NavigationSplitView(columnVisibility: $controller.columnVisibility,
                             preferredCompactColumn: $controller.compactColumn) {
             SidebarColumn(range: sidebarRange, resizable: sizeClass != .compact)
+                .keyboardCoverPadding()
                 // Our brand bar has its own toggle; the system one would sit (invisibly) under its buttons.
                 .toolbar(removing: .sidebarToggle)
                 .toolbar(.hidden, for: .navigationBar)
         } detail: {
             TerminalPanel()
+                .keyboardCoverPadding()
                 .overlay(alignment: .leading) {
                     if sizeClass != .compact { DockedSidebarEdge(range: sidebarRange) }
                 }

@@ -30,6 +30,7 @@ struct SidebarOverlay: View {
                     .accessibilityLabel("Close Sidebar")
                     .accessibilityAddTraits(.isButton)
                 SidebarView()
+                    .keyboardCoverPadding()
                     .frame(width: width)
                     .overlay(alignment: .trailing) { Hairline(axis: .vertical).ignoresSafeArea() }
                     .overlay(alignment: .trailing) {
