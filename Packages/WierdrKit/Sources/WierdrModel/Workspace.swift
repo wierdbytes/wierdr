@@ -106,7 +106,7 @@ public final class Workspace {
     // MARK: Commands (implemented by the live backend; preview/no-op otherwise)
 
     /// Backend that performs commands against herdr-core. `nil` in previews.
-    var backend: WorkspaceBackend?
+    weak var backend: WorkspaceBackend?
 
     /// New space on a machine (`nil` = connected computer) with one tab running `launch`.
     /// Returns the new space id.

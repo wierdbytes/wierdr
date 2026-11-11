@@ -72,9 +72,10 @@ final class AppModel {
     }
 
     func disconnect() async {
-        if case .live = mode, let ws = session?.workspace { await services.disconnect(ws) }
+        let live: Workspace? = { if case .live = mode { return session?.workspace } else { return nil } }()
         session = nil
         mode = .none
+        if let live { await services.disconnect(live) }
     }
 
     /// Installs this device's key on the connected computer and switches the
@@ -83,7 +84,7 @@ final class AppModel {
         guard case .live(var host) = mode else { return }
         try await services.installKey()
         host.auth = .key
-        save(host, password: nil)
+        hosts.save(host)   // the saved password stays until key login has worked once
         mode = .live(host)
     }
 

@@ -129,6 +129,7 @@ struct ToastStack: View {
 /// "Reconnecting…" / failure banner from `Workspace.phase`.
 private struct ConnectionBanner: View {
     @Environment(WorkspaceController.self) private var controller
+    @Environment(LiveConnector.self) private var connector: LiveConnector?
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -140,7 +141,17 @@ private struct ConnectionBanner: View {
         case .reconnecting(let why):
             banner("Reconnecting… \(why)", color: theme.working, spinner: true)
         case .failed(let why):
-            banner(why, color: theme.blocked, spinner: false)
+            HStack(spacing: 6) {
+                banner(why, color: theme.blocked, spinner: false)
+                if let session = connector?.active, session.workspace === controller.workspace {
+                    Button("Retry") { session.retry() }
+                        .font(.ui(12, .semibold))
+                        .padding(.horizontal, 12).frame(height: 28)
+                        .background(theme.popover, in: Capsule())
+                        .overlay(Capsule().strokeBorder(theme.border, lineWidth: 1))
+                        .padding(.top, 48)
+                }
+            }
         }
     }
 

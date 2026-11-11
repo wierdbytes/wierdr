@@ -44,6 +44,7 @@ final class HostSession {
     @ObservationIgnored private var current: CoreConnection?
     @ObservationIgnored private var stopped = false
     @ObservationIgnored private var wakeUp: CheckedContinuation<Void, Never>?
+    @ObservationIgnored private var waitID = 0
     @ObservationIgnored private var liveWatch: Task<Void, Never>?
 
     init(endpoint: Endpoint, dark: Bool, fontSize: CGFloat) {
@@ -53,7 +54,11 @@ final class HostSession {
         engine.display = terminals.theme.display(cellPixels: nil)
         engine.onEvent = { [weak self] event in
             guard let self, let address = event.terminal else { return }
-            if case .restarted = event.kind { self.terminals.terminalRestarted(address) }
+            switch event.kind {
+            case .restarted: self.terminals.terminalRestarted(address)
+            case .removed: self.terminals.remove(address)
+            default: break
+            }
         }
         #if DEBUG
         engine.log = { print("[engine] \($0)") }
@@ -81,6 +86,7 @@ final class HostSession {
     /// Disconnect for good.
     func stop() async {
         stopped = true
+        hostKeyQuestion?.answer(false)
         loop?.cancel()
         loop = nil
         liveWatch?.cancel()
@@ -154,6 +160,7 @@ final class HostSession {
         while !stopped && !Task.isCancelled {
             do {
                 let core = try await connect()
+                if stopped || Task.isCancelled { await core.close(); break }
                 current = core
                 attempt = 0
                 terminals.setConnection(core)
@@ -163,7 +170,10 @@ final class HostSession {
                 state = .reconnecting("Connection closed")
                 workspace.phase = .reconnecting("Connection closed")
             } catch {
-                if stopped || Task.isCancelled { break }
+                if stopped || Task.isCancelled {
+                    if let c = current { await c.close(); current = nil }
+                    break
+                }
                 let message = Self.describe(error)
                 if Self.isFatal(error) {
                     state = .failed(message)
@@ -200,12 +210,14 @@ final class HostSession {
 
     private func waitForWake(seconds: Double?) async {
         guard !stopped else { return }
+        waitID &+= 1
+        let id = waitID
         await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
             wakeUp = c
             if let seconds {
                 Task { [weak self] in
                     try? await Task.sleep(for: .seconds(seconds))
-                    self?.wake()
+                    if self?.waitID == id { self?.wake() }
                 }
             }
         }

@@ -19,7 +19,7 @@ import HerdrCore
 @MainActor
 @Observable
 final class TerminalSessionPool {
-    private(set) var sessions: [String: TerminalSession] = [:]
+    @ObservationIgnored private(set) var sessions: [String: TerminalSession] = [:]
     private(set) var isDark: Bool
     private(set) var fontSize: CGFloat
     /// Metal renderer (SwiftTerm `setUseMetal`); CoreGraphics when false.

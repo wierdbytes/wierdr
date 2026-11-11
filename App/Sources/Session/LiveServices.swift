@@ -34,8 +34,8 @@ final class LiveConnector {
                 try? AppStores.keys.deletePassword(host: Self.passwordKey(id), port: 0, user: "wierdr")
             },
             terminalViews: TerminalViewProvider { [weak self] ctx in
-                if let pool = self?.active?.terminals {
-                    return AnyView(LiveTerminalView(context: ctx, pool: pool))
+                if let session = self?.active {
+                    return AnyView(LiveTerminalView(context: ctx, session: session))
                 }
                 return AnyView(DemoTerminalView(context: ctx))
             },
@@ -110,8 +110,10 @@ final class LiveConnector {
 /// A live terminal in a pane card (SwiftTerm view fed by an attach stream).
 struct LiveTerminalView: View {
     let context: TerminalViewContext
-    let pool: TerminalSessionPool
+    let session: HostSession
     @Environment(\.colorScheme) private var colorScheme
+
+    private var pool: TerminalSessionPool { session.terminals }
 
     var body: some View {
         TerminalSurface(session: pool.session(for: context.address), isFocused: context.focused) {
@@ -124,7 +126,7 @@ struct LiveTerminalView: View {
 
     private func sync() {
         let dark = colorScheme == .dark
-        if pool.isDark != dark { pool.setAppearance(dark: dark) }
+        if pool.isDark != dark { session.setAppearance(dark: dark) }
         if pool.fontSize != context.fontSize { pool.setFontSize(context.fontSize) }
     }
 }

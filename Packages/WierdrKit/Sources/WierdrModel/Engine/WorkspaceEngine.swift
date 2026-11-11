@@ -533,8 +533,13 @@ public final class WorkspaceEngine: WorkspaceBackend {
         let local = LayoutID.local(address, machine)
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let afterLocal = after.map { LayoutID.local($0, machine) }
-        try await write(key) { LayoutEdits.newSpace($0, id: sp, name: trimmed, folder: used, tabID: tb, paneID: p,
-                                                     address: local, after: afterLocal) }
+        do {
+            try await write(key) { LayoutEdits.newSpace($0, id: sp, name: trimmed, folder: used, tabID: tb, paneID: p,
+                                                         address: local, after: afterLocal) }
+        } catch {
+            if slots[key]?.raw.paneShowing(local) == nil { await kill([address]) }
+            throw error
+        }
         return LayoutID.qualify(sp, machine)
     }
 
@@ -551,8 +556,13 @@ public final class WorkspaceEngine: WorkspaceBackend {
         let local = LayoutID.local(address, machine)
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let afterLocal = after.map { LayoutID.local($0, machine) }
-        try await write(key) { LayoutEdits.newTab($0, space: localSpace, after: afterLocal, id: tb, name: trimmed,
-                                                   paneID: p, address: local) }
+        do {
+            try await write(key) { LayoutEdits.newTab($0, space: localSpace, after: afterLocal, id: tb, name: trimmed,
+                                                       paneID: p, address: local) }
+        } catch {
+            if slots[key]?.raw.paneShowing(local) == nil { await kill([address]) }
+            throw error
+        }
         if slots[key]?.raw.paneShowing(local) == nil, slots[key]?.raw.locateSpace(localSpace) == nil {
             // The space closed meanwhile: the terminal has nowhere to go.
             await kill([address])
@@ -577,7 +587,12 @@ public final class WorkspaceEngine: WorkspaceBackend {
         let local = LayoutID.local(address, machine)
         let axis = direction == .right ? "row" : "column"
         let container = LayoutID.fresh("s")
-        try await write(key) { LayoutEdits.split($0, target: localPane, axis: axis, paneID: p, containerID: container, address: local) }
+        do {
+            try await write(key) { LayoutEdits.split($0, target: localPane, axis: axis, paneID: p, containerID: container, address: local) }
+        } catch {
+            if slots[key]?.raw.paneShowing(local) == nil { await kill([address]) }
+            throw error
+        }
         if let placed = slots[key]?.raw.paneShowing(local) {
             return LayoutID.qualify(placed.pane, machine)
         }
