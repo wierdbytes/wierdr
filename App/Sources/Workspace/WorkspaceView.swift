@@ -11,22 +11,29 @@ struct WorkspaceView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// Read here, outside the split view (its sidebar column is always compact).
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var windowWidth: CGFloat = 0
 
     var body: some View {
         NavigationSplitView(columnVisibility: $controller.columnVisibility,
                             preferredCompactColumn: $controller.compactColumn) {
-            SidebarView()
-                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 420)
+            SidebarColumn(range: sidebarRange, resizable: sizeClass != .compact)
                 // Our brand bar has its own toggle; the system one would sit (invisibly) under its buttons.
                 .toolbar(removing: .sidebarToggle)
                 .toolbar(.hidden, for: .navigationBar)
         } detail: {
             TerminalPanel()
+                .overlay(alignment: .leading) {
+                    if sizeClass != .compact { DockedSidebarEdge(range: sidebarRange) }
+                }
                 .toolbar(removing: .sidebarToggle)
                 .toolbar(.hidden, for: .navigationBar)
         }
         .navigationSplitViewStyle(.balanced)
+        .overlay {
+            if sizeClass != .compact { SidebarOverlay(range: sidebarRange) }
+        }
         .toolbar(removing: .sidebarToggle)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .environment(controller)
         .environment(\.homeFolder, controller.workspace.home)
         .environment(\.isCompactLayout, sizeClass == .compact)
@@ -53,6 +60,13 @@ struct WorkspaceView: View {
         .onChange(of: controller.workspace.spaces) { _, _ in controller.applyPending() }
         .onChange(of: seenKey) { _, _ in controller.markVisibleSeen(looking: looking) }
         .onAppear { controller.markVisibleSeen(looking: looking) }
+    }
+
+    /// Sidebar widths: at most 640 pt and 60% of the window, so the panel keeps room.
+    private var sidebarRange: ClosedRange<Double> {
+        let lower = SidebarResizeHandle.minWidth
+        let upper = windowWidth > 0 ? min(640, Double(windowWidth) * 0.6) : 640
+        return lower...max(lower, upper)
     }
 
     /// The panel is in front of the person: the app is active and, when the

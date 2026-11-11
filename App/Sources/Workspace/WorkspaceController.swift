@@ -14,6 +14,8 @@ final class WorkspaceController {
     // MARK: Navigation chrome
     var columnVisibility: NavigationSplitViewVisibility = .all
     var compactColumn: NavigationSplitViewColumn = .sidebar
+    /// The sidebar slid over the panel while it's hidden (`SidebarOverlay`).
+    var sidebarOverlay = false
     var showSwitcher = false
     var showSettings = false
 
@@ -95,7 +97,15 @@ final class WorkspaceController {
     /// Focus a pane (selects its space and tab); on iPhone shows the panel.
     func focus(pane paneID: String, reveal: Bool = true) {
         screen.focus(pane: paneID, in: workspace)
-        if reveal { compactColumn = .detail }
+        if reveal {
+            compactColumn = .detail
+            closeSidebarOverlay()
+        }
+    }
+
+    func closeSidebarOverlay() {
+        guard sidebarOverlay else { return }
+        withAnimation(.easeOut(duration: 0.25)) { sidebarOverlay = false }
     }
 
     func showPanel() { compactColumn = .detail }
@@ -105,6 +115,8 @@ final class WorkspaceController {
     }
 
     func toggleSidebar() {
+        // The overlay's own Hide Sidebar button (and ⌘B over it) closes it.
+        if sidebarOverlay { return closeSidebarOverlay() }
         withAnimation(.easeInOut(duration: 0.25)) {
             columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
         }

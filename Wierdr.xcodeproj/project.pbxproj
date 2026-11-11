@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0E1CCC69D66751AABAD36B2A /* SidebarOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BBD742BB5614E0A3EFA587E /* SidebarOverlay.swift */; };
 		1B05101B71E742280AB023DD /* WierdrTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90B1F34C74D7CADD79F2C52 /* WierdrTerminalView.swift */; };
 		1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */; };
 		1D99092A103C9305E6D01ACD /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF1A4D9E311EDC3924AE60C /* ConnectView.swift */; };
@@ -42,6 +43,7 @@
 		89C240BF74E4B861F2FEE59A /* Geist-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 96816409D750DAB4ECFE03B8 /* Geist-Variable.ttf */; };
 		95E3B7F160B52277B3942777 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8291C8C0633695801471D97 /* Theme.swift */; };
 		997F8D2F476056E4F6653FC8 /* TerminalPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6654E2F2DE8CC92909567AD /* TerminalPanel.swift */; };
+		9CF692D9846CA0F210A5C27A /* SidebarResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */; };
 		9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD1D033D2D7C97DEF34DCD0 /* Previews.swift */; };
 		9F4371D40DBE38454BC60FC8 /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A94262DB139809864F08002 /* AppServices.swift */; };
 		A5A665F63667AD58A3437D8E /* HostSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B9899D1F0993F0A4EEFB4B /* HostSession.swift */; };
@@ -83,8 +85,10 @@
 		4FAB055678CBEED35D324983 /* SpacesList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesList.swift; sourceTree = "<group>"; };
 		52EDFAC9EB0534459E6950A3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		60C13DE55007AF44DEA645DC /* programs.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = programs.json; sourceTree = "<group>"; };
+		6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarResizeHandle.swift; sourceTree = "<group>"; };
 		647C64E311441E658D84CAD7 /* LiveServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveServices.swift; sourceTree = "<group>"; };
 		6B698C0B918748FB60826385 /* TerminalSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurface.swift; sourceTree = "<group>"; };
+		6BBD742BB5614E0A3EFA587E /* SidebarOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarOverlay.swift; sourceTree = "<group>"; };
 		7056E4DE60E7F76AD6B1A7D3 /* Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chrome.swift; sourceTree = "<group>"; };
 		73B8BBCCDAF57164EE74D110 /* DemoTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoTerminalView.swift; sourceTree = "<group>"; };
 		8089262433D04F1C14D569AE /* OFL-Geist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-Geist.txt"; sourceTree = "<group>"; };
@@ -145,6 +149,8 @@
 			isa = PBXGroup;
 			children = (
 				BBDB08858052E955C8F9E69B /* QuickSwitcher.swift */,
+				6BBD742BB5614E0A3EFA587E /* SidebarOverlay.swift */,
+				6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */,
 				9B772A5D1E7F406A5629C045 /* SidebarRows.swift */,
 				F8F94D9E6DF287A91E86496D /* SidebarView.swift */,
 				20A5417D9BCC91A5B4906C41 /* SpaceHeader.swift */,
@@ -429,6 +435,8 @@
 				9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */,
 				CC6CA5DD5FA692EB2E3DF779 /* QuickSwitcher.swift in Sources */,
 				7CC2C3A024443CF62DBEE2E2 /* SettingsView.swift in Sources */,
+				0E1CCC69D66751AABAD36B2A /* SidebarOverlay.swift in Sources */,
+				9CF692D9846CA0F210A5C27A /* SidebarResizeHandle.swift in Sources */,
 				C95DFE56B643D6F96FE2DA27 /* SidebarRows.swift in Sources */,
 				B8A0A0249281AC1ADF72D8AF /* SidebarView.swift in Sources */,
 				47BFA075FFDB3DD630E66FA2 /* SpaceHeader.swift in Sources */,
