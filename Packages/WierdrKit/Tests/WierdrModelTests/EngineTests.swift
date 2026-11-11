@@ -55,7 +55,41 @@ struct EngineTests {
         #expect(ws.launchers[""]?.first { $0.id == "codex" }?.installed == false)
         #expect(ws.launchers[""]?.map(\.id).prefix(3) == ["claude", "codex", "pi"])
         #expect(core.calls("doc.set").isEmpty)
-        #expect(core.calls("doc.get").map { $0["on"]?.string } .sorted { ($0 ?? "") < ($1 ?? "") } == [nil, "lf"])
+        #expect(core.calls("doc.get").filter { $0["name"] == "herdr-app" }.map { $0["on"]?.string }
+            .sorted { ($0 ?? "") < ($1 ?? "") } == [nil, "lf"])
+    }
+
+    @Test func limitsFromEveryMachine() async throws {
+        typealias F = LimitsFixture
+        let core = makeCore()
+        core.setDoc("limits", F.doc(["claude.849d2d8c": F.claude(at: 1000, used5h: 37)]), version: 2)
+        core.setDoc("limits", on: "lf", F.doc(["claude.849d2d8c": F.claude(at: 2000, used5h: 41, host: "lf"),
+                                                "codex.d4800446": F.codex()]), version: 7)
+        let (ws, _) = try await start(core)
+        try await eventually { ws.limits.map(\.id) == ["claude.849d2d8c", "codex.d4800446"] }
+        #expect(ws.limits[0].windows.first?.used == 41 && ws.limits[0].host == "lf")
+
+        // pi writes again: the doc event brings it in.
+        core.setDoc("limits", F.doc(["claude.849d2d8c": F.claude(at: 3000, used5h: 50)]), version: 3)
+        core.emit("doc", ["name": "limits", "version": 3])
+        try await eventually { ws.limits.first?.windows.first?.used == 50 }
+        // An event for a version already read reads nothing.
+        let reads = { core.calls("doc.get").filter { $0["name"] == "limits" }.count }
+        let before = reads()
+        core.emit("doc", ["name": "limits", "version": 3])
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(reads() == before)
+        #expect(core.calls("doc.set").isEmpty)
+    }
+
+    @Test func limitsCanBeLeftOut() async throws {
+        let core = makeCore()
+        core.setDoc("limits", LimitsFixture.doc(["codex.d4800446": LimitsFixture.codex()]), version: 2)
+        let (ws, _) = try await start(core, EngineOptions(limitsDocument: nil))
+        core.emit("doc", ["name": "limits", "version": 3])
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(ws.limits.isEmpty)
+        #expect(core.calls("doc.get").allSatisfy { $0["name"] == "herdr-app" })
     }
 
     @Test func newTabRunsTheTerminalThenWritesTheDocument() async throws {

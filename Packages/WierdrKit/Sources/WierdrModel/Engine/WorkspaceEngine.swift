@@ -53,6 +53,10 @@ public final class WorkspaceEngine: WorkspaceBackend {
     private var installed: [String: (at: Date, commands: Set<String>?)] = [:]
     private var launcherChecks: Set<String> = []
     private var born: [String: Date] = [:]
+    // Limits (`limits` documents) per machine slot, and the reads under way.
+    private var limitDocs: [String: (version: UInt64, accounts: [LimitAccount])] = [:]
+    private var limitReading: Set<String> = []
+    private var limitReread: Set<String> = []
     private var missingSince: [String: Date] = [:]
     private var cleaning: Set<String> = []
 
@@ -121,6 +125,8 @@ public final class WorkspaceEngine: WorkspaceBackend {
             slots[key]?.reading = false
             slots[key]?.rereadNeeded = false
         }
+        limitReading = []
+        limitReread = []
         defer {
             if session == me {
                 tasks.forEach { $0.cancel() }
@@ -141,7 +147,10 @@ public final class WorkspaceEngine: WorkspaceBackend {
         applyMachines(machines, readNew: false)
         let initial = slots.filter { $0.value.connected }.map(\.key)
         await withTaskGroup(of: Void.self) { group in
-            for key in initial { group.addTask { await self.readDoc(key, session: me) } }
+            for key in initial {
+                group.addTask { await self.readDoc(key, session: me) }
+                group.addTask { await self.readLimits(key, me) }
+            }
             group.addTask { await self.fetchHome("", me) }
         }
         await readColors(me)  // first paint with the desktop's names and colors
@@ -203,7 +212,7 @@ public final class WorkspaceEngine: WorkspaceBackend {
             seq = e.seq
             for (a, _) in records { noteWord(a) }
             for a in Array(writtenSeen.keys) { confirmSeen(a) }
-            for key in slots.keys { requestRead(key) }
+            for key in slots.keys { requestRead(key); requestLimits(key) }
             scheduleMachinesRefresh()
             scheduleRebuild()
             return
@@ -223,8 +232,13 @@ public final class WorkspaceEngine: WorkspaceBackend {
             records[record.address] = record
             confirmSeen(record.address)
         case .doc(let name, let version):
-            guard name == options.documentName else { return }
             let key = e.machine ?? ""
+            if name == options.limitsDocument {
+                if let cur = limitDocs[key], cur.version >= version { return }
+                requestLimits(key)
+                return
+            }
+            guard name == options.documentName else { return }
             if let slot = slots[key], slot.state == .ready, slot.version >= version { return }
             requestRead(key)
             return
@@ -294,7 +308,7 @@ public final class WorkspaceEngine: WorkspaceBackend {
                     slot.state = .loading
                     slots[m.name] = slot
                     changed = true
-                    if readNew { requestRead(m.name) }
+                    if readNew { requestRead(m.name); requestLimits(m.name) }
                     if homes[m.name] == nil {
                         let me = session, name = m.name
                         tasks.append(Task { [weak self] in await self?.fetchHome(name, me) })
@@ -313,6 +327,7 @@ public final class WorkspaceEngine: WorkspaceBackend {
         }
         for key in slots.keys where !key.isEmpty && !visible.contains(where: { $0.name == key }) {
             slots[key] = nil
+            limitDocs[key] = nil
             changed = true
         }
         if changed || old != Set(visible.map(\.name)) { scheduleRebuild() }
@@ -375,6 +390,38 @@ public final class WorkspaceEngine: WorkspaceBackend {
         slot.state = .ready
         slot.loaded = true
         slots[key] = slot
+        scheduleRebuild()
+    }
+
+    // MARK: - Limits
+
+    /// Reads a machine's `limits` document again (one read at a time; a request
+    /// while one runs reads once more after it).
+    private func requestLimits(_ key: String) {
+        guard options.limitsDocument != nil, connection != nil, key.isEmpty || slots[key] != nil else { return }
+        if limitReading.contains(key) {
+            limitReread.insert(key)
+            return
+        }
+        limitReading.insert(key)
+        let me = session
+        Task { [weak self] in
+            guard let self else { return }
+            repeat {
+                self.limitReread.remove(key)
+                await self.readLimits(key, me)
+            } while self.session == me && self.limitReread.contains(key)
+            if self.session == me { self.limitReading.remove(key) }
+        }
+    }
+
+    /// A failed read keeps what was shown: limits are a side panel, not worth an error.
+    private func readLimits(_ key: String, _ me: Int) async {
+        guard let c = connection, let name = options.limitsDocument else { return }
+        guard let doc = try? await c.getDoc(name, on: key.isEmpty ? nil : key) else { return }
+        guard session == me, key.isEmpty || slots[key] != nil else { return }
+        if let cur = limitDocs[key], cur.version > doc.version { return }
+        limitDocs[key] = (doc.version, Limits.parse(doc.value))
         scheduleRebuild()
     }
 
@@ -1044,6 +1091,8 @@ public final class WorkspaceEngine: WorkspaceBackend {
         if workspace.machines != machines { workspace.machines = machines }
         if workspace.launchers != launchers { workspace.launchers = launchers }
         if workspace.home != home { workspace.home = home }
+        let limits = Limits.merge(keys.compactMap { limitDocs[$0]?.accounts })
+        if workspace.limits != limits { workspace.limits = limits }
 
         for gk in wantGit { probeGit(gk) }
         // Forget per-terminal state of terminals that are gone.

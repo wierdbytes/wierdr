@@ -1,7 +1,7 @@
 import SwiftUI
 import WierdrModel
 
-/// The sidebar (ui-spec §1–4): brand bar, spaces list, footer.
+/// The sidebar (ui-spec §1–4): brand bar, spaces list, subscription limits, footer.
 struct SidebarView: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -10,6 +10,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             BrandBar()
             SpacesList()
+            LimitsPanel()
             SidebarFooter()
         }
         .background(theme.chrome.ignoresSafeArea())

@@ -23,6 +23,7 @@ struct PhoneHome: View {
             .overlay(alignment: .bottom) {
                 ToastStack().padding(.horizontal, 12).padding(.bottom, 10)
             }
+            LimitsPanel(large: true)
             PhoneHomeFooter()
         }
         .background(theme.chrome.ignoresSafeArea())

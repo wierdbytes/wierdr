@@ -16,14 +16,18 @@ public struct EngineOptions: Sendable, Hashable {
     public var machinePollInterval: TimeInterval
     /// How often git facts and `shared.json` colors are refreshed (seconds).
     public var refreshInterval: TimeInterval
+    /// Subscription limits pi-herdr publishes (`limits`), read from every machine; nil: not read.
+    public var limitsDocument: String?
 
     public init(documentName: String = "herdr-app", labelPrefix: String = "herdr", display: Display? = nil,
-                allowWrites: Bool = true, machinePollInterval: TimeInterval = 5, refreshInterval: TimeInterval = 60) {
+                allowWrites: Bool = true, machinePollInterval: TimeInterval = 5, refreshInterval: TimeInterval = 60,
+                limitsDocument: String? = Limits.documentName) {
         self.documentName = documentName
         self.labelPrefix = labelPrefix
         self.display = display
         self.allowWrites = allowWrites
         self.machinePollInterval = machinePollInterval
         self.refreshInterval = refreshInterval
+        self.limitsDocument = limitsDocument
     }
 }

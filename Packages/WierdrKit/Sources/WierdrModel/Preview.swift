@@ -85,6 +85,19 @@ extension Workspace {
             AgentLauncher(program: Program(key: "opencode", name: "OpenCode", iconAsset: "program.opencode", isAgent: true),
                           run: ["opencode"], installed: false),
         ]
+        func window(_ id: String, _ label: String, _ length: TimeInterval, used: Double, left: TimeInterval) -> LimitWindow {
+            LimitWindow(id: id, label: label, length: length, used: used, resetsAt: now.addingTimeInterval(left), at: now)
+        }
+        ws.limits = [
+            LimitAccount(id: "claude.849d2d8c", provider: "claude", account: "849d2d8c", status: "ok", binding: "5h", at: now,
+                         host: "mentoair", windows: [window("5h", "5 hours", 18_000, used: 37, left: 16 * 60),
+                                                     window("7d", "7 days", 604_800, used: 58, left: 40 * 3600),
+                                                     window("7d_oi", "7 days + extra", 604_800, used: 58, left: 40 * 3600)]),
+            LimitAccount(id: "codex.d4800446", provider: "codex", account: "d4800446", label: "dev@example.com", plan: "plus",
+                         at: now.addingTimeInterval(-3600),
+                         windows: [window("5h", "5 hours", 18_000, used: 9, left: 3 * 3600 + 2 * 60),
+                                   window("7d", "7 days", 604_800, used: 21, left: 4 * 86_400)]),
+        ]
         return ws
     }
 }

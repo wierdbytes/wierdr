@@ -32,6 +32,9 @@ public final class Workspace {
     public internal(set) var launchers: [String: [AgentLauncher]] = [:]
     /// Home folder of the connected computer (for `~` shortening), when known.
     public internal(set) var home: String?
+    /// Subscription limits pi reported on every connected machine, merged by account
+    /// (`Limits.merge`: Claude first, then Codex, then others).
+    public internal(set) var limits: [LimitAccount] = []
 
     public init() {}
 
