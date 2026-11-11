@@ -40,9 +40,11 @@ struct PhonePaneScreen: View {
                 PhoneKeyPanelGestures(
                     enabled: pane?.terminal != nil,
                     isOpen: panelOpen,
+                    isComposing: pane?.terminal != nil && controller.composing == pane?.terminal,
                     onDrag: { panelDrag = $0 },
                     onEnd: { finishPanelDrag(projected: $0) },
-                    onTapOutside: { setPanel(open: false) }
+                    // The panel first; then the message field (its keyboard goes, the terminal doesn't get one).
+                    onTapOutside: { if panelOpen { setPanel(open: false) } else { controller.composing = nil } }
                 )
             }
             .background(theme.background)

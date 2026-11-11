@@ -336,12 +336,16 @@ struct PhoneKeyPanelGrip: View {
 /// view, so they see touches over the terminal too (like the back swipe).
 /// Closed, a pan from the area's right edge pulls the panel out; open, a
 /// rightward pan anywhere in the area pushes it back, and a tap on the
-/// terminal beside it closes it instead of taking the keyboard. Their pans
+/// terminal beside it closes it instead of taking the keyboard. While the
+/// message field is open, a tap on the terminal closes that (and its
+/// keyboard) instead, the panel first if both are. Their pans
 /// (the terminal's scrolling, selection and mouse, the panel's scrolling)
 /// wait for it, so a swipe that moves the panel does nothing else.
 struct PhoneKeyPanelGestures: UIViewRepresentable {
     var enabled: Bool
     var isOpen: Bool
+    /// The message field is open: a tap on the terminal closes it rather than typing there.
+    var isComposing = false
     /// Leftward is negative.
     var onDrag: (CGFloat) -> Void
     /// Where the panel would come to rest at the finger's speed (translation).
@@ -363,7 +367,7 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         let c = context.coordinator
         c.parent = self
         if c.pan.isEnabled != enabled { c.pan.isEnabled = enabled }
-        let tapOn = enabled && isOpen
+        let tapOn = enabled && (isOpen || isComposing)
         if c.tap.isEnabled != tapOn { c.tap.isEnabled = tapOn }
     }
 
@@ -443,7 +447,8 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
             guard p.y >= area.minY, p.y <= area.maxY, p.x >= area.minX else { return false }
             if g === tap {
                 // Beside the panel only: its keys take their own taps.
-                return parent.isOpen && p.x < area.maxX - PhoneKeyPanel.width
+                if parent.isOpen { return p.x < area.maxX - PhoneKeyPanel.width }
+                return parent.isComposing && p.x <= area.maxX
             }
             claims = parent.isOpen || p.x >= area.maxX - PhoneKeyPanelGestures.edgeWidth
             return claims
