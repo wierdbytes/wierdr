@@ -77,6 +77,15 @@ extension CoreConnection {
         return try await call("terminal.interrupt", params)
     }
 
+    /// `terminal.put`: writes `data` (at most 8 MB) to a file beside a live
+    /// terminal, on its machine, in a folder of its own that goes with the
+    /// terminal; `name` is kept (a suffix when taken). Types nothing: the
+    /// caller pastes the returned path (how a pasted image reaches an agent).
+    public func putFile(_ terminal: String, name: String, data: Data) async throws -> PutResult {
+        try await call("terminal.put", ["terminal": .string(terminal), "name": .string(name),
+                                        "data": .string(data.base64EncodedString())] as JSONValue)
+    }
+
     // MARK: Documents
 
     /// `doc.get`: a document's value (key order preserved) and version; `on` reads another machine's.

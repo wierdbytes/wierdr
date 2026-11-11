@@ -69,6 +69,20 @@ import Testing
         for (sent, got) in results { #expect(sent == got) }
     }
 
+    @Test func putSendsBase64AndReturnsWhereItLanded() async throws {
+        let core = MockCore()
+        let connection = try await core.connect()
+        let bytes = Data([0x89, 0x50, 0x4E, 0x47, 0x00, 0xFF])
+        async let put = connection.putFile("lf/t7", name: "image.png", data: bytes)
+        let request = try await core.nextRequest()
+        #expect(request["method"] == "terminal.put")
+        #expect(request["params"]?["terminal"] == "lf/t7" && request["params"]?["name"] == "image.png")
+        #expect(request["params"]?["data"]?.string.flatMap { Data(base64Encoded: $0) } == bytes)
+        core.reply(request["id"] ?? .null, result: ["path": "/home/x/.local/state/herdr-core/default/files/t7/image.png", "bytes": 6])
+        let result = try await put
+        #expect(result.path.hasSuffix("/t7/image.png") && result.bytes == 6)
+    }
+
     @Test func rpcErrorsMapToCoreError() async throws {
         let core = MockCore()
         let connection = try await core.connect()

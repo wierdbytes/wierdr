@@ -93,7 +93,7 @@ cat > "$DIR/index.html" <<HTML
   <img src="icon-512.png" alt="">
   <h1>Wierdr</h1>
   <p>Версия $VERSION (сборка $BUILD) · $(date '+%d.%m.%Y %H:%M')</p>
-  <a class="btn" href="itms-services://?action=download-manifest&amp;url=$BASE/manifest.plist?v=$STAMP">Установить</a>
+  <a class="btn" href="itms-services://?action=download-manifest&amp;url=$BASE/manifest.plist">Установить</a>
   <ol>
     <li>Нажми «Установить» и подтверди. Иконка появится на экране «Домой».</li>
     <li>Если iOS пишет «Ненадёжный разработчик»: Настройки › Основные › VPN и управление устройством › Apple Development: … › Доверять.</li>

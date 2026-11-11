@@ -138,6 +138,13 @@ public struct SendResult: Codable, Sendable, Hashable {
     public var wait: JSONValue?
 }
 
+/// `terminal.put` reply.
+public struct PutResult: Codable, Sendable, Hashable {
+    /// Where it landed, as the terminal's machine sees it.
+    public var path: String
+    public var bytes: UInt64
+}
+
 /// `terminal.keys` reply.
 public struct KeysResult: Codable, Sendable, Hashable {
     public var turn: UInt64

@@ -89,6 +89,8 @@ final class TerminalSession: Identifiable {
 
     /// Whether a stream is open or being opened.
     var isAttached: Bool { stream != nil || attachTask != nil }
+    /// The core connection terminals attach on (nil while disconnected).
+    var currentConnection: CoreConnection? { connection }
 
     init(address: String, theme: TerminalTheme, fontSize: CGFloat, useMetal: Bool) {
         self.address = address
@@ -488,6 +490,13 @@ extension TerminalSession {
                 self?.terminalView.send([0x0d])
             }
         }
+    }
+
+    /// Puts a file beside the terminal on its machine (`terminal.put`, as a
+    /// pasted image on the desktop) and returns its path there.
+    func put(_ data: Data, name: String) async throws -> String {
+        guard let connection = currentConnection else { throw ConnectionError.disconnected("Not connected") }
+        return try await connection.putFile(address, name: name, data: data).path
     }
 
     /// Gives the terminal the keyboard (typing straight into it, with the key bar).

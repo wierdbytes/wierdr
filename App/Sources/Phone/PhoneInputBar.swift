@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import WierdrModel
 
 /// Under the iPhone's terminal while it doesn't have the keyboard: quick keys
@@ -7,6 +8,9 @@ import WierdrModel
 /// autocorrect, any language) whose text goes to the program as one paste,
 /// followed by Return. The keyboard button types straight into the terminal
 /// instead (with the terminal's own key bar); the bar steps aside meanwhile.
+/// The paperclip puts a photo or a copied image beside the terminal on its
+/// machine (`terminal.put`, like pasting an image on the desktop) and adds its
+/// path to the message.
 struct PhoneInputBar: View {
     var address: String
 
@@ -17,6 +21,9 @@ struct PhoneInputBar: View {
     @FocusState private var composing: Bool
     @State private var text = ""
     @State private var sent = 0
+    @State private var picking = false
+    @State private var picked: PhotosPickerItem?
+    @State private var uploading = false
 
     var body: some View {
         let session = services.terminalSession(address)
@@ -31,6 +38,15 @@ struct PhoneInputBar: View {
             .sensoryFeedback(.impact(weight: .light), trigger: sent)
             .onAppear { text = controller.drafts[address] ?? "" }
             .onChange(of: text) { _, t in controller.drafts[address] = t.isEmpty ? nil : t }
+            .photosPicker(isPresented: $picking, selection: $picked, matching: .images, preferredItemEncoding: .compatible)
+            .onChange(of: picked) { _, item in
+                guard let item else { return }
+                picked = nil
+                Task {
+                    let data = try? await item.loadTransferable(type: Data.self)
+                    await attach(data, session)
+                }
+            }
             .transition(.opacity)
         }
     }
@@ -53,6 +69,8 @@ struct PhoneInputBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Type in the Terminal")
+
+            attachMenu(session)
 
             TextField("Message", text: $text, axis: .vertical)
                 .font(.ui(16))
@@ -109,6 +127,47 @@ struct PhoneInputBar: View {
             out = out.replacingOccurrences(of: from, with: to)
         }
         return out.replacingOccurrences(of: "\u{2014}(?=[^\\s\u{2014}])", with: "--", options: .regularExpression)
+    }
+
+    private func attachMenu(_ session: TerminalSession?) -> some View {
+        Menu {
+            Button { picking = true } label: { Label("Photo Library", systemImage: "photo.on.rectangle") }
+            Button {
+                Task { await attach(UIPasteboard.general.image.flatMap { $0.pngData() }, session) }
+            } label: { Label("Paste Image", systemImage: "doc.on.clipboard") }
+            .disabled(!UIPasteboard.general.hasImages)
+        } label: {
+            Group {
+                if uploading {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(theme.muted)
+                }
+            }
+            .frame(width: 34, height: 40)
+            .contentShape(Rectangle())
+        }
+        .menuOrder(.fixed)
+        .disabled(uploading)
+        .accessibilityLabel("Attach Image")
+    }
+
+    /// Puts the image beside the terminal and adds its path to the message.
+    private func attach(_ data: Data?, _ session: TerminalSession?) async {
+        guard let session else { return controller.toast("Not available in the demo") }
+        guard let data, let image = ImageForAgent(data) else { return controller.toast("Couldn't read that image") }
+        uploading = true
+        defer { uploading = false }
+        do {
+            let path = try await session.put(image.data, name: image.name)
+            if let last = text.last, !last.isWhitespace { text += " " }
+            text += path + " "
+            composing = true
+        } catch {
+            controller.toast("Image: \(error.localizedDescription)")
+        }
     }
 
     private func send(_ key: TerminalSession.Key, _ session: TerminalSession?) {
@@ -204,4 +263,48 @@ private struct KeyPressStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.55 : 1)
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
     }
+}
+
+/// An image made ready for an agent: screenshots stay PNG; photos (HEIC and
+/// others) become JPEG; anything over 2048 px on a side is scaled down, so
+/// it stays well under `terminal.put`'s 8 MB.
+struct ImageForAgent {
+    var data: Data
+    var name: String
+
+    init?(_ original: Data) {
+        guard let image = UIImage(data: original) else { return nil }
+        let stamp = Self.stamp.string(from: Date())
+        let px = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+        let longest = max(px.width, px.height)
+        let isPNG = original.starts(with: [0x89, 0x50, 0x4E, 0x47])
+        if isPNG, original.count <= 6_000_000, longest <= 2048 {
+            data = original
+            name = "image-\(stamp).png"
+            return
+        }
+        let scale = min(1, 2048 / max(longest, 1))
+        let size = CGSize(width: (px.width * scale).rounded(), height: (px.height * scale).rounded())
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = !isPNG
+        let drawn = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        if isPNG, let png = drawn.pngData(), png.count <= 6_000_000 {
+            data = png
+            name = "image-\(stamp).png"
+        } else if let jpeg = drawn.jpegData(compressionQuality: 0.85) {
+            data = jpeg
+            name = "photo-\(stamp).jpg"
+        } else {
+            return nil
+        }
+    }
+
+    private static let stamp: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        return f
+    }()
 }
