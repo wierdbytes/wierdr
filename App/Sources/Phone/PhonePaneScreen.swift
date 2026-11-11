@@ -1,14 +1,19 @@
 import SwiftUI
+import UIKit
 import WierdrModel
 
 /// One pane on the whole iPhone screen: a bar with back, what runs here and
 /// the next agent waiting for you; the other panes of the space; the
 /// terminal edge to edge, and over it, from the right edge, the key panel
-/// (`PhoneKeyPanel`, with or without the keyboard). Under the terminal only
-/// the message field while it is open (Type in the panel), above the
-/// keyboard; a tap on the terminal types straight into it, with its key bar.
+/// (`PhoneKeyPanel`, with or without the keyboard). The keyboards come from
+/// the edge swipe too: while it is under way, two icons beside the panel —
+/// the terminal's keyboard above the finger, the message field below; let
+/// go on one and it comes (`KeyboardChoice`). Under the terminal only the
+/// message field while it is open, above the keyboard. Taps on the terminal
+/// are clicks for the program; while a keyboard is up, a tap hides it.
 struct PhonePaneScreen: View {
     @Environment(WorkspaceController.self) private var controller
+    @Environment(\.services) private var services
     @Environment(\.theme) private var theme
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var panelOpen = false
@@ -16,6 +21,12 @@ struct PhonePaneScreen: View {
     @State private var panelDrag: CGFloat?
     /// The window's height (the key panel's keys come to rest a third of it up from the bottom).
     @State private var screenHeight: CGFloat = 0
+    /// The terminal's area (where the keyboard icons go).
+    @State private var areaSize: CGSize = .zero
+    /// A swipe from the edge is under way: where it began (the icons sit above and below).
+    @State private var pickerStart: CGPoint?
+    /// The icon under the finger.
+    @State private var hovered: KeyboardChoice?
 
     var body: some View {
         let space = controller.activeSpace
@@ -40,24 +51,29 @@ struct PhonePaneScreen: View {
                 PhoneKeyPanelGestures(
                     enabled: pane?.terminal != nil,
                     isOpen: panelOpen,
-                    isComposing: pane?.terminal != nil && controller.composing == pane?.terminal,
-                    onDrag: { panelDrag = $0 },
-                    onEnd: { finishPanelDrag(projected: $0) },
-                    // The panel first; then the message field (its keyboard goes, the terminal
-                    // doesn't get one); else (a tap on the right half) the field opens.
+                    keyboardUp: keyboardUp,
+                    onDrag: { x, p in panelMoved(x, at: p) },
+                    onEnd: { projected, p in panelReleased(projected: projected, at: p) },
+                    // The panel first; then the keyboard (and the message field), at once.
                     onTap: {
                         if panelOpen { return setPanel(open: false) }
-                        if controller.composing != nil { return controller.closeCompose() }
-                        controller.composing = pane?.terminal
+                        hideKeyboards()
                     }
                 )
             }
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { areaSize = $0 }
             .background(theme.background)
             .overlay(alignment: .trailing) {
                 if let address = pane?.terminal {
                     keyPanel(address)
                 }
             }
+            .overlay {
+                if let start = pickerStart {
+                    KeyboardPickerIcons(centers: iconCenters(start), hovered: hovered)
+                }
+            }
+            .sensoryFeedback(.selection, trigger: hovered)
             .overlay(alignment: .bottom) {
                 // Above the panel, and beside it while it is out.
                 ToastStack()
@@ -83,6 +99,63 @@ struct PhonePaneScreen: View {
         // Watching an agent work: the screen stays on (a locked iPhone drops the connection).
         .onChange(of: keepsAwake, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+    }
+
+    /// The terminal has the keyboard, or the message field is open.
+    private var keyboardUp: Bool {
+        guard let address = controller.focusedPane?.terminal else { return false }
+        return controller.composing == address || services.terminalSession(address)?.hasKeyboardFocus == true
+    }
+
+    /// Hides the message field or the terminal's keyboard, at once.
+    private func hideKeyboards() {
+        if controller.composing != nil { return controller.closeCompose() }
+        let session = services.terminalSession(controller.focusedPane?.terminal ?? "")
+        UIView.performWithoutAnimation { session?.releaseKeyboard() }
+    }
+
+    // MARK: Swipe from the edge
+
+    /// The finger moved the panel. A swipe that began with it hidden shows the keyboard icons.
+    private func panelMoved(_ x: CGFloat, at p: CGPoint) {
+        if panelDrag == nil, !panelOpen { pickerStart = p }
+        panelDrag = x
+        if let start = pickerStart { hovered = choice(at: p, start: start) }
+    }
+
+    /// Let go on an icon: that keyboard (the panel goes); elsewhere: the panel as usual.
+    private func panelReleased(projected: CGFloat, at p: CGPoint) {
+        let choice = pickerStart.flatMap { choice(at: p, start: $0) }
+        pickerStart = nil
+        hovered = nil
+        guard let choice, let address = controller.focusedPane?.terminal else {
+            return finishPanelDrag(projected: projected)
+        }
+        setPanel(open: false)
+        switch choice {
+        case .terminal:
+            controller.closeCompose()
+            guard let session = services.terminalSession(address) else {
+                return controller.toast(controller.isDemo ? "Not available in the demo" : "The terminal is not connected yet")
+            }
+            session.takeKeyboard()
+        case .message:
+            controller.composing = address
+        }
+    }
+
+    /// Left of the panel, one above the swipe's line and one below (in the terminal's area).
+    private func iconCenters(_ start: CGPoint) -> [KeyboardChoice: CGPoint] {
+        let x = areaSize.width - PhoneKeyPanel.width - KeyboardPickerIcons.size / 2 - 14
+        let r = KeyboardPickerIcons.size / 2 + 6
+        let gap = KeyboardPickerIcons.size / 2 + 26
+        func y(_ v: CGFloat) -> CGFloat { min(max(v, r), max(r, areaSize.height - r)) }
+        return [.terminal: CGPoint(x: x, y: y(start.y - gap)), .message: CGPoint(x: x, y: y(start.y + gap))]
+    }
+
+    private func choice(at p: CGPoint, start: CGPoint) -> KeyboardChoice? {
+        let reach = KeyboardPickerIcons.size / 2 + 10
+        return iconCenters(start).first { hypot($0.value.x - p.x, $0.value.y - p.y) <= reach }?.key
     }
 
     /// How far out the panel is: 0 hidden, 1 open.
@@ -132,6 +205,54 @@ struct PhonePaneScreen: View {
     /// sidebar's urgency order, so chips don't move under the finger).
     private func panes(of space: Space) -> [Pane] {
         space.tabs.flatMap(\.panes)
+    }
+}
+
+/// Which keyboard a swipe from the edge brings.
+enum KeyboardChoice: Hashable {
+    /// The terminal's own (typing straight into it, with its key bar).
+    case terminal
+    /// The message field's (`PhoneComposeBar`).
+    case message
+}
+
+/// The two icons shown beside the key panel while a swipe from the edge is
+/// under way: the terminal's keyboard above, the message field below; the
+/// one under the finger lights up. Only a picture: the swipe does the picking.
+private struct KeyboardPickerIcons: View {
+    var centers: [KeyboardChoice: CGPoint]
+    var hovered: KeyboardChoice?
+
+    static let size: CGFloat = 58
+
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        ZStack {
+            ForEach([KeyboardChoice.terminal, .message], id: \.self) { choice in
+                if let c = centers[choice] { icon(choice).position(c) }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func icon(_ choice: KeyboardChoice) -> some View {
+        let on = hovered == choice
+        return VStack(spacing: 2) {
+            Image(systemName: choice == .terminal ? "keyboard" : "text.bubble")
+                .font(.system(size: 20, weight: .semibold))
+            Text(choice == .terminal ? "Terminal" : "Message")
+                .font(.ui(9.5, .medium))
+        }
+        .foregroundStyle(on ? theme.accentForeground : theme.foreground)
+        .frame(width: Self.size, height: Self.size)
+        .background(on ? theme.accent : theme.raised.opacity(0.92), in: Circle())
+        .overlay(Circle().strokeBorder(on ? .clear : theme.border, lineWidth: 1))
+        .shadow(color: .black.opacity(0.3), radius: 8)
+        .scaleEffect(on ? 1.15 : 1)
+        .animation(.snappy(duration: 0.15), value: on)
     }
 }
 

@@ -48,7 +48,7 @@ struct TerminalSurfaceRepresentable: UIViewRepresentable {
                 || (WierdrTerminalView.keyboardOwner != nil && WierdrTerminalView.keyboardOwner !== view)
             if takeKeyboard {
                 DispatchQueue.main.async {
-                    if view.window != nil, !view.isFirstResponder { _ = view.becomeFirstResponder() }
+                    if view.window != nil { view.requestKeyboard() }
                 }
             }
         } else if !isFocused && c.wasFocused && view.isFirstResponder {

@@ -40,6 +40,12 @@ final class WierdrTerminalView: TerminalView {
     var onTap: (() -> Void)?
     /// The terminal view that has the keyboard, if any.
     private(set) static weak var keyboardOwner: WierdrTerminalView?
+    /// A tap gives the terminal the keyboard (iPad). On the iPhone it doesn't:
+    /// a tap is a click for the program, and the keyboard comes only when
+    /// asked for (`requestKeyboard`: the key panel's swipe, switching panes).
+    let tapsTakeKeyboard = !Device.isPhone
+    /// Set while the keyboard is asked for on purpose (see `tapsTakeKeyboard`).
+    private var keyboardRequested = false
 
     private var keyBar: TerminalKeyBar?
 
@@ -83,14 +89,22 @@ final class WierdrTerminalView: TerminalView {
     /// the keyboard without popping the on-screen one.
     static var hardwareKeyboardConnected: Bool { GCKeyboard.coalesced != nil }
 
-    /// A tap always takes the keyboard. SwiftTerm spends the first tap of an
-    /// unfocused terminal only on focus, except when the program tracks the
-    /// mouse (pi, vim with `mouse=a`, ...): then it forwards the click and
+    /// A tap always takes the keyboard (iPad). SwiftTerm spends the first tap
+    /// of an unfocused terminal only on focus, except when the program tracks
+    /// the mouse (pi, vim with `mouse=a`, ...): then it forwards the click and
     /// stays unfocused, so the keyboard never shows. The click still reaches
-    /// the program either way.
+    /// the program either way. On the iPhone a tap never takes it.
     @objc private func touched() {
-        if !isFirstResponder { _ = becomeFirstResponder() }
+        if tapsTakeKeyboard, !isFirstResponder { _ = becomeFirstResponder() }
         onTap?()
+    }
+
+    /// Gives the terminal the keyboard on purpose (also on the iPhone, where taps don't).
+    func requestKeyboard() {
+        guard !isFirstResponder else { return }
+        keyboardRequested = true
+        defer { keyboardRequested = false }
+        _ = becomeFirstResponder()
     }
 
     // MARK: Metal scale
@@ -145,6 +159,8 @@ final class WierdrTerminalView: TerminalView {
     // MARK: Focus
 
     override func becomeFirstResponder() -> Bool {
+        // iPhone: SwiftTerm's own tap (and UIKit restoring focus) doesn't bring the keyboard.
+        if !tapsTakeKeyboard, !keyboardRequested, !isFirstResponder { return false }
         let wasFirst = isFirstResponder
         let ok = super.becomeFirstResponder()
         if ok { Self.keyboardOwner = self }

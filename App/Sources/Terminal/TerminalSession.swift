@@ -502,7 +502,7 @@ extension TerminalSession {
 
     /// Gives the terminal the keyboard (typing straight into it, with the key bar).
     func takeKeyboard() {
-        if !terminalView.isFirstResponder { _ = terminalView.becomeFirstResponder() }
+        terminalView.requestKeyboard()
     }
 
     func releaseKeyboard() {
