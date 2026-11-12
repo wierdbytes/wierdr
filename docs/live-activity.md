@@ -70,10 +70,14 @@ iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)         
 1. **developer.apple.com → Certificates, IDs & Profiles**, команда `AUL4CCB2XY`:
    - **Keys → +**: включить *Apple Push Notifications service (APNs)* (окружение
      Sandbox & Production), скачать `AuthKey_XXXXXXXXXX.p8`. Ключ скачивается один раз.
-   - **Identifiers → `pw.xff.wierdr`**: у *Push Notifications* должна стоять галка
-     **Broadcast Capability**. Сам Push Notifications Xcode включает автоматически при
-     первой сборке с `aps-environment`, а Broadcast нужно отметить вручную, иначе каналы
-     не создаются.
+   - **Identifiers → `pw.xff.wierdr`**: включить *Push Notifications* и в нём галку
+     **Broadcast Capability**. Без Broadcast каналы не создаются.
+   - Подписи нужен профиль с push для `pw.xff.wierdr`: прежний wildcard‑профиль
+     (`iOS Team Provisioning Profile: *`) push не включает, а виджету `pw.xff.wierdr.widgets`
+     хватает и его. Проще всего войти в Xcode (Settings → Accounts) этой командой:
+     `make ipa` / `make device` с `-allowProvisioningUpdates` сами заведут App ID и профиль.
+     Если ASC API пишет `REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`, сначала нужно принять
+     соглашение в developer account.
 2. На Mac:
    ```sh
    mkdir -p ~/.config/wierdr && mv ~/Downloads/AuthKey_XXXXXXXXXX.p8 ~/.config/wierdr/
