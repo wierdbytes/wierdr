@@ -25,13 +25,14 @@ extension View {
 
 /// The key panel (`PhoneKeyPanel`) over a terminal area, and how it and the keyboards come.
 ///
-/// iPhone: a swipe from the area's right edge pulls the panel out with the finger
-/// (or a tap on the grip there). iPad: the right edge is Slide Over's and the left
-/// one the sidebar's, so a puck (`KeyPuck`) instead, wherever the person put it
-/// (one place per orientation): a tap brings the panel out on the puck's side
-/// (the nearer one), a drag from it toward the middle pulls it out with the finger,
-/// as the iPhone's swipe, and a long press picks it up to move it. Its keys come
-/// to rest at the puck's height, under the thumb.
+/// Both: a swipe to the left anywhere on a terminal pulls the panel out at the
+/// right with the finger (on the iPad its pane gets the focus); on the iPhone
+/// from the right edge too, or a tap on the grip there. iPad: also a puck
+/// (`KeyPuck`), wherever the person put it (one place per orientation): a tap
+/// brings the panel out on the puck's side (the nearer one), a drag from it
+/// toward the middle pulls it out with the finger, as the swipe, and a long
+/// press picks it up to move it. Its keys come to rest at the puck's height,
+/// under the thumb.
 ///
 /// While a swipe (or a drag from the puck) that began with the panel hidden is
 /// under way, the message field's icon beside the panel, below the finger; let
@@ -39,7 +40,8 @@ extension View {
 /// comes with a double tap on the terminal (`WierdrTerminalView`).
 /// Taps on the terminal are clicks for the program and its pans scroll it, with
 /// a keyboard up too; a double tap hides the keyboard (the message field with
-/// it); with the panel out, a tap beside it puts the panel back. While
+/// it); with the panel out, a tap beside it puts the panel back (a double tap
+/// there brings the terminal's keyboard; the panel stays). While
 /// the area is `covered` (the list, the sidebar overlay), the panel and the
 /// keyboards go and the gestures rest.
 struct KeyPanelLayer: ViewModifier {
@@ -81,7 +83,11 @@ struct KeyPanelLayer: ViewModifier {
                     side: state.side,
                     opensFromEdge: !usesPuck,
                     keyboardUp: keyboardUp,
-                    onDrag: { x, p in moved(x, at: p) },
+                    onDrag: { x, p in
+                        // A swipe on the terminal brings it out at the right, wherever the puck is.
+                        if drag == nil, !state.open { setSide(.trailing) }
+                        moved(x, at: p)
+                    },
                     onEnd: { projected, p in released(projected: projected, at: p) },
                     onTap: { setPanel(open: false) },
                     // The keyboard (and the message field), at once; the panel stays.
@@ -207,9 +213,9 @@ struct KeyPanelLayer: ViewModifier {
         controller.composing = address
     }
 
-    /// Beside the panel, below the swipe's line (in the area). As far from where
-    /// the swipe began as from the edge on the iPhone, so the thumb travels as
-    /// much to reach it from the puck.
+    /// Beside the panel, below the swipe's line (in the area), as far from where
+    /// the swipe began (the edge, anywhere on the terminal, the puck) as the
+    /// panel is wide and a bit: a short move on to reach it.
     private func messageIconCenter(_ start: CGPoint) -> CGPoint {
         let w = area.width, h = area.height
         let size = MessagePickerIcon.size
@@ -218,11 +224,9 @@ struct KeyPanelLayer: ViewModifier {
         let x: CGFloat
         switch state.side {
         case .trailing:
-            let from = usesPuck ? start.x : w
-            x = max(r, min(from - travel, w - PhoneKeyPanel.width - r))
+            x = max(r, min(start.x - travel, w - PhoneKeyPanel.width - r))
         case .leading:
-            let from = usesPuck ? start.x : 0
-            x = min(max(r, w - r), max(from + travel, PhoneKeyPanel.width + r))
+            x = min(max(r, w - r), max(start.x + travel, PhoneKeyPanel.width + r))
         }
         let gap = size / 2 + 26
         return CGPoint(x: x, y: min(max(start.y + gap, r), max(r, h - r)))

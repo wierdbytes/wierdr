@@ -36,8 +36,10 @@ final class WierdrTerminalView: TerminalView {
     var onFocusChange: ((Bool) -> Void)?
     /// Keys from the key bar or the keymap (to reclaim the size).
     var onUserTouch: (() -> Void)?
-    /// A tap or pointer click on the terminal.
+    /// A tap or pointer click on the terminal (or a swipe on it that pulls the key panel out).
     var onTap: (() -> Void)?
+    /// The name of its double tap that brings the keyboard (the key panel's tap waits for it).
+    static let keyboardTapName = "wierdr.terminal.keyboardTap"
     /// The terminal view that has the keyboard, if any.
     private(set) static weak var keyboardOwner: WierdrTerminalView?
     /// The last touch on the terminal came from a pointer (trackpad, mouse,
@@ -89,6 +91,7 @@ final class WierdrTerminalView: TerminalView {
         // and triple clicks stay SwiftTerm's.
         let keyboardTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
         keyboardTap.numberOfTapsRequired = 2
+        keyboardTap.name = Self.keyboardTapName
         keyboardTap.delegate = KeyboardDoubleTap.shared
         for case let tap as UITapGestureRecognizer in gestureRecognizers ?? [] where tap !== touch {
             tap.require(toFail: keyboardTap)
