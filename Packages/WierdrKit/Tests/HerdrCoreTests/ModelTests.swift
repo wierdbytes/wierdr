@@ -96,6 +96,18 @@ import Testing
         #expect(t.isFinished && t.reason == "exited" && t.exitCode == 0 && t.foreground == nil && t.finishedMs == 9)
     }
 
+    @Test func aStatusChangeMovesStatusMs() throws {
+        var t = try JSONValue(parsing: Self.liveRecord).decode(Terminal.self)
+        t.statusMs = 1000
+        let working = TerminalStatus(state: "working", msg: "a")
+        t.apply(.status(status: working, records: nil, reported: true))
+        let changed = try #require(t.statusMs)
+        #expect(changed > 1000)
+        // The same state with another message is no change.
+        t.apply(.status(status: TerminalStatus(state: "working", msg: "b"), records: nil, reported: true))
+        #expect(t.statusMs == changed)
+    }
+
     @Test func coreErrorFromJSON() throws {
         let e = CoreError(json: try JSONValue(parsing: #"{"code":-32000,"message":"no terminal \"t999\"","data":{"hint":"see `hc ls --all`","kind":"not_found"}}"#))
         #expect(e.code == -32000 && e.kind == "not_found" && e.hint == "see `hc ls --all`" && e.isNotFound)

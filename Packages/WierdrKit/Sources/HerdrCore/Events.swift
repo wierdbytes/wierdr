@@ -157,6 +157,9 @@ extension Terminal {
         case .keep(let k):
             keep = k
         case .status(let s, let r, let rep):
+            // The event carries no `status_ms`; the core sets it when the state
+            // changes, and so do we, with when we heard of it.
+            if s?.state != status?.state { statusMs = UInt64(Date().timeIntervalSince1970 * 1000) }
             status = s
             records = r
             reported = rep
