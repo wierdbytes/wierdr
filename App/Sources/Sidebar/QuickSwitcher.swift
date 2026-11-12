@@ -43,6 +43,14 @@ struct QuickSwitcher: View {
                 agentItems.append(Item(id: "a:" + row.paneID, kind: .agent, title: Format.agentTitle(t, tab: ws.tab(row.tabID)),
                                        subtitle: "\(space.displayName) · \(t.meta?.model ?? t.program.name)",
                                        status: t.status, space: space, paneID: row.paneID, program: t.program))
+                // Its kept sub-agents (they show under it in the list, not as rows).
+                for kid in row.subtree where kid.isAgent {
+                    guard let pane = kid.paneID else { continue }
+                    let k = kid.terminal
+                    agentItems.append(Item(id: "a:" + pane, kind: .agent, title: Format.kidTitle(k),
+                                           subtitle: "\(space.displayName) · from \(Format.agentTitle(t, tab: ws.tab(row.tabID)))",
+                                           status: k.status, space: space, paneID: pane, program: k.program))
+                }
             }
         }
         let all = spaceItems + tabItems + agentItems

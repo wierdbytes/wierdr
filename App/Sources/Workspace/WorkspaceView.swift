@@ -22,6 +22,18 @@ struct WorkspaceView: View {
                 splitView
             }
         }
+        .overlay {
+            // A sub-agent looked at over the window (the iPhone layout shows it on its pane screen).
+            if !phone, let address = controller.peek {
+                SubAgentPeek(address: address)
+                    .keyboardCoverPadding()
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+        }
+        .overlay {
+            // The key panel and its puck, once, over all of it (the sub-agent's window too).
+            if !phone { KeyLayerHost() }
+        }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .environment(controller)
         .environment(\.homeFolder, controller.workspace.home)
@@ -51,8 +63,16 @@ struct WorkspaceView: View {
             controller.revealsNewPanes = phone
         }
         .onChange(of: controller.workspace.spaces) { _, _ in controller.applyPending() }
+        .onChange(of: peekGone) { _, gone in if gone { controller.checkPeek() } }
         .onChange(of: seenKey) { _, _ in controller.markVisibleSeen(looking: looking) }
         .onAppear { controller.markVisibleSeen(looking: looking) }
+    }
+
+    /// The sub-agent shown for now ended, or got a pane (kept here or elsewhere).
+    private var peekGone: Bool {
+        guard let address = controller.peek else { return false }
+        let ws = controller.workspace
+        return ws.terminal(address)?.isLive != true || ws.pane(showing: address) != nil
     }
 
     /// iPhone (any orientation) and narrow iPad windows: the list and one pane

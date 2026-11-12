@@ -803,10 +803,18 @@ struct SpaceDragPreview: View {
             SpaceHeader(space: space, rows: rows, closed: closed, bodyShown: bodyShown)
                 .padding(.bottom, bodyShown ? 0 : -6)
             if bodyShown {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
-                    SidebarRowView(row: row, space: space, bracket: Bracket.position(rows, i))
-                        .padding(.horizontal, 5)
-                        .padding(.top, 4)
+                let items = controller.cardItems(rows)
+                ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
+                    Group {
+                        switch item {
+                        case .row(let row):
+                            SidebarRowView(row: row, space: space, bracket: Bracket.position(items, i))
+                        case .kid(let kid, let parent):
+                            SubAgentRowView(kid: kid, parent: parent, bracket: Bracket.position(items, i))
+                        }
+                    }
+                    .padding(.horizontal, 5)
+                    .padding(.top, 4)
                 }
                 Color.clear.frame(height: 5)
             }

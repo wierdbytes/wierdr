@@ -163,9 +163,9 @@ struct LaunchMenuItems: View {
 
 // MARK: - Agents inbox
 
-/// Every agent (all spaces and computers), grouped by what it needs:
-/// needs you, done, working, idle. Inside a group: pinned first, then the
-/// most recent status change.
+/// Every agent (all spaces and computers), grouped by what it needs (with its
+/// sub-agents, which show under it): needs you, done, working, idle. Inside a
+/// group: pinned first, then the most recent status change.
 struct AgentsInbox: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -184,11 +184,20 @@ struct AgentsInbox: View {
                     sectionHeader(group.status, count: group.items.count)
                         .sidebarRow(id: "status:\(group.status.rawValue)", background: Color.clear)
                     ForEach(group.items) { item in
+                        // Its sub-agents are rows of their own in its card (the badge folds them).
+                        let kids = controller.showsKids(of: item.row) ? item.row.subtree : []
                         SidebarRowView(row: item.row, space: item.space, bracket: .none, showsSpace: true)
-                            .background(theme.surface, in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(theme.border, lineWidth: 1).allowsHitTesting(false))
-                            .padding(.vertical, 3)
-                            .sidebarRow(id: item.row.paneID, background: Color.clear)
+                            .padding(.top, 3)
+                            .padding(.bottom, kids.isEmpty ? 3 : 0)
+                            .sidebarRow(id: item.row.paneID, background: InboxSlice(top: true, bottom: kids.isEmpty))
+                        ForEach(Array(kids.enumerated()), id: \.element.id) { i, kid in
+                            let last = i == kids.count - 1
+                            SubAgentRowView(kid: kid, parent: item.row)
+                                .padding(.horizontal, 1)
+                                .padding(.top, 4)
+                                .padding(.bottom, last ? 4 + 3 : 0)
+                                .sidebarRow(id: "kid:\(kid.terminal.address)", background: InboxSlice(top: false, bottom: last))
+                        }
                     }
                 }
                 if groups.isEmpty {
@@ -203,7 +212,7 @@ struct AgentsInbox: View {
             .environment(\.defaultMinListRowHeight, 0)
             .onChange(of: controller.focusedPane?.id) { _, id in
                 guard let id else { return }
-                withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(id) }
+                withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(controller.listID(ofPane: id)) }
             }
         }
     }
@@ -213,7 +222,8 @@ struct AgentsInbox: View {
         var byStatus: [AgentStatus: [Item]] = [:]
         for space in ws.spaces {
             for row in ws.sidebarRows(for: space) where row.kind == .agent {
-                guard let status = row.terminal?.status else { continue }
+                // An agent goes where its most urgent sub-agent would (one needs you: so does it).
+                guard let status = row.urgency ?? row.terminal?.status else { continue }
                 byStatus[status, default: []].append(Item(row: row, space: space))
             }
         }
@@ -269,5 +279,37 @@ struct AgentsInbox: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
+    }
+}
+
+/// A piece of an agent's card in the agents list, drawn as its list rows'
+/// background: `surface` with a 1-pt border, radius 8, 3 pt from the rows
+/// around it; an agent with its sub-agents under it is one card in several rows.
+private struct InboxSlice: View {
+    var top: Bool
+    var bottom: Bool
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        GeometryReader { geo in
+            let y0: CGFloat = top ? 3 : 0
+            let h = max(0, geo.size.height - y0 - (bottom ? 3 : 0))
+            let r: CGFloat = 8
+            let shape = UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
+                                               bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0)
+            ZStack(alignment: .top) {
+                shape.fill(theme.surface).frame(height: h)
+                // Stroke a taller rounded rect and clip it, so open ends have no line.
+                RoundedRectangle(cornerRadius: r)
+                    .strokeBorder(theme.border, lineWidth: 1)
+                    .frame(height: h + (top ? 0 : 2 * r) + (bottom ? 0 : 2 * r))
+                    .offset(y: top ? 0 : -2 * r)
+                    .frame(height: h, alignment: .top)
+                    .clipped()
+            }
+            .offset(y: y0)
+            .frame(height: geo.size.height, alignment: .top)
+        }
+        .padding(.horizontal, 8)
     }
 }

@@ -58,7 +58,23 @@ final class WorkspaceController {
     // MARK: Sidebar state (persisted)
     var foldedMachines: Set<String> { didSet { save(foldedMachines, "sidebar.foldedMachines") } }
     var closedSpaces: Set<String> { didSet { save(closedSpaces, "sidebar.closedSpaces") } }
-    var expandedAgents: Set<String> = []
+    /// Agents whose sub-agents are folded away (their badge folds them); the rest show theirs.
+    var foldedAgents: Set<String> = []
+
+    // MARK: Sub-agent shown for now
+    /// A sub-agent without a pane, shown for now (as Herdr's `terminal.show`):
+    /// on the iPad over the window with Keep and Close (`SubAgentPeek`), on the
+    /// iPhone on the pane screen in its parent's place. Gone when another pane
+    /// is focused, it ends, or someone keeps it.
+    var peek: String?
+    /// The sidebar row it was opened from (the iPhone shows it in that row's place).
+    private(set) var peekFrom: String?
+
+    // MARK: Keys (iPad)
+    /// The key panel over the panel's panes (`KeyLayerHost`): out or not, its side.
+    var keys = KeyPanelState()
+    /// The panel's panes in the window (global), where the key panel and its puck go.
+    var keyArea: CGRect = .zero
 
     // MARK: Pending selection (a new tab/space/pane shows up with the next doc event)
     enum Pending: Equatable { case space(String), tab(String), pane(String) }
@@ -106,6 +122,7 @@ final class WorkspaceController {
 
     /// Focus a pane (selects its space and tab); on iPhone shows the panel.
     func focus(pane paneID: String, reveal: Bool = true) {
+        closePeek()
         screen.focus(pane: paneID, in: workspace)
         if reveal {
             compactColumn = .detail
@@ -134,31 +151,104 @@ final class WorkspaceController {
         }
     }
 
-    /// ⌘] / ⌘[: next/previous visible sidebar row, wrapping.
+    /// ⌘] / ⌘[: next/previous visible sidebar row (a kept sub-agent's pane after
+    /// its parent's), wrapping.
     func stepRow(_ offset: Int) {
-        let rows = visibleRows
-        guard !rows.isEmpty else { return }
-        let current = focusedPane.flatMap { p in rows.firstIndex { $0.paneID == p.id } }
-        let n = rows.count
+        let panes = visibleRows.flatMap(\.paneIDs)
+        guard !panes.isEmpty else { return }
+        let current = focusedPane.flatMap { p in panes.firstIndex(of: p.id) }
+        let n = panes.count
         let next = current.map { (($0 + offset) % n + n) % n } ?? (offset > 0 ? 0 : n - 1)
-        focus(pane: rows[next].paneID, reveal: false)
+        focus(pane: panes[next], reveal: false)
+    }
+
+    /// Agents with a pane in sidebar order: each row's, then its kept sub-agents'.
+    private var agentPanes: [(pane: String, terminal: TerminalInfo)] {
+        allRows.flatMap { row -> [(pane: String, terminal: TerminalInfo)] in
+            guard row.kind == .agent, let t = row.terminal else { return [] }
+            return [(row.paneID, t)] + row.subtree.compactMap { kid in
+                kid.paneID.flatMap { p in kid.isAgent ? (p, kid.terminal) : nil }
+            }
+        }
     }
 
     /// Status bar: focus the next agent with `status` after the focused one (sidebar order, wrapping).
     func focusNext(status: AgentStatus) {
-        let rows = allRows
+        let rows = agentPanes
         guard !rows.isEmpty else { return }
-        let start = focusedPane.flatMap { p in rows.firstIndex { $0.paneID == p.id } } ?? -1
+        let start = focusedPane.flatMap { p in rows.firstIndex { $0.pane == p.id } } ?? -1
         for k in 1...rows.count {
             let row = rows[(start + k + rows.count) % rows.count]
-            if row.kind == .agent, row.terminal?.status == status {
-                if let space = workspace.location(ofPane: row.paneID)?.space {
+            if row.terminal.status == status {
+                if let space = workspace.location(ofPane: row.pane)?.space {
                     if showsMachines { foldedMachines.remove(space.machine ?? "") }
                     closedSpaces.remove(space.id)
                 }
-                focus(pane: row.paneID)
+                focus(pane: row.pane)
                 return
             }
+        }
+    }
+
+    // MARK: - Sub-agents
+
+    /// A sub-agent's row was tapped (under the row of `rowPane`): kept, its pane;
+    /// else it shows for now (`peek`): over the window on the iPad, in the row's
+    /// place on the iPhone.
+    func open(_ kid: SubAgent, from rowPane: String) {
+        if let pane = kid.paneID { return focus(pane: pane) }
+        if singlePane {
+            focus(pane: rowPane)
+        } else {
+            closeSidebarOverlay()
+            // The keyboard was the pane's under the window: it goes (the puck brings one to the sub-agent).
+            closeCompose()
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        withAnimation(.snappy(duration: 0.25)) {
+            peek = kid.terminal.address
+            peekFrom = rowPane
+            // Keys out for the pane would now go to the sub-agent: the puck brings them back.
+            keys.open = false
+        }
+    }
+
+    func closePeek() {
+        guard peek != nil else { return }
+        if composing == peek { closeCompose() }
+        withAnimation(.snappy(duration: 0.2)) {
+            peek = nil
+            peekFrom = nil
+            // Its keys were the sub-agent's: they don't stay out for the pane under it.
+            keys.open = false
+        }
+    }
+
+    /// The shown sub-agent went away (ended), or someone else gave it a pane.
+    func checkPeek() {
+        guard let address = peek else { return }
+        let t = workspace.terminal(address)
+        if t == nil || t?.isLive == false || workspace.pane(showing: address) != nil { closePeek() }
+    }
+
+    /// Where Keep puts a sub-agent: a tab right after its parent's (the nearest
+    /// ancestor with a pane), else at the end of the space it's looked at from.
+    func keepTarget(for address: String) -> (spaceID: String, after: String?, parent: String?)? {
+        if let t = workspace.keepTarget(for: address) { return (t.spaceID, t.after, t.parent) }
+        let machine = workspace.terminal(address)?.machine
+        if let space = activeSpace, space.machine == machine { return (space.id, space.tabs.last?.id, nil) }
+        guard let space = workspace.spaces(on: machine).first else { return nil }
+        return (space.id, space.tabs.last?.id, nil)
+    }
+
+    /// Keep: a sub-agent becomes a tab (next to its parent's) and is focused there;
+    /// it still shows under its parent in the list.
+    func keep(_ address: String) {
+        guard let target = keepTarget(for: address) else { return toast("Keep: no space to put it in") }
+        closePeek()
+        run("Keep") { [workspace] in
+            let tab = try await workspace.keepAsTab(address, in: target.spaceID, after: target.after)
+            self.selectWhenReady(.tab(tab))
         }
     }
 
@@ -322,9 +412,12 @@ final class WorkspaceController {
         workspace.markSeen(looking ? visibleAgents : [])
     }
 
-    /// Agents drawn in the panel: the active tab's (or its zoomed pane's).
+    /// Agents drawn in the panel: the active tab's (or its zoomed pane's), and a
+    /// sub-agent shown for now.
     private var visibleAgents: [String] {
-        onScreenPanes.compactMap(\.terminal).filter { workspace.terminal($0)?.isAgent == true }
+        // The iPhone shows it in its parent's place.
+        let panes = singlePane && peek != nil ? [] : onScreenPanes.compactMap(\.terminal)
+        return (panes + (peek.map { [$0] } ?? [])).filter { workspace.terminal($0)?.isAgent == true }
     }
 
     /// Panes drawn in the panel: the active tab's, its zoomed pane, or (iPhone) the focused one.
@@ -337,8 +430,8 @@ final class WorkspaceController {
     /// Agents other than `paneID`'s that wait for the person, by status.
     func attention(excluding paneID: String?) -> (blocked: Int, done: Int) {
         var blocked = 0, done = 0
-        for row in allRows where row.kind == .agent && row.paneID != paneID {
-            switch row.terminal?.status {
+        for row in agentPanes where row.pane != paneID {
+            switch row.terminal.status {
             case .blocked: blocked += 1
             case .done: done += 1
             default: break

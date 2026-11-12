@@ -112,6 +112,10 @@ public struct TerminalInfo: Identifiable, Hashable, Sendable {
     public var machine: String?
     /// hc terminal name (`--name`), if any.
     public var name: String?
+    /// hc template it was started from (`hc run reviewer …`), if any.
+    public var template: String?
+    /// When the core started it.
+    public var createdAt: Date?
     /// Window title (OSC 0/2), cleaned of spinner glyphs; `""` when none.
     public var title: String
     /// Live folder (foreground process cwd, else launch cwd).
@@ -140,13 +144,15 @@ public struct TerminalInfo: Identifiable, Hashable, Sendable {
     public var spaceID: String?
     public var tabID: String?
 
-    public init(address: String, machine: String? = nil, name: String? = nil, title: String = "",
+    public init(address: String, machine: String? = nil, name: String? = nil, template: String? = nil,
+                createdAt: Date? = nil, title: String = "",
                 cwd: String? = nil, processName: String? = nil, program: Program = .shell,
                 isLive: Bool = true, status: AgentStatus? = nil, state: String? = nil,
                 message: String? = nil, app: String? = nil, turn: Int = 0,
                 statusChangedAt: Date? = nil, parent: String? = nil, labels: [String: String] = [:],
                 pinned: Bool = false, meta: AgentMeta? = nil, spaceID: String? = nil, tabID: String? = nil) {
         self.address = address; self.machine = machine; self.name = name; self.title = title
+        self.template = template; self.createdAt = createdAt
         self.cwd = cwd; self.processName = processName; self.program = program; self.isLive = isLive
         self.status = status; self.state = state; self.message = message; self.app = app
         self.turn = turn; self.statusChangedAt = statusChangedAt; self.parent = parent
@@ -155,6 +161,36 @@ public struct TerminalInfo: Identifiable, Hashable, Sendable {
     }
 
     public var isAgent: Bool { status != nil }
+
+    /// Its status as a sub-agent reads under its parent (`kidStatus`): never
+    /// done, it reports to its parent and the parent's done is the news
+    /// (`error` is already blocked).
+    public var kidStatus: AgentStatus? {
+        status == .done ? .idle : status
+    }
+}
+
+/// A live terminal an agent started (`hc run`), shown under that agent in the
+/// sidebar (the user's `wierd-agents`): a sub-agent (it reports a status) or a
+/// plain terminal. Its own children follow it, a level deeper.
+public struct SubAgent: Identifiable, Hashable, Sendable {
+    /// One column of the tree in front of a row: `├`/`└` its own elbow into
+    /// its first line, `│` an ancestor's line going on past it, blank none.
+    public enum Line: Hashable, Sendable { case tee, elbow, pipe, blank }
+
+    public var id: String { terminal.address }
+    public var terminal: TerminalInfo
+    /// One per level, outermost first; the last is its own (`tee` or `elbow`).
+    public var lines: [Line]
+    /// Its pane, when someone kept it (`Keep`): it still shows here, under its parent.
+    public var paneID: String?
+
+    public init(terminal: TerminalInfo, lines: [Line], paneID: String? = nil) {
+        self.terminal = terminal; self.lines = lines; self.paneID = paneID
+    }
+
+    public var isAgent: Bool { terminal.isAgent }
+    public var depth: Int { lines.count }
 }
 
 // MARK: - Layout: spaces, tabs, panes
@@ -315,13 +351,23 @@ public struct SidebarRow: Identifiable, Hashable, Sendable {
     public var terminal: TerminalInfo?
     /// Mod name for mod panes.
     public var mod: String?
-    /// True when this row's tab has 2+ panes (the sidebar draws a bracket joining them).
+    /// True when this row's tab shows 2+ rows (the sidebar draws a bracket joining them).
     public var tabIsSplit: Bool
+    /// An agent's sub-agents and terminals, depth first (kept ones too: they show
+    /// here, not as rows of their own tab).
+    public var subtree: [SubAgent]
+    /// The most urgent of its own status and its sub-agents' (what the sidebar sorts by).
+    public var urgency: AgentStatus?
 
-    public init(kind: Kind, paneID: String, tabID: String, terminal: TerminalInfo?, mod: String? = nil, tabIsSplit: Bool = false) {
+    public init(kind: Kind, paneID: String, tabID: String, terminal: TerminalInfo?, mod: String? = nil,
+                tabIsSplit: Bool = false, subtree: [SubAgent] = [], urgency: AgentStatus? = nil) {
         self.kind = kind; self.paneID = paneID; self.tabID = tabID; self.terminal = terminal
-        self.mod = mod; self.tabIsSplit = tabIsSplit
+        self.mod = mod; self.tabIsSplit = tabIsSplit; self.subtree = subtree
+        self.urgency = urgency ?? terminal?.status
     }
+
+    /// This row's pane, then its kept sub-agents' panes (the order ⌘] steps through).
+    public var paneIDs: [String] { [paneID] + subtree.compactMap(\.paneID) }
 }
 
 // MARK: - Commands

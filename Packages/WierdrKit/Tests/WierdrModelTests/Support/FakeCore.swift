@@ -134,6 +134,12 @@ final class FakeCore: @unchecked Sendable {
                 s.terminals[a] = t
                 emit("labels", terminal: a, ["labels": .object(labels)])
                 return .success(t)
+            case "terminal.keep":
+                let a = p["terminal"]?.string ?? ""
+                guard var t = s.terminals[a] else { return notFound(a) }
+                t["keep"] = p["keep"] ?? true
+                s.terminals[a] = t
+                return .success(t)
             case "terminal.get":
                 let a = p["terminal"]?.string ?? ""
                 return s.terminals[a].map { .success($0) } ?? notFound(a)

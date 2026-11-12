@@ -25,9 +25,9 @@ public final class Workspace {
     /// Connected computer first, then added machines by name.
     public internal(set) var machines: [Machine] = []
     /// All spaces in Herdr's order (connected computer first, then machines by name; doc order inside).
-    public internal(set) var spaces: [Space] = []
+    public internal(set) var spaces: [Space] = [] { didSet { index = nil } }
     /// Every live terminal by qualified address (plus ended ones still shown in a pane).
-    public internal(set) var terminals: [String: TerminalInfo] = [:]
+    public internal(set) var terminals: [String: TerminalInfo] = [:] { didSet { index = nil } }
     /// Agents people can start, per machine id (`""` = connected computer).
     public internal(set) var launchers: [String: [AgentLauncher]] = [:]
     /// Home folder of the connected computer (for `~` shortening), when known.
@@ -83,14 +83,65 @@ public final class Workspace {
 
     /// Rows under a space card, in Herdr's sidebar order.
     public func sidebarRows(for space: Space) -> [SidebarRow] {
-        SidebarOrder.rows(for: space, terminals: terminals)
+        SidebarOrder.rows(for: space, index: subAgents)
     }
 
-    /// Live terminals started by `address` that have no pane (sub-agents).
-    public func children(of address: String) -> [TerminalInfo] {
-        terminals.values
-            .filter { $0.parent == address && $0.isLive && pane(showing: $0.address) == nil }
-            .sorted { $0.address < $1.address }
+    // MARK: Sub-agents
+
+    /// Who started whom, for this snapshot (rebuilt after spaces or terminals change).
+    @ObservationIgnored private var index: SubAgentIndex?
+
+    var subAgents: SubAgentIndex {
+        // Read both every time: a view that only asks the (unobserved) cache still
+        // follows changes to them. Copies are free (copy on write).
+        let spaces = self.spaces, terminals = self.terminals
+        if let index { return index }
+        let built = SubAgentIndex(spaces: spaces, terminals: terminals)
+        index = built
+        return built
+    }
+
+    /// The live terminals `address` started, and theirs, depth first (kept ones too).
+    public func subtree(of address: String) -> [SubAgent] {
+        subAgents.subtree(of: address)
+    }
+
+    /// Whether a terminal shows under an agent in the sidebar rather than as a row of its own.
+    public func isNested(_ address: String) -> Bool {
+        subAgents.isNested(address)
+    }
+
+    /// A space's agents by status as its card counts them: its agents, and the
+    /// sub-agents under them (never done).
+    public func agentCounts(in spaceID: String) -> [AgentStatus: Int] {
+        subAgents.countsBySpace[spaceID] ?? [:]
+    }
+
+    /// The same for all of a machine's spaces (a folded machine's header).
+    public func agentCounts(on machine: String?) -> [AgentStatus: Int] {
+        let all = subAgents.countsBySpace
+        var out: [AgentStatus: Int] = [:]
+        for space in spaces(on: machine) {
+            for (s, n) in all[space.id] ?? [:] { out[s, default: 0] += n }
+        }
+        return out
+    }
+
+    /// Where a sub-agent goes when kept: a tab of its nearest ancestor's space
+    /// (the nearest with a pane), right after that ancestor's tab and the tabs
+    /// of its other kept children already there. Nil when no ancestor has a pane.
+    public func keepTarget(for address: String) -> (spaceID: String, after: String, parent: String)? {
+        let index = subAgents
+        guard let home = index.home(of: address), let space = space(home.place.space),
+              let at = space.tabs.firstIndex(where: { $0.id == home.place.tab }) else { return nil }
+        let kin = Set(index.subtree(of: home.address).map(\.terminal.address)).subtracting([address])
+        var after = at
+        while after + 1 < space.tabs.count {
+            let panes = space.tabs[after + 1].panes
+            guard !panes.isEmpty, panes.allSatisfy({ $0.terminal.map(kin.contains) ?? false }) else { break }
+            after += 1
+        }
+        return (space.id, space.tabs[after].id, home.address)
     }
 
     /// Agent counts by status over all agents shown in panes.
@@ -175,6 +226,15 @@ public final class Workspace {
         try await backend.moveTab(tabID, to: index)
     }
 
+    /// Keep a running terminal without a pane (a sub-agent): a new tab of a
+    /// space (of its machine), after `afterTab` (else at the end), showing it;
+    /// it lives on like any pane's terminal (`terminal.keep`). Returns the new tab id.
+    @discardableResult
+    public func keepAsTab(_ address: String, in spaceID: String, after afterTab: String? = nil) async throws -> String {
+        guard let backend else { throw WorkspaceError.notConnected }
+        return try await backend.keepAsTab(address, in: spaceID, after: afterTab)
+    }
+
     /// The person is looking at these agents now, and only these (pass all of
     /// them each time; `[]` when nothing is on screen or the app is in the
     /// background): raise their shared `herdr.seen` to their current turn
@@ -218,6 +278,7 @@ protocol WorkspaceBackend: AnyObject {
     func renameTab(_ tabID: String, to name: String) async throws
     func moveSpace(_ spaceID: String, before: String?) async throws
     func moveTab(_ tabID: String, to index: Int) async throws
+    func keepAsTab(_ address: String, in spaceID: String, after: String?) async throws -> String
     func markSeen(_ addresses: [String])
     func markUnread(_ address: String)
     func markRead(_ address: String)

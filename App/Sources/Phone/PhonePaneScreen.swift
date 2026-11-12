@@ -10,7 +10,9 @@ import WierdrModel
 /// message field while it is open, above the keyboard. Taps on the terminal
 /// are clicks for the program; while a keyboard is up, a tap hides it.
 /// The list (`PhoneHome`) slides over it; while it is out (`covered`), the
-/// panel and the keyboards go and the swipes rest.
+/// panel and the keyboards go and the swipes rest. A sub-agent opened from the
+/// list (`controller.peek`) shows here in its parent's place, as any agent
+/// would; its menu keeps it as a tab or goes back to the parent.
 struct PhonePaneScreen: View {
     var covered = false
 
@@ -25,14 +27,20 @@ struct PhonePaneScreen: View {
         let space = controller.activeSpace
         let tab = controller.activeTab
         let pane = controller.focusedPane
+        let peek = controller.peek
+        // What the screen shows: the sub-agent opened from the list, else the pane's terminal.
+        let address = peek ?? pane?.terminal
         VStack(spacing: 0) {
-            PhonePaneTopBar(space: space, tab: tab, pane: pane)
+            PhonePaneTopBar(space: space, tab: tab, pane: pane, peek: peek)
             if let space, verticalSizeClass != .compact, panes(of: space).count > 1 {
                 PhonePaneStrip(space: space, current: pane?.id, panes: panes(of: space))
             }
             Group {
-                if let pane, let tab {
-                    PhonePaneContent(pane: pane, tab: tab)
+                if let peek {
+                    PhonePaneContent(pane: Pane(id: "peek:\(peek)", terminal: peek, mod: nil))
+                        .id("peek:\(peek)")
+                } else if let pane {
+                    PhonePaneContent(pane: pane)
                         .id(pane.id)
                 } else {
                     PhoneEmptyPane()
@@ -40,7 +48,7 @@ struct PhonePaneScreen: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(theme.background)
-            .keyPanel(address: pane?.terminal, covered: covered, thumbY: screenHeight * 2 / 3, state: $keys)
+            .keyPanel(address: address, covered: covered, thumbY: screenHeight * 2 / 3, state: $keys)
             .overlay(alignment: .bottom) {
                 // Above the panel, and beside it while it is out.
                 ToastStack()
@@ -48,14 +56,14 @@ struct PhonePaneScreen: View {
                     .padding(.trailing, keys.trailingInset > 0 ? keys.trailingInset + 6 : 12)
                     .padding(.bottom, 10)
             }
-            if let address = pane?.terminal, controller.composing == address {
+            if let address, controller.composing == address {
                 // No transition: it comes and goes with its keyboard, at once.
                 PhoneComposeBar(address: address)
                     .id(address)
             }
         }
         // Another pane, or the list out: the message field closes (its draft stays).
-        .onChange(of: pane?.terminal) { controller.composing = nil }
+        .onChange(of: address) { controller.composing = nil }
         .onDisappear { controller.composing = nil }
         .background(theme.chrome.ignoresSafeArea())
         // Safe area included: the keyboard's inset moves with it, so the sum is the window's height.
@@ -70,7 +78,7 @@ struct PhonePaneScreen: View {
     }
 
     private var keepsAwake: Bool {
-        controller.workspace.terminal(controller.focusedPane?.terminal)?.status == .working
+        controller.workspace.terminal(controller.peek ?? controller.focusedPane?.terminal)?.status == .working
     }
 
     /// The space's panes in tab order, then pane order (stable, unlike the
@@ -83,7 +91,6 @@ struct PhonePaneScreen: View {
 /// The terminal (or the desktop-only panel note) filling the screen.
 private struct PhonePaneContent: View {
     var pane: Pane
-    var tab: Tab
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -129,17 +136,19 @@ private struct PhoneEmptyPane: View {
 // MARK: - Top bar
 
 /// The list's button, the space avatar, what runs here (title + model or folder), the
-/// next agent waiting for you, the pane menu. 52 pt.
+/// next agent waiting for you, the pane menu. 52 pt. A sub-agent shown here (`peek`)
+/// reads as under its parent in the list (never done), from whom.
 private struct PhonePaneTopBar: View {
     var space: Space?
     var tab: Tab?
     var pane: Pane?
+    var peek: String? = nil
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
-        let terminal = controller.workspace.terminal(pane?.terminal)
+        let terminal = controller.workspace.terminal(peek ?? pane?.terminal)
         HStack(spacing: 0) {
             Button { controller.showSidebar() } label: {
                 Icon("sidebar", size: 20, color: theme.foreground)
@@ -155,7 +164,7 @@ private struct PhonePaneTopBar: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
-                    if let status = terminal?.status { StatusMark(status: status) }
+                    if let status = peek != nil ? terminal?.kidStatus : terminal?.status { StatusMark(status: status) }
                     Text(title(terminal))
                         .font(.ui(15.5, .semibold))
                         .foregroundStyle(theme.foreground)
@@ -169,7 +178,7 @@ private struct PhonePaneTopBar: View {
             .accessibilityAddTraits(.isHeader)
             AttentionButton(current: pane?.id)
                 .padding(.leading, 6)
-            PhonePaneMenu(space: space, tab: tab, pane: pane, terminal: terminal)
+            PhonePaneMenu(space: space, tab: tab, pane: pane, terminal: terminal, peek: peek)
         }
         .padding(.leading, 2)
         .padding(.trailing, 4)
@@ -180,6 +189,7 @@ private struct PhonePaneTopBar: View {
     }
 
     private func title(_ t: TerminalInfo?) -> String {
+        if let peek { return t.map { Format.kidTitle($0) } ?? peek }
         guard let pane else { return space?.displayName ?? "" }
         guard let t else { return pane.mod ?? "terminal" }
         return t.isAgent ? Format.agentTitle(t, tab: tab) : Format.processName(t)
@@ -189,6 +199,9 @@ private struct PhonePaneTopBar: View {
     private func subtitle(_ t: TerminalInfo?) -> Text {
         var out = Text(space?.displayName ?? "").foregroundColor(theme.muted)
         func dot() { out = out + Text("  ·  ").foregroundColor(theme.dim) }
+        if peek != nil, let parent = controller.workspace.terminal(t?.parent) {
+            out = Text("from \(Format.kidTitle(parent))").foregroundColor(theme.muted)
+        }
         if let t, t.isAgent {
             dot()
             out = out + Text(t.meta?.model ?? t.program.name).foregroundColor(theme.muted)
@@ -322,11 +335,13 @@ private struct PhonePaneStrip: View {
 // MARK: - Pane menu
 
 /// Everything else about the pane, its tab and space; text size; settings.
+/// A sub-agent shown here (`peek`): Keep as Tab, back to its parent's pane.
 private struct PhonePaneMenu: View {
     var space: Space?
     var tab: Tab?
     var pane: Pane?
     var terminal: TerminalInfo?
+    var peek: String? = nil
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -334,41 +349,18 @@ private struct PhonePaneMenu: View {
 
     var body: some View {
         Menu {
-            if let t = terminal, t.isAgent {
+            if let peek {
                 Section {
-                    Button { controller.setPinned(t.address, !t.pinned) } label: {
-                        Label(t.pinned ? "Unpin" : "Pin", image: t.pinned ? "ui.pin-off" : "ui.pin")
-                    }
-                    switch t.status {
-                    case .idle:
-                        Button { controller.markUnread(t.address) } label: { Label("Mark Unread", systemImage: "circle.fill") }
-                    case .done:
-                        Button { controller.markRead(t.address) } label: { Label("Mark Idle", systemImage: "circle") }
-                    default:
-                        EmptyView()
+                    Button { controller.keep(peek) } label: { Label("Keep as Tab", image: "ui.plus") }
+                        .disabled(controller.keepTarget(for: peek) == nil)
+                    if let pane {
+                        Button { controller.focus(pane: pane.id) } label: {
+                            Label("Back to \(parentTitle)", image: "ui.chevron-left")
+                        }
                     }
                 }
-            }
-            Section {
-                if let space {
-                    Menu {
-                        LaunchMenuItems(machine: space.machine) { controller.newTab(launch: $0, in: space) }
-                    } label: { Label("New Tab", image: "ui.plus") }
-                }
-                if let pane {
-                    Menu {
-                        Button { controller.split(.right, pane: pane.id) } label: { Label("Split Right", image: "ui.split-right") }
-                        Button { controller.split(.down, pane: pane.id) } label: { Label("Split Down", image: "ui.split-down") }
-                    } label: { Label("Split", image: "ui.split-right") }
-                }
-            }
-            Section {
-                if let tab {
-                    Button { controller.beginRename(tab: tab.id) } label: { Label("Rename Tab…", image: "ui.square-pen") }
-                }
-                if let space {
-                    Button { controller.beginRename(space: space.id) } label: { Label("Rename Space…", image: "ui.square-pen") }
-                }
+            } else {
+                paneSections
             }
             Section {
                 ControlGroup {
@@ -382,13 +374,8 @@ private struct PhonePaneMenu: View {
                 .controlGroupStyle(.compactMenu)
                 Button { controller.showSettings = true } label: { Label("Settings…", image: "ui.settings") }
             }
-            Section {
-                if let pane {
-                    Button(role: .destructive) { controller.closePane(pane.id) } label: { Label("Close Pane", image: "ui.x") }
-                }
-                if let tab, tab.panes.count > 1 {
-                    Button(role: .destructive) { controller.closeTab(tab.id) } label: { Label("Close Tab", image: "ui.x") }
-                }
+            if peek == nil {
+                closeSection
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -399,6 +386,65 @@ private struct PhonePaneMenu: View {
         }
         .menuOrder(.fixed)
         .accessibilityLabel("More")
+    }
+
+    /// The pane the sub-agent shows in place of (its parent's row).
+    private var parentTitle: String {
+        let ws = controller.workspace
+        guard let t = ws.terminal(pane?.terminal) else { return "the Parent" }
+        return t.isAgent ? Format.agentTitle(t, tab: tab) : Format.processName(t)
+    }
+
+    @ViewBuilder
+    private var paneSections: some View {
+        if let t = terminal, t.isAgent {
+            Section {
+                Button { controller.setPinned(t.address, !t.pinned) } label: {
+                    Label(t.pinned ? "Unpin" : "Pin", image: t.pinned ? "ui.pin-off" : "ui.pin")
+                }
+                switch t.status {
+                case .idle:
+                    Button { controller.markUnread(t.address) } label: { Label("Mark Unread", systemImage: "circle.fill") }
+                case .done:
+                    Button { controller.markRead(t.address) } label: { Label("Mark Idle", systemImage: "circle") }
+                default:
+                    EmptyView()
+                }
+            }
+        }
+        Section {
+            if let space {
+                Menu {
+                    LaunchMenuItems(machine: space.machine) { controller.newTab(launch: $0, in: space) }
+                } label: { Label("New Tab", image: "ui.plus") }
+            }
+            if let pane {
+                Menu {
+                    Button { controller.split(.right, pane: pane.id) } label: { Label("Split Right", image: "ui.split-right") }
+                    Button { controller.split(.down, pane: pane.id) } label: { Label("Split Down", image: "ui.split-down") }
+                } label: { Label("Split", image: "ui.split-right") }
+            }
+        }
+        Section {
+            if let tab {
+                Button { controller.beginRename(tab: tab.id) } label: { Label("Rename Tab…", image: "ui.square-pen") }
+            }
+            if let space {
+                Button { controller.beginRename(space: space.id) } label: { Label("Rename Space…", image: "ui.square-pen") }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var closeSection: some View {
+        Section {
+            if let pane {
+                Button(role: .destructive) { controller.closePane(pane.id) } label: { Label("Close Pane", image: "ui.x") }
+            }
+            if let tab, tab.panes.count > 1 {
+                Button(role: .destructive) { controller.closeTab(tab.id) } label: { Label("Close Tab", image: "ui.x") }
+            }
+        }
     }
 
     private func step(_ delta: Double) {

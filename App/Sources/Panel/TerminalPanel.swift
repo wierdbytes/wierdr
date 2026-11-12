@@ -3,12 +3,14 @@ import WierdrModel
 
 /// The work column: tab bar, the active tab's panes on `canvas`, the status bar.
 /// Over the panes, the key panel and the puck that brings it and the keyboards
-/// (`KeyPanelLayer`), for the focused pane; while its message field is open
-/// (`PhoneComposeBar`, above the keyboard), the field takes the status bar's place.
+/// (`KeyPanelLayer`), for the focused pane: drawn once over the whole window
+/// (`KeyLayerHost`, so over a sub-agent's window too), placed over the panes,
+/// whose frame this column reports (`controller.keyArea`). While the focused
+/// pane's message field is open (`PhoneComposeBar`, above the keyboard), the
+/// field takes the status bar's place.
 struct TerminalPanel: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    @State private var keys = KeyPanelState()
 
     var body: some View {
         let address = controller.focusedPane?.terminal
@@ -24,8 +26,8 @@ struct TerminalPanel: View {
             .padding(8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(theme.canvas)
-            .keyPanel(address: address, covered: controller.sidebarOverlay, state: $keys)
-            .overlay(alignment: .bottomTrailing) { ToastStack().padding(16).padding(.trailing, keys.trailingInset) }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { controller.keyArea = $0 }
+            .overlay(alignment: .bottomTrailing) { ToastStack().padding(16).padding(.trailing, controller.keys.trailingInset) }
             if let address, controller.composing == address {
                 // No transition: it comes and goes with its keyboard, at once.
                 PhoneComposeBar(address: address, placeholder: "Message to \(Format.paneName(controller.workspace.terminal(address)))")
@@ -181,5 +183,35 @@ struct ConnectionBanner: View {
         .background(theme.popover, in: Capsule())
         .overlay(Capsule().strokeBorder(theme.border, lineWidth: 1))
         .padding(.top, top)
+    }
+}
+
+/// The iPad's key panel and its puck, once, over everything: the panes, the
+/// sidebar overlay's edge, a sub-agent's window (`SubAgentPeek`). Placed over the
+/// panel's panes (`controller.keyArea`), so the puck stays where the person put it;
+/// for the focused pane's terminal, or the sub-agent looked at while its window is up.
+struct KeyLayerHost: View {
+    @Environment(WorkspaceController.self) private var controller
+    /// This layer's own origin in the window (the panes' frame is global).
+    @State private var origin: CGPoint = .zero
+
+    var body: some View {
+        @Bindable var controller = controller
+        let area = controller.keyArea
+        ZStack(alignment: .topLeading) {
+            if area.width > 0, area.height > 0 {
+                // Not hit-testable: touches go through to the panes (or the window) under it,
+                // but for the puck and the panel.
+                Color.clear
+                    .frame(width: area.width, height: area.height)
+                    .keyPanel(address: controller.peek ?? controller.focusedPane?.terminal,
+                              covered: controller.sidebarOverlay, state: $controller.keys)
+                    .padding(.leading, area.minX - origin.x)
+                    .padding(.top, area.minY - origin.y)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { origin = $0 }
+        .ignoresSafeArea(.keyboard)
     }
 }

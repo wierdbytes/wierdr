@@ -191,6 +191,36 @@ struct EngineTests {
         try await eventually { ws.space("spB") == nil }
     }
 
+    /// Keep: a sub-agent gets a tab right after its parent's (labels first, then
+    /// keep, then the document); it still shows under its parent.
+    @Test func keepGivesASubAgentATabNextToItsParent() async throws {
+        let core = makeCore()
+        core.state.withLock { s in s.terminals["t1"]?["status"] = ["state": "working", "app": "pi"] }
+        core.addTerminal(terminalJSON("t50", parent: "t1"))
+        let (ws, _) = try await start(core)
+        try await eventually { ws.terminal("t50") != nil && ws.terminal("t1")?.isAgent == true }
+        #expect(ws.sidebarRows(for: ws.space("spA")!).first { $0.terminal?.address == "t1" }?.subtree.map(\.terminal.address) == ["t50"])
+        let target = try #require(ws.keepTarget(for: "t50"))
+        #expect(target.spaceID == "spA" && target.after == "tbA" && target.parent == "t1")
+        let id = try await ws.keepAsTab("t50", in: target.spaceID, after: target.after)
+        let label = try #require(core.calls("terminal.label").last)
+        #expect(label["terminal"] == "t50" && label["labels"] == ["herdr.space": "spA", "herdr.tab": .string(id)])
+        #expect(core.calls("terminal.keep").last?["keep"] == true)
+        let methods = core.state.withLock { $0.calls.map(\.method) }
+        #expect(methods.lastIndex(of: "terminal.label")! < methods.lastIndex(of: "terminal.keep")!)
+        #expect(methods.lastIndex(of: "terminal.keep")! < methods.lastIndex(of: "doc.set")!)
+        let doc = try #require(core.doc("herdr-app"))
+        #expect(doc.value.layoutSpaces[0].layoutTabs.map(\.nodeID) == ["tbA", id, "tbB"])
+        try await eventually { ws.pane(showing: "t50") != nil }
+        // Still its parent's: under it, not a row of its own tab.
+        let rows = ws.sidebarRows(for: ws.space("spA")!)
+        #expect(!rows.contains { $0.terminal?.address == "t50" })
+        #expect(rows.first { $0.terminal?.address == "t1" }?.subtree.first?.paneID != nil)
+        // Kept already: that tab, nothing written.
+        #expect(try await ws.keepAsTab("t50", in: "spA", after: "tbA") == id)
+        #expect(core.doc("herdr-app")?.version == doc.version)
+    }
+
     @Test func splitRightAndDown() async throws {
         let core = makeCore()
         let (ws, _) = try await start(core)

@@ -719,6 +719,39 @@ public final class WorkspaceEngine: WorkspaceBackend {
         try await write(key) { LayoutEdits.moveTab($0, id: local, to: index) }
     }
 
+    /// `terminal.keep` for a running terminal without a pane (a sub-agent): labels
+    /// first (if our write loses, the desktop adopts it under them), keep on, then
+    /// a new tab showing it after `after`. Already shown somewhere: that tab.
+    func keepAsTab(_ address: String, in spaceID: String, after: String?) async throws -> String {
+        let (key, machine, localSpace) = key(of: spaceID)
+        let c = try requireDocument(key)
+        guard LayoutID.machine(of: address) == machine else {
+            throw WorkspaceError.core("It runs on \(LayoutID.machine(of: address) ?? "this computer"), not where that space is")
+        }
+        guard let record = records[address], record.isLive else { throw WorkspaceError.notFound("Terminal") }
+        let local = LayoutID.local(address, machine)
+        if let placed = slots[key]?.raw.paneShowing(local), let ti = placed.location.tab {
+            return LayoutID.qualify(slots[key]!.raw.layoutSpaces[placed.location.space].layoutTabs[ti].nodeID, machine)
+        }
+        guard slots[key]?.raw.locateSpace(localSpace) != nil else { throw WorkspaceError.notFound("Space") }
+        let (tb, p) = (LayoutID.fresh("tb"), LayoutID.fresh("p"))
+        do {
+            _ = try await c.labelTerminal(address, [label("space"): localSpace, label("tab"): tb])
+            if !record.keep { _ = try await c.keepTerminal(address, true) }
+        } catch let e as CoreError {
+            throw WorkspaceError.core("Cannot keep it: \(e.message)")
+        } catch is ConnectionError {
+            throw WorkspaceError.notConnected
+        }
+        let afterLocal = after.map { LayoutID.local($0, machine) }
+        try await write(key) { LayoutEdits.newTab($0, space: localSpace, after: afterLocal, id: tb, name: "",
+                                                   paneID: p, address: local) }
+        if let placed = slots[key]?.raw.paneShowing(local), let ti = placed.location.tab {
+            return LayoutID.qualify(slots[key]!.raw.layoutSpaces[placed.location.space].layoutTabs[ti].nodeID, machine)
+        }
+        return LayoutID.qualify(tb, machine)
+    }
+
     // MARK: Seen, unread, pinned
 
     private func seenTurn(_ t: Terminal) -> UInt64? {

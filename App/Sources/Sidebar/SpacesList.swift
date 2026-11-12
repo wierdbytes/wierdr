@@ -65,7 +65,7 @@ struct SpacesList: View {
             .onChange(of: ws.spaces.map(\.id)) { drag.settle() }
             .onChange(of: controller.focusedPane?.id) { _, id in
                 guard let id else { return }
-                withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(id) }
+                withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(controller.listID(ofPane: id)) }
             }
             .onChange(of: controller.activeSpace?.id) { _, id in
                 guard let id else { return }
@@ -107,17 +107,27 @@ struct SpaceCardRows: View {
             .background(SpaceRowMarker(space: space.id, header: true, markers: drag?.markers))
             .sidebarRow(id: "space:\(space.id)", background: CardSlice(top: true, bottom: !bodyShown, slot: slot))
         if bodyShown {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
-                let last = i == rows.count - 1
-                let bracket = Bracket.position(rows, i)
-                SidebarRowView(row: row, space: space, bracket: bracket)
-                    .padding(.horizontal, 5) // 1-pt border + 4-pt card padding
-                    .padding(.top, 4)
-                    .padding(.bottom, last ? 4 : 0)
-                    .padding(.bottom, last ? 7 : 0) // 1-pt border + 6-pt gap after the card
-                    .opacity(slot ? 0 : 1)
-                    .background(SpaceRowMarker(space: space.id, markers: drag?.markers))
-                    .sidebarRow(id: row.paneID, background: CardSlice(top: false, bottom: last, slot: slot))
+            // An agent's sub-agents are rows of their own under it: folding them
+            // (its badge) inserts and removes rows, which the list animates.
+            let items = controller.cardItems(rows)
+            ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
+                let last = i == items.count - 1
+                let bracket = Bracket.position(items, i)
+                Group {
+                    switch item {
+                    case .row(let row):
+                        SidebarRowView(row: row, space: space, bracket: bracket)
+                    case .kid(let kid, let parent):
+                        SubAgentRowView(kid: kid, parent: parent, bracket: bracket)
+                    }
+                }
+                .padding(.horizontal, 5) // 1-pt border + 4-pt card padding
+                .padding(.top, 4)
+                .padding(.bottom, last ? 4 : 0)
+                .padding(.bottom, last ? 7 : 0) // 1-pt border + 6-pt gap after the card
+                .opacity(slot ? 0 : 1)
+                .background(SpaceRowMarker(space: space.id, markers: drag?.markers))
+                .sidebarRow(id: item.id, background: CardSlice(top: false, bottom: last, slot: slot))
             }
         }
     }
@@ -163,10 +173,15 @@ enum Bracket {
     case none, first, middle, last, only
 
     static func position(_ rows: [SidebarRow], _ i: Int) -> Bracket {
-        let row = rows[i]
+        position(rows.map { .row($0) }, i)
+    }
+
+    /// A sub-agent's row is in its agent's tab: the bracket goes on past it.
+    static func position(_ items: [CardItem], _ i: Int) -> Bracket {
+        let row = items[i].row
         guard row.tabIsSplit else { return .none }
-        let startsGroup = i == 0 || rows[i - 1].tabID != row.tabID
-        let endsGroup = i == rows.count - 1 || rows[i + 1].tabID != row.tabID
+        let startsGroup = i == 0 || items[i - 1].row.tabID != row.tabID
+        let endsGroup = i == items.count - 1 || items[i + 1].row.tabID != row.tabID
         switch (startsGroup, endsGroup) {
         case (true, true): return .only
         case (true, false): return .first
@@ -272,14 +287,9 @@ struct MachineHeader: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// Its spaces' agents, sub-agents too (as each card counts them).
     private func counts(_ ws: Workspace) -> [AgentStatus: Int] {
-        var c: [AgentStatus: Int] = [:]
-        for space in ws.spaces(on: machine.name) {
-            for row in ws.sidebarRows(for: space) {
-                if let s = row.terminal?.status { c[s, default: 0] += 1 }
-            }
-        }
-        return c
+        ws.agentCounts(on: machine.name)
     }
 }
 

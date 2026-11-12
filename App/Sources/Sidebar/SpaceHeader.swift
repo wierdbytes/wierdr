@@ -67,10 +67,9 @@ struct SpaceHeader: View {
         return hovering ? theme.selected : theme.hover
     }
 
+    /// Its agents by status, and the sub-agents under them (never done; §4.6).
     private var counts: [AgentStatus: Int] {
-        var c: [AgentStatus: Int] = [:]
-        for row in rows { if let s = row.terminal?.status { c[s, default: 0] += 1 } }
-        return c
+        controller.workspace.agentCounts(in: space.id)
     }
 
     @ViewBuilder

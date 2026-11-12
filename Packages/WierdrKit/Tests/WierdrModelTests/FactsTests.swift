@@ -231,4 +231,56 @@ import Testing
         #expect(rows.map(\.kind) == [.agent, .mod, .agent, .agent, .agent, .agent, .terminal, .terminal])
         #expect(rows.first { $0.paneID == "p1" }?.tabIsSplit == false && rows.first { $0.paneID == "p2" }?.tabIsSplit == true)
     }
+
+    /// wierd-agents' tree: sub-agents depth first under their agent, kept ones
+    /// too (not rows of their own tab), the parent sorted by its most urgent
+    /// sub-agent, counts in the parent's space (never done).
+    @MainActor @Test func subAgentsNestUnderTheirAgent() {
+        let now = Date()
+        func t(_ a: String, _ s: AgentStatus?, parent: String? = nil, age: TimeInterval = 0, live: Bool = true) -> TerminalInfo {
+            TerminalInfo(address: a, createdAt: now.addingTimeInterval(-age), isLive: live, status: s,
+                         state: s.map { _ in "x" }, statusChangedAt: now.addingTimeInterval(-age), parent: parent)
+        }
+        let terms: [TerminalInfo] = [
+            t("a", .idle, age: 1), t("b", .working, age: 5),
+            // a's: k1 (with k3 under it), k2 a plain terminal, k4 kept in its own tab.
+            t("k1", .working, parent: "a", age: 30), t("k2", nil, parent: "a", age: 20),
+            t("k3", .blocked, parent: "k1", age: 10), t("k4", .done, parent: "a", age: 5),
+            // Gone ones and their children don't show.
+            t("k5", .working, parent: "a", live: false), t("k6", .working, parent: "k5"),
+            // A shell's child isn't anyone's sub-agent.
+            t("s", nil), t("k7", .working, parent: "s"), t("s2", nil),
+        ]
+        func pane(_ id: String, _ a: String) -> PaneNode { PaneNode(id: id, kind: .terminal(a)) }
+        let tabs = [
+            Tab(id: "t1", spaceID: "sp", name: "", index: 0, root: PaneNode(id: "t1", kind: .row([pane("pb", "b")]))),
+            Tab(id: "t2", spaceID: "sp", name: "", index: 1, root: PaneNode(id: "t2", kind: .row([pane("pa", "a"), pane("ps", "s")]))),
+            Tab(id: "t3", spaceID: "sp", name: "", index: 2, root: PaneNode(id: "t3", kind: .row([pane("p4", "k4")]))),
+            Tab(id: "t4", spaceID: "sp", name: "", index: 3, root: PaneNode(id: "t4", kind: .row([pane("px", "s2")]))),
+        ]
+        let ws = Workspace()
+        ws.spaces = [Space(id: "sp", machine: nil, name: "", displayName: "x", folder: "", tabs: tabs)]
+        ws.terminals = Dictionary(uniqueKeysWithValues: terms.map { ($0.address, $0) })
+        let rows = ws.sidebarRows(for: ws.spaces[0])
+        // a is idle but its k3 needs you: its tab comes first; t3 (all kept kin) is no row.
+        #expect(rows.map(\.paneID) == ["pa", "ps", "pb", "px"])
+        let a = rows[0]
+        #expect(a.urgency == .blocked && a.tabIsSplit)
+        #expect(a.subtree.map(\.terminal.address) == ["k1", "k3", "k2", "k4"])
+        #expect(a.subtree.map(\.lines) == [[.tee], [.pipe, .elbow], [.tee], [.elbow]])
+        #expect(a.subtree.map(\.paneID) == [nil, nil, nil, "p4"])
+        #expect(a.paneIDs == ["pa", "p4"])
+        #expect(ws.isNested("k4") && !ws.isNested("k7") && !ws.isNested("a"))
+        // b working, a idle (not counted by the summary, but here), k1 working, k3 blocked, k4 done → idle.
+        #expect(ws.agentCounts(in: "sp") == [.working: 2, .idle: 2, .blocked: 1])
+        // Kept next to a's tab, past its kin's tab (t3).
+        let target = ws.keepTarget(for: "k1")
+        #expect(target?.spaceID == "sp" && target?.after == "t3" && target?.parent == "a")
+        #expect(ws.keepTarget(for: "k3")?.after == "t3")
+        #expect(ws.keepTarget(for: "k6") == nil)
+        // A sub-agent ending leaves the tree (the index follows the terminals).
+        ws.terminals["k3"]?.isLive = false
+        #expect(ws.sidebarRows(for: ws.spaces[0])[0].subtree.map(\.terminal.address) == ["k1", "k2", "k4"])
+        #expect(ws.agentCounts(in: "sp")[.blocked] == nil)
+    }
 }

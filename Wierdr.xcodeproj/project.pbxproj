@@ -11,6 +11,7 @@
 		1B05101B71E742280AB023DD /* WierdrTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90B1F34C74D7CADD79F2C52 /* WierdrTerminalView.swift */; };
 		1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */; };
 		1D99092A103C9305E6D01ACD /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF1A4D9E311EDC3924AE60C /* ConnectView.swift */; };
+		24484EFD85EC8F1800F97C9F /* SubAgentPeek.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384B24F496E887AC8E036AF3 /* SubAgentPeek.swift */; };
 		2603EB8A5D761C502BED791F /* HerdrSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 8129A5BF2F3516F166B530D1 /* HerdrSSH */; };
 		281ACDB6C96A9C6546DFB23D /* TerminalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B698C0B918748FB60826385 /* TerminalSurface.swift */; };
 		293313B9597429F72BDC4358 /* JetBrainsMono-Italic-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */; };
@@ -92,6 +93,7 @@
 		24C773688B33E3F0413C5204 /* KeyboardCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCover.swift; sourceTree = "<group>"; };
 		24CFA2C9F9D15FF3073EDD5A /* KeyPanelLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyPanelLayer.swift; sourceTree = "<group>"; };
 		2E36CF13C460CDEB0145C6CE /* WorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceView.swift; sourceTree = "<group>"; };
+		384B24F496E887AC8E036AF3 /* SubAgentPeek.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubAgentPeek.swift; sourceTree = "<group>"; };
 		3970FD27B3DF671D83DC038E /* TerminalSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSession.swift; sourceTree = "<group>"; };
 		3E32A6DFB0783950D3599945 /* DebugAutoConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugAutoConnect.swift; sourceTree = "<group>"; };
 		3F148D55F4969B78423C1E75 /* Wierdr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Wierdr.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -160,6 +162,7 @@
 			children = (
 				73B8BBCCDAF57164EE74D110 /* DemoTerminalView.swift */,
 				1AF2BC817415DFF36FE83826 /* PaneTreeView.swift */,
+				384B24F496E887AC8E036AF3 /* SubAgentPeek.swift */,
 				DEFF448659A8E45E54D69258 /* TabBar.swift */,
 				A6654E2F2DE8CC92909567AD /* TerminalPanel.swift */,
 				97C6BD950A0C47F6B5C9FFDC /* TerminalViewProvider.swift */,
@@ -501,6 +504,7 @@
 				ED3AFBEDB413912EC56AB45B /* SpaceDrag.swift in Sources */,
 				47BFA075FFDB3DD630E66FA2 /* SpaceHeader.swift in Sources */,
 				EAC16D41AEBCC5EC9EC37FEB /* SpacesList.swift in Sources */,
+				24484EFD85EC8F1800F97C9F /* SubAgentPeek.swift in Sources */,
 				3129E5A3E56BC7C93B4845AF /* TabBar.swift in Sources */,
 				1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */,
 				37C4F8FC0E6A74F9D18F5DCC /* TerminalLabView.swift in Sources */,
@@ -586,7 +590,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -653,7 +657,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

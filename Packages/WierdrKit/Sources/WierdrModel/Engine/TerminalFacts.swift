@@ -181,6 +181,8 @@ struct TerminalDeriver {
             address: t.address,
             machine: machine,
             name: t.name.flatMap { $0.isEmpty ? nil : $0 },
+            template: t.template.flatMap { $0.isEmpty ? nil : $0 },
+            createdAt: t.createdMs > 0 ? Date(timeIntervalSince1970: Double(t.createdMs) / 1000) : nil,
             title: TerminalText.shownTitle(t.title),
             cwd: cwd,
             processName: TerminalText.processName(t),

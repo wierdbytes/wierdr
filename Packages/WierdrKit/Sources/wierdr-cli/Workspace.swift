@@ -125,9 +125,15 @@ func render(_ ws: Workspace) -> [String] {
                     if let m = t.meta {
                         line += " meta[\(m.providerAsset ?? m.provider ?? "-") \(m.model ?? "-")\(m.effort.map { " @\($0)" } ?? "") ctx=\(m.ctx.map(String.init) ?? "-")/\(m.ctxMax.map(String.init) ?? "-") sub=\(m.subagents)]"
                     }
+                    if ws.isNested(a) { line += " (nested under its parent)" }
                     out.append(line)
-                    for child in ws.children(of: a) {
-                        out.append("\(pad)  ↳ \(child.address) \(child.program.name) \(status(child.status))")
+                    if ws.isNested(a) { return }
+                    for kid in ws.subtree(of: a) {
+                        let lead = kid.lines.map { l -> String in
+                            switch l { case .tee: return "├ "; case .elbow: return "└ "; case .pipe: return "│ "; case .blank: return "  " }
+                        }.joined()
+                        let k = kid.terminal
+                        out.append("\(pad)  \(lead)\(k.address) \(k.name ?? k.program.name) \(status(k.kidStatus))\(kid.paneID.map { " kept in \($0)" } ?? "")")
                     }
                 }
             }
