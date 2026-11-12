@@ -9,7 +9,7 @@ import UIKit
 ///   gives the terminal the keyboard only when another terminal had it
 ///   already (it follows the focus). A click with a pointer does too
 ///   (`WierdrTerminalView.tapsTakeKeyboard`); a finger's tap doesn't: the
-///   keyboard comes from the key panel's swipe or puck (`KeyPanelLayer`).
+///   keyboard comes with a double tap.
 /// - `onTap`: the user tapped/clicked the terminal (focus the pane).
 struct TerminalSurface: View {
     let session: TerminalSession

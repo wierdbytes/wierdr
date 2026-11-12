@@ -46,8 +46,8 @@ final class WierdrTerminalView: TerminalView {
     /// A click with a pointer gives the terminal the keyboard (iPad), as on a
     /// Mac: typing goes where you clicked. A finger's tap doesn't: it is a
     /// click for the program, and the keyboard comes only when asked for
-    /// (`requestKeyboard`: the key panel's swipe or puck, switching panes
-    /// while another terminal has it). Not `GCKeyboard`: it reports a keyboard
+    /// (`requestKeyboard`: a finger's double tap, switching panes while
+    /// another terminal has it). Not `GCKeyboard`: it reports a keyboard
     /// while only the on-screen one is there (seen on the iPad).
     var tapsTakeKeyboard: Bool { !Device.isPhone && lastTouchWasPointer }
     /// Set while the keyboard is asked for on purpose (see `tapsTakeKeyboard`).
@@ -81,6 +81,23 @@ final class WierdrTerminalView: TerminalView {
         touch.delaysTouchesEnded = false
         touch.delegate = TouchPassthrough.shared
         addGestureRecognizer(touch)
+        // A finger's double tap brings the keyboard. SwiftTerm's taps wait for
+        // it: its double tap (select a word) and triple (a line) never come from
+        // a finger, and a double tap is no click (its single tap fails too).
+        // A pointer's double and triple clicks stay SwiftTerm's.
+        let keyboardTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+        keyboardTap.numberOfTapsRequired = 2
+        keyboardTap.delegate = KeyboardDoubleTap.shared
+        for case let tap as UITapGestureRecognizer in gestureRecognizers ?? [] where tap !== touch {
+            tap.require(toFail: keyboardTap)
+        }
+        addGestureRecognizer(keyboardTap)
+        accessibilityCustomActions = [
+            UIAccessibilityCustomAction(name: "Terminal Keyboard") { [weak self] _ in
+                self?.requestKeyboard()
+                return true
+            },
+        ]
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -103,6 +120,12 @@ final class WierdrTerminalView: TerminalView {
     @objc private func touched() {
         if tapsTakeKeyboard, !isFirstResponder { _ = becomeFirstResponder() }
         onTap?()
+    }
+
+    /// A finger's double tap: the keyboard (nothing goes to the program).
+    @objc private func doubleTapped(_ g: UITapGestureRecognizer) {
+        guard g.state == .ended else { return }
+        requestKeyboard()
     }
 
     /// Gives the terminal the keyboard on purpose (also on the iPhone, where taps don't).
@@ -257,4 +280,18 @@ private final class TouchPassthrough: NSObject, UIGestureRecognizerDelegate {
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool { false }
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool { false }
+}
+
+/// The keyboard's double tap takes fingers only. It gets a pointer's clicks
+/// too and fails on them (rather than `allowedTouchTypes`), so SwiftTerm's
+/// taps waiting for it see it fail and go on.
+private final class KeyboardDoubleTap: NSObject, UIGestureRecognizerDelegate {
+    @MainActor static let shared = KeyboardDoubleTap()
+    func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        (g.view as? WierdrTerminalView)?.lastTouchWasPointer == false
+    }
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        (g.view as? WierdrTerminalView)?.lastTouchWasPointer = touch.type == .indirectPointer
+        return true
+    }
 }

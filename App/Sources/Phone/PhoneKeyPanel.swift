@@ -17,7 +17,7 @@ import WierdrModel
 /// and inserting (text, a photo, a copied image) above. Keys don't close
 /// it, so ↓ ↓ ⏎ is three taps; a swipe to the right or a tap on the terminal
 /// does. Type opens the message field above the keyboard (`PhoneComposeBar`);
-/// a tap on the terminal types straight into it, with its key bar.
+/// a double tap on the terminal brings its own keyboard, with its key bar.
 struct PhoneKeyPanel: View {
     var address: String
     /// On screen (even partly): each time it comes out, it starts at its bottom.
@@ -355,7 +355,7 @@ struct PhoneKeyPanelGrip: View {
 /// beside it closes it. While a keyboard is up (the terminal's or
 /// the message field's), a tap on the terminal hides it instead, the panel
 /// first if both are. Otherwise taps are the terminal's own (a click for
-/// the program; on the iPhone they don't bring the keyboard). Their pans
+/// the program, a double tap its keyboard). Their pans
 /// (the terminal's scrolling, selection and mouse, the panel's scrolling)
 /// wait for it, so a swipe that moves the panel does nothing else.
 struct PhoneKeyPanelGestures: UIViewRepresentable {

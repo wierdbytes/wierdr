@@ -16,14 +16,6 @@ struct KeyPanelState: Equatable {
     var trailingInset: CGFloat { open && side == .trailing ? PhoneKeyPanel.width : 0 }
 }
 
-/// Which keyboard a swipe from the edge (or a drag from the puck) brings.
-enum KeyboardChoice: Hashable {
-    /// The terminal's own (typing straight into it, with its key bar).
-    case terminal
-    /// The message field's (`PhoneComposeBar`).
-    case message
-}
-
 extension View {
     /// The key panel over this terminal area and the ways it and the keyboards come (`KeyPanelLayer`).
     func keyPanel(address: String?, covered: Bool, thumbY: CGFloat = 0, state: Binding<KeyPanelState>) -> some View {
@@ -42,8 +34,9 @@ extension View {
 /// to rest at the puck's height, under the thumb.
 ///
 /// While a swipe (or a drag from the puck) that began with the panel hidden is
-/// under way, two icons beside the panel: the terminal's keyboard above the
-/// finger, the message field below; let go on one and it comes (the panel goes).
+/// under way, the message field's icon beside the panel, below the finger; let
+/// go on it and the field comes (the panel goes). The terminal's own keyboard
+/// comes with a double tap on the terminal (`WierdrTerminalView`).
 /// Taps on the terminal are clicks for the program; while a keyboard is up, a
 /// tap hides it; with the panel out, a tap beside it puts the panel back. While
 /// the area is `covered` (the list, the sidebar overlay), the panel and the
@@ -62,10 +55,10 @@ struct KeyPanelLayer: ViewModifier {
     @State private var drag: CGFloat?
     /// The terminal area in global coordinates (its size; its top places the puck in the window).
     @State private var area: CGRect = .zero
-    /// A swipe from the edge (or the puck) is under way: where it began (the icons sit above and below).
+    /// A swipe from the edge (or the puck) is under way: where it began (the message icon sits below).
     @State private var pickerStart: CGPoint?
-    /// The icon under the finger.
-    @State private var hovered: KeyboardChoice?
+    /// The finger is on the message icon.
+    @State private var overMessage = false
     /// The puck while it is being moved, and where it was when picked up.
     @State private var movingPuck: CGPoint?
     @State private var moveOrigin: CGPoint = .zero
@@ -105,10 +98,10 @@ struct KeyPanelLayer: ViewModifier {
             }
             .overlay {
                 if let start = pickerStart {
-                    KeyboardPickerIcons(centers: iconCenters(start), hovered: hovered)
+                    MessagePickerIcon(center: messageIconCenter(start), lit: overMessage)
                 }
             }
-            .sensoryFeedback(.selection, trigger: hovered)
+            .sensoryFeedback(.selection, trigger: overMessage)
             .onChange(of: covered) { _, covered in
                 guard covered else { return }
                 setPanel(open: false)
@@ -192,44 +185,35 @@ struct KeyPanelLayer: ViewModifier {
 
     // MARK: Swipe (or drag from the puck)
 
-    /// The finger moved the panel. A move that began with it hidden shows the keyboard icons.
+    /// The finger moved the panel. A move that began with it hidden shows the message icon.
     private func moved(_ x: CGFloat, at p: CGPoint) {
         if drag == nil, !state.open { pickerStart = p }
         drag = x
-        if let start = pickerStart { hovered = choice(at: p, start: start) }
+        if let start = pickerStart { overMessage = onMessageIcon(p, start: start) }
     }
 
-    /// Let go on an icon: that keyboard (the panel goes); elsewhere: the panel as usual.
+    /// Let go on the icon: the message field (the panel goes); elsewhere: the panel as usual.
     private func released(projected: CGFloat, at p: CGPoint) {
-        let choice = pickerStart.flatMap { choice(at: p, start: $0) }
+        let message = pickerStart.map { onMessageIcon(p, start: $0) } ?? false
         pickerStart = nil
-        hovered = nil
-        guard let choice else { return finishDrag(projected: projected) }
-        bring(choice)
+        overMessage = false
+        guard message else { return finishDrag(projected: projected) }
+        writeMessage()
     }
 
-    /// That keyboard comes (the panel goes).
-    private func bring(_ choice: KeyboardChoice) {
+    /// The message field comes (the panel goes).
+    private func writeMessage() {
         guard let address else { return }
         setPanel(open: false)
-        switch choice {
-        case .terminal:
-            controller.closeCompose()
-            guard let session = services.terminalSession(address) else {
-                return controller.toast(controller.isDemo ? "Not available in the demo" : "The terminal is not connected yet")
-            }
-            session.takeKeyboard()
-        case .message:
-            controller.composing = address
-        }
+        controller.composing = address
     }
 
-    /// Beside the panel, one above the swipe's line and one below (in the area).
-    /// As far from where the swipe began as from the edge on the iPhone, so the
-    /// thumb travels as much to reach them from the puck.
-    private func iconCenters(_ start: CGPoint) -> [KeyboardChoice: CGPoint] {
+    /// Beside the panel, below the swipe's line (in the area). As far from where
+    /// the swipe began as from the edge on the iPhone, so the thumb travels as
+    /// much to reach it from the puck.
+    private func messageIconCenter(_ start: CGPoint) -> CGPoint {
         let w = area.width, h = area.height
-        let size = KeyboardPickerIcons.size
+        let size = MessagePickerIcon.size
         let travel = PhoneKeyPanel.width + size / 2 + 14
         let r = size / 2 + 6
         let x: CGFloat
@@ -242,13 +226,12 @@ struct KeyPanelLayer: ViewModifier {
             x = min(max(r, w - r), max(from + travel, PhoneKeyPanel.width + r))
         }
         let gap = size / 2 + 26
-        func y(_ v: CGFloat) -> CGFloat { min(max(v, r), max(r, h - r)) }
-        return [.terminal: CGPoint(x: x, y: y(start.y - gap)), .message: CGPoint(x: x, y: y(start.y + gap))]
+        return CGPoint(x: x, y: min(max(start.y + gap, r), max(r, h - r)))
     }
 
-    private func choice(at p: CGPoint, start: CGPoint) -> KeyboardChoice? {
-        let reach = KeyboardPickerIcons.size / 2 + 10
-        return iconCenters(start).first { hypot($0.value.x - p.x, $0.value.y - p.y) <= reach }?.key
+    private func onMessageIcon(_ p: CGPoint, start: CGPoint) -> Bool {
+        let c = messageIconCenter(start)
+        return hypot(c.x - p.x, c.y - p.y) <= MessagePickerIcon.size / 2 + 10
     }
 
     // MARK: Puck (iPad)
@@ -298,8 +281,7 @@ struct KeyPanelLayer: ViewModifier {
             .accessibilityHint("Opens the keys")
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { setSide(puckSide); setPanel(open: true) }
-            .accessibilityAction(named: "Terminal Keyboard") { bring(.terminal) }
-            .accessibilityAction(named: "Write a Message") { bring(.message) }
+            .accessibilityAction(named: "Write a Message") { writeMessage() }
     }
 
     /// A finger that began `start` from the puck's center and moved `t`, in the area.
@@ -353,37 +335,33 @@ struct KeyPanelLayer: ViewModifier {
     }
 }
 
-// MARK: - Keyboard icons
+// MARK: - Message icon
 
-/// The two icons shown beside the key panel while a swipe from the edge (or a
-/// drag from the puck) is under way: the terminal's keyboard above, the message
-/// field below; the one under the finger lights up. Only a picture: the swipe
-/// does the picking.
-struct KeyboardPickerIcons: View {
-    var centers: [KeyboardChoice: CGPoint]
-    var hovered: KeyboardChoice?
+/// The message field's icon, shown beside the key panel (below the finger)
+/// while a swipe from the edge (or a drag from the puck) is under way; it
+/// lights up under the finger. Only a picture: the swipe does the picking.
+struct MessagePickerIcon: View {
+    var center: CGPoint
+    var lit: Bool
 
     static let size: CGFloat = 58
 
     @Environment(\.theme) private var theme
 
     var body: some View {
-        ZStack {
-            ForEach([KeyboardChoice.terminal, .message], id: \.self) { choice in
-                if let c = centers[choice] { icon(choice).position(c) }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        icon
+            .position(center)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
-    private func icon(_ choice: KeyboardChoice) -> some View {
-        let on = hovered == choice
+    private var icon: some View {
+        let on = lit
         return VStack(spacing: 2) {
-            Image(systemName: choice == .terminal ? "keyboard" : "text.bubble")
+            Image(systemName: "text.bubble")
                 .font(.system(size: 20, weight: .semibold))
-            Text(choice == .terminal ? "Terminal" : "Message")
+            Text("Message")
                 .font(.ui(9.5, .medium))
         }
         .foregroundStyle(on ? theme.accentForeground : theme.foreground)
