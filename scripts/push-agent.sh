@@ -48,6 +48,8 @@ install() {
 </dict></plist>
 PL
   launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+  # bootout returns before the job is gone; bootstrap fails (5: I/O error) until it is.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1 || break; sleep 0.5; done
   launchctl bootstrap "$DOMAIN" "$PLIST"
   echo "installed: $BIN, $PLIST (log: $LOG)"
 }
