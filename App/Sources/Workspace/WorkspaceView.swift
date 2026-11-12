@@ -116,10 +116,14 @@ struct WorkspaceView: View {
         scenePhase == .active && !((usesPhoneLayout || sizeClass == .compact) && controller.compactColumn == .sidebar)
     }
 
-    /// Changes when the agents on screen, their turns or `looking` change.
+    /// Changes when the agents on screen, their turns or `looking` change, and when
+    /// the workspace goes live again: back from the background (a tap on the Live
+    /// Activity) the pane shows before the frozen line is replaced, and the seen
+    /// label written then is lost; after the reconnect it's written again.
     private var seenKey: String {
         guard looking else { return "" }
-        return controller.onScreenPanes.compactMap { p in
+        let live = controller.workspace.phase == .live ? "live" : "stale"
+        return live + "|" + controller.onScreenPanes.compactMap { p in
             p.terminal.flatMap { controller.workspace.terminal($0) }.map { "\($0.address):\($0.turn):\($0.status?.rawValue ?? 0)" }
         }.joined(separator: ",")
     }
