@@ -15,7 +15,9 @@ public struct Lane: Codable, Hashable, Sendable {
 /// When to start, update and end the agents Live Activity (pure: tests drive it
 /// with a clock). One activity per lane while any agent needs you, is done or is
 /// working; it is started on each registered device with push-to-start, then
-/// updated and ended by broadcasts on the lane's channel.
+/// updated and ended by broadcasts on its channel. Each activity gets a channel of
+/// its own (the lane's spare, which the pusher replaces once used), so an end, or
+/// the channel's stored last message, never reaches the next activity.
 public struct Planner: Sendable {
     public typealias State = AgentsActivityAttributes.ContentState
 
@@ -73,7 +75,7 @@ public struct Planner: Sendable {
     ///   - summary: what the activity should show.
     ///   - host: the computer's name (start alerts).
     ///   - devices: registered devices (bad tokens already left out).
-    ///   - channels: the channel of each lane (by lane key); lanes without one wait.
+    ///   - channels: each lane's spare channel (by lane key) for the next start; lanes without one wait.
     public mutating func step(now: Date, summary: State, host: String,
                               devices: [String: PushRegistry.Device], channels: [String: String]) -> [Action] {
         let t = now.timeIntervalSince1970
@@ -107,11 +109,11 @@ public struct Planner: Sendable {
                     continue
                 }
                 r.inactiveSince = nil
-                if t - r.startedAt >= settings.maxAge {
-                    // A fresh activity before ActivityKit ends this one.
+                if t - r.startedAt >= settings.maxAge, let fresh = channels[key], fresh != r.channel {
+                    // A fresh activity (on a channel of its own) before ActivityKit ends this one.
                     actions.append(.end(lane: lane, channel: r.channel, state: summary))
                     running[key] = nil
-                    actions += start(lane: lane, devices: laneDevices, channel: r.channel, summary: summary,
+                    actions += start(lane: lane, devices: laneDevices, channel: fresh, summary: summary,
                                      host: host, now: t, sound: false)
                     continue
                 }

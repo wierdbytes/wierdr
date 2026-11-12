@@ -42,7 +42,7 @@ public struct PushError: Error, CustomStringConvertible {
 
 /// What the pusher keeps between runs: channels, the running activities, tokens APNs refused.
 public struct PushState: Codable, Sendable {
-    /// Channel id by lane key.
+    /// Each lane's spare channel (for the next activity), by lane key.
     public var channels: [String: String] = [:]
     public var running: [String: Planner.Running] = [:]
     public var badTokens: Set<String> = []
@@ -157,6 +157,14 @@ public final class Pusher {
         for action in actions {
             if !(await perform(action, now: now)) { failed = true }
         }
+        // A spare that a start took is the activity's now: the next start gets a new one.
+        for r in planner.running.values where state.channels[r.lane.key] == r.channel {
+            state.channels[r.lane.key] = nil
+        }
+        // An ended activity's channel is done with.
+        for case let .end(lane, channel, _) in actions where state.channels[lane.key] != channel {
+            try? await apns.deleteChannel(channel, bundle: lane.bundle, env: lane.env)
+        }
         if failed {
             backoff = min(max(backoff * 2, 5), 300)
             pausedUntil = now.addingTimeInterval(backoff)
@@ -169,7 +177,7 @@ public final class Pusher {
         }
     }
 
-    /// A channel for every lane with devices (created once, kept in the state file).
+    /// A spare channel for every lane with devices (kept in the state file).
     func ensureChannels(for devices: [String: PushRegistry.Device]) async {
         for d in devices.values {
             guard let env = APNsEnvironment(rawValue: d.env) else { continue }
@@ -179,7 +187,7 @@ public final class Pusher {
                 let id = try await apns.createChannel(bundle: lane.bundle, env: lane.env)
                 state.channels[lane.key] = id
                 state.save(stateURL)
-                log("channel for \(lane.key): \(id)")
+                log("new channel for \(lane.key): \(id)")
             } catch {
                 log("can't create a channel for \(lane.key): \(error) (is Broadcast on for the App ID's Push Notifications?)")
                 pausedUntil = Date().addingTimeInterval(60)
@@ -216,8 +224,7 @@ public final class Pusher {
                 log("update: \(ActivitySummary.line(s))\(alert.map { " — alert \($0.title): \($0.body)" } ?? "")")
                 return true
             } catch let e as APNsError where e.isBadChannel {
-                log("update: \(e); a new channel and activity")
-                state.channels[lane.key] = nil
+                log("update: \(e); a new activity on a new channel")
                 planner.drop(lane: lane)
                 return true
             } catch {
@@ -243,6 +250,7 @@ public final class Pusher {
         let now = Date()
         for r in planner.running.values {
             _ = await perform(.end(lane: r.lane, channel: r.channel, state: r.last), now: now)
+            try? await apns.deleteChannel(r.channel, bundle: r.lane.bundle, env: r.lane.env)
         }
         planner.running = [:]
         state.running = [:]

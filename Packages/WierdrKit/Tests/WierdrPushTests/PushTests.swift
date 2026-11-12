@@ -93,9 +93,17 @@ private let channels = [lane.key: "CHAN=="]
         var p = Planner()
         let s = state([agent("t1", .working)])
         _ = p.step(now: at(0), summary: s, host: "mac", devices: ["d": phone], channels: channels)
-        let actions = p.step(now: at(7.75 * 3600), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+        // No fresh channel yet: it goes on (a heartbeat), the restart waits.
+        #expect(p.step(now: at(7.75 * 3600), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+                == [.update(lane: lane, channel: "CHAN==", state: s, priority: 5, alert: nil)])
+        let actions = p.step(now: at(7.75 * 3600), summary: s, host: "mac", devices: ["d": phone],
+                             channels: [lane.key: "NEW=="])
         #expect(actions.count == 2)
-        guard case .end = actions[0], case .start = actions[1] else { Issue.record("\(actions)"); return }
+        guard case let .end(_, old, _) = actions[0], case let .start(_, new, _, _, _, _) = actions[1] else {
+            Issue.record("\(actions)"); return
+        }
+        #expect(old == "CHAN==")
+        #expect(new == "NEW==")
         #expect(p.running[lane.key]?.startedAt == at(7.75 * 3600).timeIntervalSince1970)
     }
 
