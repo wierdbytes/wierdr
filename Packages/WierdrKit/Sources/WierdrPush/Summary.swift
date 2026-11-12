@@ -12,6 +12,8 @@ public enum ActivitySummary {
     public static let maxAgents = 5
     /// Titles longer than this are cut (the rows show one line anyway).
     public static let maxTitle = 64
+    /// Space names longer than this are cut (the row shows them whole, the title gives way).
+    public static let maxSpace = 14
 
     @MainActor
     public static func state(of ws: Workspace, now: Date = Date()) -> State {
@@ -40,8 +42,10 @@ public enum ActivitySummary {
     static func agent(_ t: TerminalInfo, status: AgentStatus, tab: Tab?, space: Space) -> AgentsActivityAttributes.Agent {
         var title = AgentText.title(t, tab: tab)
         if title.count > maxTitle { title = String(title.prefix(maxTitle - 1)) + "…" }
+        var spaceName = space.displayName
+        if spaceName.count > maxSpace { spaceName = String(spaceName.prefix(maxSpace - 1)) + "…" }
         // Its row's status is its urgency (a sub-agent's blocked); its time is its own.
-        return .init(id: t.address, title: title, space: space.displayName, spaceColor: space.color,
+        return .init(id: t.address, title: title, space: spaceName, spaceColor: space.color,
                      machine: t.machine, status: word(status),
                      since: t.statusChangedAt.map { $0.timeIntervalSince1970.rounded() },
                      model: t.meta?.model ?? t.program.name,

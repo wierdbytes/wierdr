@@ -139,10 +139,12 @@ private struct AgentLine: View {
                 .lineLimit(1)
                 .layoutPriority(1)
             Spacer(minLength: 4)
+            // Its whole name (the pusher keeps it short); the title gives way.
             Text(agent.machine.map { "\($0) · \(agent.space)" } ?? agent.space)
                 .font(.system(size: 12))
                 .foregroundStyle(Palette.muted)
                 .lineLimit(1)
+                .fixedSize()
             if let since = agent.sinceDate {
                 // Counts up by itself (m:ss, h:mm:ss), no pushes needed.
                 Text(timerInterval: min(since, .now)...Date.distantFuture, countsDown: false)
