@@ -473,9 +473,10 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             if g === pan { claims = false }
             guard let parent, let anchor, anchor.window != nil else { return false }
-            // The terminal's area now, in window coordinates (it moves with the back swipe).
-            let area = anchor.convert(anchor.bounds, to: nil)
-            let p = touch.location(in: nil)
+            // The finger in the terminal's area (which moves with the back swipe). Not
+            // through `nil`: in landscape that is the screen's unrotated space on the iPad.
+            let area = anchor.bounds
+            let p = touch.location(in: anchor)
             // Beside the terminal's rows only (not over the top bar); to its
             // right is the edge (or, in landscape, the safe area up to it).
             guard p.y >= area.minY, p.y <= area.maxY, p.x >= area.minX else { return false }

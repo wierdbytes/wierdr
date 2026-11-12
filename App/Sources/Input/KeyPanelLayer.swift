@@ -435,7 +435,7 @@ struct KeyPuckGestures: UIViewRepresentable {
     var side: KeyPanelSide
     /// A tap: the panel comes out.
     var onTap: () -> Void
-    /// The finger's travel (window points) and where it began, from the puck's center.
+    /// The finger's travel (in the window) and where it began, from the puck's center.
     var onDrag: (_ translation: CGSize, _ start: CGPoint) -> Void
     /// Where the panel would come to rest at the finger's speed (horizontal travel), the travel, where it began.
     var onEnd: (_ projected: CGFloat, _ translation: CGSize, _ start: CGPoint) -> Void
@@ -503,7 +503,8 @@ struct KeyPuckGestures: UIViewRepresentable {
 
         @objc private func panned(_ g: UIPanGestureRecognizer) {
             guard let parent, let view = g.view else { return }
-            let t = g.translation(in: nil)
+            let window = view.window
+            let t = g.translation(in: window)
             let travel = CGSize(width: t.x, height: t.y)
             switch g.state {
             case .began:
@@ -513,7 +514,7 @@ struct KeyPuckGestures: UIViewRepresentable {
             case .changed:
                 parent.onDrag(travel, start)
             case .ended:
-                parent.onEnd(t.x + g.velocity(in: nil).x * 0.25, travel, start)
+                parent.onEnd(t.x + g.velocity(in: window).x * 0.25, travel, start)
             case .cancelled, .failed:
                 parent.onEnd(0, travel, start)
             default:
@@ -522,7 +523,9 @@ struct KeyPuckGestures: UIViewRepresentable {
         }
 
         @objc private func pressed(_ g: UILongPressGestureRecognizer) {
-            let p = g.location(in: nil)
+            // In the window: `nil` gives the screen's unrotated space here (seen
+            // in landscape: the puck went at right angles to the finger).
+            let p = g.location(in: g.view?.window)
             switch g.state {
             case .began:
                 pressOrigin = p
@@ -542,7 +545,7 @@ struct KeyPuckGestures: UIViewRepresentable {
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard g === pan, let parent else { return true }
             if press.state == .began || press.state == .changed { return false }
-            let v = pan.velocity(in: nil)
+            let v = pan.velocity(in: pan.view?.window)
             let out = parent.side == .trailing ? -v.x : v.x
             return out > 0 && out > abs(v.y)
         }
