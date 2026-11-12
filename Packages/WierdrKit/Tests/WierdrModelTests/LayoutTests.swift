@@ -212,6 +212,20 @@ import Testing
         #expect(LayoutEdits.moveTab(doc, id: "tbA", to: 99)?.layoutSpaces[0].layoutTabs.map(\.nodeID) == ["tbB", "tbA"])
     }
 
+    @Test func moveSpace() throws {
+        let up = try #require(LayoutEdits.moveSpace(doc, id: "spB", before: "spA"))
+        #expect(up.layoutSpaces.map(\.nodeID) == ["spB", "spA"])
+        #expect(up.layoutSpaces[0] == doc.layoutSpaces[1])  // the space itself is untouched
+        let last = try #require(LayoutEdits.moveSpace(doc, id: "spA", before: nil))
+        #expect(last.layoutSpaces.map(\.nodeID) == ["spB", "spA"])
+        // Already there, onto itself, or a space gone meanwhile: nothing to write.
+        #expect(LayoutEdits.moveSpace(doc, id: "spA", before: "spB") == nil)
+        #expect(LayoutEdits.moveSpace(doc, id: "spB", before: nil) == nil)
+        #expect(LayoutEdits.moveSpace(doc, id: "spA", before: "spA") == nil)
+        #expect(LayoutEdits.moveSpace(doc, id: "spA", before: "spGone") == nil)
+        #expect(LayoutEdits.moveSpace(doc, id: "spGone", before: nil) == nil)
+    }
+
     @Test func surgicalEditsPreserveUnknownFieldsOrderAndNumbers() throws {
         let local = Fixture.json(Fixture.local)
         let out = try #require(LayoutEdits.renameTab(local, id: "tbf10bf70073a2821aaec1c28eafa96dd2", name: "x"))

@@ -699,6 +699,19 @@ public final class WorkspaceEngine: WorkspaceBackend {
         try await write(key) { LayoutEdits.renameTab($0, id: local, name: trimmed) }
     }
 
+    func moveSpace(_ spaceID: String, before: String?) async throws {
+        let (key, _, local) = key(of: spaceID)
+        _ = try requireDocument(key)
+        guard slots[key]?.raw.locateSpace(local) != nil else { throw WorkspaceError.notFound("Space") }
+        // Each machine keeps its spaces in its own document: a space moves among those.
+        let beforeLocal = try before.map { other -> String in
+            let (otherKey, _, otherLocal) = self.key(of: other)
+            guard otherKey == key else { throw WorkspaceError.core("A space moves only among its machine's spaces") }
+            return otherLocal
+        }
+        try await write(key) { LayoutEdits.moveSpace($0, id: local, before: beforeLocal) }
+    }
+
     func moveTab(_ tabID: String, to index: Int) async throws {
         let (key, _, local) = key(of: tabID)
         _ = try requireDocument(key)

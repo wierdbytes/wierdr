@@ -92,6 +92,21 @@ enum LayoutEdits {
         }
     }
 
+    /// `space.move`: puts a space just before `before` (another space of this
+    /// document, i.e. of its machine), or last when `before` is nil. Nil when it
+    /// is already there or either space is gone.
+    static func moveSpace(_ doc: JSONValue, id: String, before: String?) -> JSONValue? {
+        guard let from = doc.locateSpace(id), before != id else { return nil }
+        if let before, doc.locateSpace(before) == nil { return nil }
+        return withSpaces(doc) { list in
+            let space = list.remove(at: from)
+            let to = before.flatMap { b in list.firstIndex { $0.nodeID == b } } ?? list.count
+            guard to != from else { return false }
+            list.insert(space, at: to)
+            return true
+        }
+    }
+
     /// `space.close`: removes it; returns the terminal addresses it held.
     static func removeSpace(_ doc: JSONValue, id: String) -> (doc: JSONValue, removed: [String])? {
         guard let si = doc.locateSpace(id) else { return nil }

@@ -209,12 +209,28 @@ struct EngineTests {
         try await eventually { ws.location(ofPane: down)?.tab.id == "tbB" }
     }
 
+    @Test func moveSpaceStaysOnItsMachine() async throws {
+        let core = makeCore()
+        let (ws, _) = try await start(core)
+        try await ws.moveSpace("spB", before: "spA")
+        let doc = try #require(core.doc("herdr-app"))
+        #expect(doc.version == 6 && doc.value.layoutSpaces.map(\.nodeID) == ["spB", "spA"])
+        #expect(core.doc("herdr-app", on: "lf")?.version == 3)
+        try await eventually { ws.spaces.map(\.id) == ["spB", "spA", "lf/sp6bc8f7a059117d7f59c9102b833bdb0d"] }
+        // Another machine's spaces aren't in its document: no such move.
+        await #expect(throws: WorkspaceError.self) { try await ws.moveSpace("spA", before: "lf/sp6bc8f7a059117d7f59c9102b833bdb0d") }
+        await #expect(throws: WorkspaceError.self) { try await ws.moveSpace("spGone", before: nil) }
+        #expect(core.calls("doc.set").count == 1)
+    }
+
     @Test func noOpsAreNeverWritten() async throws {
         let core = makeCore()
         let (ws, _) = try await start(core)
         try await ws.renameSpace("spA", to: " A ")
         try await ws.renameTab("tbB", to: "two")
         try await ws.moveTab("tbA", to: 0)
+        try await ws.moveSpace("spA", before: "spB")
+        try await ws.moveSpace("spB", before: nil)
         #expect(core.calls("doc.set").isEmpty)
         await #expect(throws: WorkspaceError.self) { try await ws.renameTab("tbGone", to: "x") }
     }

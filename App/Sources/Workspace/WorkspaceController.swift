@@ -284,6 +284,18 @@ final class WorkspaceController {
         }
     }
 
+    /// A space dropped in the sidebar: just before `before`, or last of its machine's (`nil`).
+    func moveSpace(_ spaceID: String, before: String?, failed: @escaping @MainActor () -> Void = {}) {
+        run("Move space") { [workspace] in
+            do {
+                try await workspace.moveSpace(spaceID, before: before)
+            } catch {
+                failed()
+                throw error
+            }
+        }
+    }
+
     func moveTab(_ tabID: String, to index: Int) {
         run("Move tab") { [workspace] in try await workspace.moveTab(tabID, to: index) }
     }

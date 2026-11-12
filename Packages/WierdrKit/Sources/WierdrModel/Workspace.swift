@@ -162,6 +162,13 @@ public final class Workspace {
         try await backend.renameTab(tabID, to: name)
     }
 
+    /// Move a space among its machine's spaces: just before `before`, or after
+    /// the last of them when `before` is nil (`space.move`).
+    public func moveSpace(_ spaceID: String, before: String?) async throws {
+        guard let backend else { throw WorkspaceError.notConnected }
+        try await backend.moveSpace(spaceID, before: before)
+    }
+
     /// Move a tab within its space.
     public func moveTab(_ tabID: String, to index: Int) async throws {
         guard let backend else { throw WorkspaceError.notConnected }
@@ -209,6 +216,7 @@ protocol WorkspaceBackend: AnyObject {
     func closeSpace(_ spaceID: String) async throws
     func renameSpace(_ spaceID: String, to name: String) async throws
     func renameTab(_ tabID: String, to name: String) async throws
+    func moveSpace(_ spaceID: String, before: String?) async throws
     func moveTab(_ tabID: String, to index: Int) async throws
     func markSeen(_ addresses: [String])
     func markUnread(_ address: String)

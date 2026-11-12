@@ -6,10 +6,13 @@ import WierdrModel
 /// A native `List` (swipe actions, context menus, scroll-to, keyboard focus)
 /// whose rows draw the pieces of each card: the card itself is the rows'
 /// `listRowBackground` (`CardSlice`), so swiping a row slides its content over
-/// a card that stays put.
+/// a card that stays put. Cards are dragged by their header to reorder them
+/// among their machine's (`SpaceDrag`).
 struct SpacesList: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
+    @Environment(\.isCompactLayout) private var compact
+    @State private var drag = SpaceDrag()
 
     var body: some View {
         let ws = controller.workspace
@@ -32,13 +35,14 @@ struct SpacesList: View {
                                 }
                                 .sidebarRow(id: "empty:\(machine.id)", background: Color.clear)
                             }
-                            ForEach(spaces) { space in
+                            ForEach(drag.arranged(spaces, machine: machine.name)) { space in
                                 SpaceCardRows(space: space)
                             }
                         }
                     }
                 } else {
-                    ForEach(ws.spaces) { space in
+                    // No added machines: all of them are this computer's.
+                    ForEach(drag.arranged(ws.spaces, machine: nil)) { space in
                         SpaceCardRows(space: space)
                     }
                 }
@@ -49,6 +53,16 @@ struct SpacesList: View {
             .scrollContentBackground(.hidden)
             .environment(\.defaultMinListRowHeight, 0)
             .contentMargins(.top, 4, for: .scrollContent)
+            .environment(drag)
+            .background(SpaceDropTarget(drag: drag))
+            .onAppear {
+                drag.controller = controller
+                drag.theme = theme
+                drag.compact = compact
+            }
+            .onChange(of: theme) { drag.theme = theme }
+            .onChange(of: compact) { drag.compact = compact }
+            .onChange(of: ws.spaces.map(\.id)) { drag.settle() }
             .onChange(of: controller.focusedPane?.id) { _, id in
                 guard let id else { return }
                 withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(id) }
@@ -78,14 +92,20 @@ extension View {
 struct SpaceCardRows: View {
     var space: Space
     @Environment(WorkspaceController.self) private var controller
+    @Environment(SpaceDrag.self) private var drag: SpaceDrag?
 
     var body: some View {
         let ws = controller.workspace
         let rows = ws.sidebarRows(for: space)
         let closed = controller.closedSpaces.contains(space.id)
         let bodyShown = !closed && !rows.isEmpty
+        // Dragged: its rows stay (they keep the card's height), empty, as the slot
+        // where it would land.
+        let slot = drag?.dragged == space.id
         SpaceHeader(space: space, rows: rows, closed: closed, bodyShown: bodyShown)
-            .sidebarRow(id: "space:\(space.id)", background: CardSlice(top: true, bottom: !bodyShown))
+            .opacity(slot ? 0 : 1)
+            .background(SpaceRowMarker(space: space.id, header: true, markers: drag?.markers))
+            .sidebarRow(id: "space:\(space.id)", background: CardSlice(top: true, bottom: !bodyShown, slot: slot))
         if bodyShown {
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                 let last = i == rows.count - 1
@@ -95,7 +115,9 @@ struct SpaceCardRows: View {
                     .padding(.top, 4)
                     .padding(.bottom, last ? 4 : 0)
                     .padding(.bottom, last ? 7 : 0) // 1-pt border + 6-pt gap after the card
-                    .sidebarRow(id: row.paneID, background: CardSlice(top: false, bottom: last))
+                    .opacity(slot ? 0 : 1)
+                    .background(SpaceRowMarker(space: space.id, markers: drag?.markers))
+                    .sidebarRow(id: row.paneID, background: CardSlice(top: false, bottom: last, slot: slot))
             }
         }
     }
@@ -103,10 +125,13 @@ struct SpaceCardRows: View {
 
 /// A horizontal piece of a space card, drawn as a list row background:
 /// `surface` fill with the card's 1-pt border; rounded at the card's ends.
-/// The 6-pt gap after a card is left transparent.
+/// The 6-pt gap after a card is left transparent. `slot`: the card is being
+/// dragged, and this is where it would land: a dashed `accent`@35% outline on
+/// `accent`@5%.
 struct CardSlice: View {
     var top: Bool
     var bottom: Bool
+    var slot = false
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -116,11 +141,12 @@ struct CardSlice: View {
             let shape = UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
                                                bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0)
             ZStack(alignment: .top) {
-                shape.fill(theme.surface)
+                shape.fill(slot ? theme.accent.opacity(0.05) : theme.surface)
                     .frame(height: h)
                 // Stroke a taller rounded rect and clip it, so open ends have no line.
                 RoundedRectangle(cornerRadius: r)
-                    .strokeBorder(theme.border, lineWidth: 1)
+                    .strokeBorder(slot ? theme.accent.opacity(0.35) : theme.border,
+                                  style: StrokeStyle(lineWidth: 1, dash: slot ? [4, 3] : []))
                     .frame(height: h + (top ? 0 : 2 * r) + (bottom ? 0 : 2 * r))
                     .offset(y: top ? 0 : -2 * r)
                     .frame(height: h, alignment: .top)
