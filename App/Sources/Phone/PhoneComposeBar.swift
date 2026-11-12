@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 import WierdrModel
 
-/// The message field, opened by Type in the key panel (or the keyboard icons
-/// of the swipe or the puck): right above the system keyboard (dictation,
+/// The message field, opened by Type in the key panel (or the Message icon
+/// of the swipe): right above the system keyboard (dictation,
 /// autocorrect, any language), a field and a send button. Under the terminal
 /// on the iPhone; across the iPad's panel, in the status bar's place, for the
 /// focused pane. The text goes to the program as one paste (bracketed when it

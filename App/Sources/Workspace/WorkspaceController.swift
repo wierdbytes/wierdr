@@ -73,7 +73,7 @@ final class WorkspaceController {
     // MARK: Keys (iPad)
     /// The key panel over the panel's panes (`KeyLayerHost`): out or not, its side.
     var keys = KeyPanelState()
-    /// The panel's panes in the window (global), where the key panel and its puck go.
+    /// The panel's panes in the window (global), where the key panel goes.
     var keyArea: CGRect = .zero
 
     // MARK: Pending selection (a new tab/space/pane shows up with the next doc event)
@@ -201,14 +201,14 @@ final class WorkspaceController {
             focus(pane: rowPane)
         } else {
             closeSidebarOverlay()
-            // The keyboard was the pane's under the window: it goes (the puck brings one to the sub-agent).
+            // The keyboard was the pane's under the window: it goes (a double tap brings one to the sub-agent).
             closeCompose()
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         withAnimation(.snappy(duration: 0.25)) {
             peek = kid.terminal.address
             peekFrom = rowPane
-            // Keys out for the pane would now go to the sub-agent: the puck brings them back.
+            // Keys out for the pane would now go to the sub-agent: a swipe brings them back.
             keys.open = false
         }
     }

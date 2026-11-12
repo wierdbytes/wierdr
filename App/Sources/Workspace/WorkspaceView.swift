@@ -31,7 +31,7 @@ struct WorkspaceView: View {
             }
         }
         .overlay {
-            // The key panel and its puck, once, over all of it (the sub-agent's window too).
+            // The key panel, once, over all of it (the sub-agent's window too).
             if !phone { KeyLayerHost() }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }

@@ -5,8 +5,8 @@ import WierdrModel
 /// `wierd-agents`' peek bar for a sub-agent). A card of 82% of the window: a
 /// 38-pt bar (its status, its provider or program, what it's on, `from <its
 /// parent>`, Keep ↵ and ✕ esc) over its live terminal, which takes typing like
-/// any pane's (a pointer's click; the puck, which stays where it is over the
-/// window, `KeyLayerHost`, brings its keys and keyboards to it while it's up).
+/// any pane's (a pointer's click, a double tap; a swipe on it brings its keys
+/// and the message field, `KeyLayerHost`, while it's up).
 /// Keep makes it a tab right after its parent's; Close, a tap beside the card
 /// or esc leave it running. esc and Return are the bar's only while the
 /// terminal doesn't have the keyboard (then they're the program's).
@@ -18,8 +18,8 @@ struct SubAgentPeek: View {
     @Environment(\.terminalViewProvider) private var provider
     @Environment(\.services) private var services
     @AppStorage(TerminalFonts.sizeKey) private var fontSize = Double(TerminalFonts.defaultSize)
-    /// The terminal takes the keyboard only when asked (a click, the puck's
-    /// keyboards): opening the peek doesn't steal esc from the bar.
+    /// The terminal takes the keyboard only when asked (a click, a double
+    /// tap): opening the peek doesn't steal esc from the bar.
     @State private var focused = false
 
     var body: some View {

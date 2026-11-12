@@ -3,17 +3,16 @@ import UIKit
 import PhotosUI
 import WierdrModel
 
-/// The key panel, at the side of the terminal: on the iPhone a swipe from the
-/// right edge (or a tap on the grip there), on the iPad the puck, slides out a
-/// narrow column of large keys over the terminal, within the thumb's reach,
-/// with or without the keyboard (then above it); see `KeyPanelLayer`. The
-/// column has no backing and the keys are translucent, so it hides as little
-/// of the terminal as it can. It scrolls past its ends, so the first and the
-/// last key can come to the thumb: about a third of the screen up from its
-/// bottom on the iPhone, the puck's height on the iPad (with the keyboard up,
-/// the first one to the middle of the column above it, and ⏎ no higher than its bottom);
-/// each time it opens with ⏎ at its bottom (on the iPad at the puck's height,
-/// `opensAtRest`), where the keys an agent asks for are (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys, the keyboard
+/// The key panel, at the right of the terminal: a swipe to the left on the
+/// terminal slides out a narrow column of large keys over it, within the
+/// thumb's reach, with or without the keyboard (then above it); see
+/// `KeyPanelLayer`. The column has no backing and the keys are translucent,
+/// so it hides as little of the terminal as it can. It scrolls past its ends,
+/// so the first and the last key can come to the thumb: about a third of the
+/// screen up from its bottom on the iPhone, the swipe's height on the iPad
+/// (with the keyboard up, the first one to the middle of the column above it,
+/// and ⏎ no higher than its bottom); each time it opens with ⏎ at its bottom
+/// (on the iPad at the swipe's height, `opensAtRest`), where the keys an agent asks for are (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys, the keyboard
 /// and inserting (text, a photo, a copied image) above. Keys don't close
 /// it, so ↓ ↓ ⏎ is three taps; a swipe to the right or a tap on the terminal
 /// does. Type opens the message field above the keyboard (`PhoneComposeBar`);
@@ -26,7 +25,7 @@ struct PhoneKeyPanel: View {
     /// (under the thumb; 0: unknown, the column's middle).
     var restY: CGFloat
     /// It comes out with ⏎ at `restY` rather than at its bottom (the iPad: the
-    /// thumb is at the puck, the column's bottom may be far below it). Not with
+    /// thumb is where the swipe began, the column's bottom may be far below it). Not with
     /// the keyboard up: then ⏎ goes no higher than the bottom.
     var opensAtRest = false
     var close: () -> Void
@@ -323,37 +322,15 @@ private struct PanelPressStyle: ButtonStyle {
     }
 }
 
-/// The grip at the right edge while the panel is closed: a hint that it is
-/// there, and a tap target that opens it.
-struct PhoneKeyPanelGrip: View {
-    var open: () -> Void
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        Button(action: open) {
-            Capsule()
-                .fill(theme.dim.opacity(0.55))
-                .frame(width: 4, height: 44)
-                .frame(width: 22, height: 96, alignment: .trailing)
-                .padding(.trailing, 3)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Keys")
-        .accessibilityHint("Opens the keys")
-    }
-}
-
 // MARK: - Gestures
 
 /// The panel's gestures. Placed behind the terminal, it fills the terminal's
 /// area (where they start) and puts its recognizers on the window's root
 /// view, so they see touches over the terminal too (like the back swipe).
 /// Closed, a swipe to the left anywhere on a terminal pulls the panel out at
-/// the right (on the iPhone from the right edge too: the grip, the landscape
-/// safe area); open, a pan toward its side anywhere in the area pushes it
-/// back, and a tap on the terminal beside it closes it (once it is clear no
-/// second tap comes: a double tap there brings the terminal's keyboard). While
+/// the right; open, a swipe right anywhere in the area pushes it back, and a
+/// tap on the terminal beside it closes it (once it is clear no second tap
+/// comes: a double tap there brings the terminal's keyboard). While
 /// a keyboard is up (the terminal's or the message field's), a double tap on
 /// the terminal hides it (beside the panel too). Otherwise taps are the
 /// terminal's own (a click for the program, with a keyboard up too; a double
@@ -363,10 +340,6 @@ struct PhoneKeyPanelGrip: View {
 struct PhoneKeyPanelGestures: UIViewRepresentable {
     var enabled: Bool
     var isOpen: Bool
-    /// The panel's side: it closes with a swipe toward it.
-    var side: KeyPanelSide = .trailing
-    /// Closed, a swipe from the area's trailing edge pulls it out too (not only one on a terminal).
-    var opensFromEdge = true
     /// A keyboard is up (the terminal's or the message field's): a double tap on the terminal hides it.
     var keyboardUp = false
     /// The finger's travel (leftward is negative) and where it is, in the terminal's area.
@@ -378,7 +351,6 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
     /// A double tap on the terminal while a keyboard is up: hides it.
     var onDoubleTap: () -> Void
 
-    static let edgeWidth: CGFloat = 24
     /// Its pan's name: the sidebar's and the list's swipes on a terminal wait for it (it closes the open panel).
     static let panName = "wierdr.keyPanel.pan"
 
@@ -429,8 +401,6 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         let doubleTap = UITapGestureRecognizer()
         /// The current pan may move the panel (it began where it should): others' pans wait for it.
         private var claims = false
-        /// It began at the trailing edge with the panel in: everything else waits for it (as the back swipe).
-        private var fromEdge = false
         /// The terminal it began on (with the panel in): its pane gets the focus as the panel comes.
         private weak var swiped: WierdrTerminalView?
 
@@ -488,7 +458,7 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         private func onTerminal(_ touch: UITouch) -> Bool { WierdrTerminalView.under(touch) != nil }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            if g === pan { claims = false; fromEdge = false; swiped = nil }
+            if g === pan { claims = false; swiped = nil }
             guard let parent, let anchor, anchor.window != nil else { return false }
             // The finger in the terminal's area (which moves with the back swipe). Not
             // through `nil`: in landscape that is the screen's unrotated space on the iPad.
@@ -503,14 +473,10 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
                 if g === doubleTap, touch.type == .indirectPointer { return false }
                 // Open panel: beside it (its keys take their own taps); else anywhere.
                 guard parent.isOpen else { return true }
-                return parent.side == .trailing ? p.x < area.maxX - PhoneKeyPanel.width
-                                                : p.x > area.minX + PhoneKeyPanel.width
+                return p.x < area.maxX - PhoneKeyPanel.width
             }
             if parent.isOpen {
                 claims = true
-            } else if parent.opensFromEdge, p.x >= area.maxX - PhoneKeyPanelGestures.edgeWidth {
-                claims = true
-                fromEdge = true
             } else if WierdrTerminalView.swipeable(touch) {
                 // Anywhere on a terminal.
                 claims = true
@@ -520,11 +486,11 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         }
 
         // Closed: only a mostly horizontal move to the left (the panel comes out
-        // at the right); open: one toward its side.
+        // at the right); open: one to the right.
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard g === pan, let parent, let view = g.view else { return true }
             let v = pan.velocity(in: view)
-            let dx = !parent.isOpen ? -v.x : parent.side == .trailing ? v.x : -v.x
+            let dx = parent.isOpen ? v.x : -v.x
             return dx > 0 && dx > abs(v.y)
         }
 
@@ -537,8 +503,7 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         // The terminal's and the panel's pans wait for the panel's (it fails
         // at once on a vertical move). Only pans: a held finger never fails a
         // pan, so a held arrow key or the terminal's long press (its menu)
-        // would wait until the finger lifts; from the edge, everything (no key
-        // or menu is there). Not the root view's own (the list's swipe). The
+        // would wait until the finger lifts. Not the root view's own (the list's swipe). The
         // taps it takes beat the terminal's (click, double tap): with a
         // keyboard up, a click waits to see that no second tap comes. The
         // panel's tap waits for the double tap too (it hides the keyboard
@@ -551,7 +516,7 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
                 return other is UITapGestureRecognizer && other.view !== g.view
             }
             guard claims, other.view !== g.view else { return false }
-            return fromEdge || other is UIPanGestureRecognizer
+            return other is UIPanGestureRecognizer
         }
     }
 }

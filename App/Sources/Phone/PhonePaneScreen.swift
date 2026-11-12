@@ -5,8 +5,8 @@ import WierdrModel
 /// One pane on the whole iPhone screen: a bar with the list's button, what runs here and
 /// the next agent waiting for you; the other panes of the space; the
 /// terminal edge to edge, and over it the key panel and the ways the
-/// keyboards come (`KeyPanelLayer`: a swipe from the right edge on the
-/// iPhone, the puck in a narrow iPad window). Under the terminal only the
+/// keyboards come (`KeyPanelLayer`: a swipe to the left on the terminal).
+/// Under the terminal only the
 /// message field while it is open, above the keyboard. Taps on the terminal
 /// are clicks for the program, with a keyboard up too; a double tap brings the
 /// terminal's keyboard or hides the one that is up.
@@ -53,7 +53,7 @@ struct PhonePaneScreen: View {
             .overlay(alignment: .bottom) {
                 // Above the panel, and beside it while it is out.
                 ToastStack()
-                    .padding(.leading, keys.leadingInset > 0 ? keys.leadingInset + 6 : 12)
+                    .padding(.leading, 12)
                     .padding(.trailing, keys.trailingInset > 0 ? keys.trailingInset + 6 : 12)
                     .padding(.bottom, 10)
             }

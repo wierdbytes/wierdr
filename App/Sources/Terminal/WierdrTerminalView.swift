@@ -113,12 +113,20 @@ final class WierdrTerminalView: TerminalView {
             tap.require(toFail: keyboardTap)
         }
         addGestureRecognizer(keyboardTap)
-        accessibilityCustomActions = [
-            UIAccessibilityCustomAction(name: "Terminal Keyboard") { [weak self] _ in
-                self?.requestKeyboard()
-                return true
-            },
-        ]
+        updateAccessibilityActions()
+    }
+
+    /// VoiceOver actions the app adds for this terminal (the key panel, the message field: `KeyPanelLayer`).
+    var appActions: [UIAccessibilityCustomAction] = [] {
+        didSet { updateAccessibilityActions() }
+    }
+
+    private func updateAccessibilityActions() {
+        let keyboard = UIAccessibilityCustomAction(name: "Terminal Keyboard") { [weak self] _ in
+            self?.requestKeyboard()
+            return true
+        }
+        accessibilityCustomActions = [keyboard] + appActions
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }

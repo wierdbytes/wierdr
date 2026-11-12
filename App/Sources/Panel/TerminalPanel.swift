@@ -2,7 +2,7 @@ import SwiftUI
 import WierdrModel
 
 /// The work column: tab bar, the active tab's panes on `canvas`, the status bar.
-/// Over the panes, the key panel and the puck that brings it and the keyboards
+/// Over the panes, the key panel and the ways it and the keyboards come
 /// (`KeyPanelLayer`), for the focused pane: drawn once over the whole window
 /// (`KeyLayerHost`, so over a sub-agent's window too), placed over the panes,
 /// whose frame this column reports (`controller.keyArea`). While the focused
@@ -186,10 +186,10 @@ struct ConnectionBanner: View {
     }
 }
 
-/// The iPad's key panel and its puck, once, over everything: the panes, the
-/// sidebar overlay's edge, a sub-agent's window (`SubAgentPeek`). Placed over the
-/// panel's panes (`controller.keyArea`), so the puck stays where the person put it;
-/// for the focused pane's terminal, or the sub-agent looked at while its window is up.
+/// The iPad's key panel, once, over everything: the panes, the sidebar
+/// overlay's edge, a sub-agent's window (`SubAgentPeek`). Placed over the
+/// panel's panes (`controller.keyArea`); for the focused pane's terminal, or
+/// the sub-agent looked at while its window is up.
 struct KeyLayerHost: View {
     @Environment(WorkspaceController.self) private var controller
     /// This layer's own origin in the window (the panes' frame is global).
@@ -201,7 +201,7 @@ struct KeyLayerHost: View {
         ZStack(alignment: .topLeading) {
             if area.width > 0, area.height > 0 {
                 // Not hit-testable: touches go through to the panes (or the window) under it,
-                // but for the puck and the panel.
+                // but for the panel.
                 Color.clear
                     .frame(width: area.width, height: area.height)
                     .keyPanel(address: controller.peek ?? controller.focusedPane?.terminal,
