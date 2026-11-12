@@ -10,9 +10,10 @@ import WierdrModel
 ///
 /// The drag is the list's own (its collection view's, `SpaceListDragDrop`): a
 /// finger holds a header and moves (as with the header's menu, which the system
-/// gives way), a pointer presses and moves. The card rows' markers
-/// (`SpaceRowMarker`) say where the cards are, and `SpacesList` shows the
-/// machine's spaces in `lane`'s order, the dragged one as its slot.
+/// gives way), a pointer presses and moves. The lifted card is drawn by the list
+/// (`LiftedCard`), the card rows' markers (`SpaceRowMarker`) say where the cards
+/// are, and `SpacesList` shows the machine's spaces in `lane`'s order, the dragged
+/// one as its slot.
 @MainActor
 @Observable
 final class SpaceDrag {
@@ -345,10 +346,11 @@ final class SpaceDragContext: NSObject {
 
 /// The list's drag and drop delegate while it shows space cards. A card's header
 /// starts a drag of its space (its item knows which, wherever the finger is when
-/// the drag really starts), shown as the whole card lifted; a space drag over
-/// the list is reported to `SpaceDrag`. Being the collection view's own drag, it plays along with the
-/// header's menu and scrolls the list at its top and bottom by itself. Anything
-/// else goes to SwiftUI's own delegates, when it set them.
+/// the drag really starts); over the list, the drag is reported to `SpaceDrag`
+/// and the card drawn lifted where the finger holds it (`LiftedCard`). Being the
+/// collection view's own drag, it plays along with the header's menu and scrolls
+/// the list at its top and bottom by itself. Anything else goes to SwiftUI's own
+/// delegates, when it set them.
 @MainActor
 final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollectionViewDropDelegate {
     var drag: SpaceDrag
@@ -357,11 +359,8 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
     private weak var swiftUIDrag: (any UICollectionViewDragDelegate)?
     private weak var swiftUIDrop: (any UICollectionViewDropDelegate)?
 
-    /// The lifted look over the dragged card's preview (it fades as the card lands).
-    private weak var liftedLook: UIView?
-    /// How long the card takes to glide into its slot (the drop animation's spring
-    /// settles long after that, while the card already lies there).
-    private let glide: TimeInterval = 0.35
+    /// The dragged card, drawn over the list (the system's own preview is invisible).
+    private var card: LiftedCard?
 
     /// The header the touch now down lifted (nil: it lifted something else).
     private var lifted: (space: String?, touch: Int)?
@@ -455,21 +454,41 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
         }
         let item = UIDragItem(itemProvider: provider)
         item.localObject = SpaceDragContext(space: id)
-        // Lifted, the whole card follows the finger (the lift itself is its header's).
-        item.previewProvider = { [weak self, weak cv] in
-            guard let self, let cv else { return nil }
-            return self.cardPreview(id, in: cv)
-        }
+        // Lifted, the list draws the card (`LiftedCard`): the system's preview goes
+        // where it likes (centered under the finger) and can't change as it lands.
+        item.previewProvider = { Self.invisiblePreview() }
         return item
     }
 
-    /// The card lifted: drawn afresh (its cells on screen are dimmed by the lift),
-    /// as wide as it is in the list.
-    private func cardPreview(_ id: String, in cv: UICollectionView) -> UIDragPreview? {
+    private static func invisiblePreview() -> UIDragPreview {
+        let view = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        let parameters = UIDragPreviewParameters()
+        parameters.backgroundColor = .clear
+        parameters.visiblePath = UIBezierPath(rect: view.bounds)
+        parameters.shadowPath = UIBezierPath()
+        view.alpha = 0.01
+        return UIDragPreview(view: view, parameters: parameters)
+    }
+
+    /// The card lifted where the finger holds it: in the list's column, as far below
+    /// the finger as it was taken (desktop's `dragLayout` card).
+    private func moveCard(_ id: String, to p: CGPoint, in cv: UICollectionView) {
+        if card == nil, let made = makeCard(id, in: cv) {
+            card = made
+            cv.addSubview(made)
+        }
+        guard let card, card.landing == false else { return }
+        card.isHidden = false
+        card.frame.origin = CGPoint(x: card.frame.minX, y: p.y - drag.grab.y)
+    }
+
+    /// The card as it is now, drawn afresh (its rows in the list are the slot by now,
+    /// or dimmed by the lift), as wide as it is in the list and where it is.
+    private func makeCard(_ id: String, in cv: UICollectionView) -> LiftedCard? {
         guard let controller = drag.controller, let space = controller.workspace.space(id),
-              let card = drag.cardFrames(in: cv)[id] else { return nil }
+              let frame = drag.cardFrames(in: cv)[id] else { return nil }
         func render(lifted: Bool) -> UIImage? {
-            let content = SpaceDragPreview(space: space, width: card.width, lifted: lifted)
+            let content = SpaceDragPreview(space: space, width: frame.width, lifted: lifted)
                 .environment(controller)
                 .environment(\.theme, drag.theme)
                 .environment(\.isCompactLayout, drag.compact)
@@ -478,28 +497,15 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
             renderer.scale = cv.traitCollection.displayScale
             return renderer.uiImage
         }
-        // The card as it lies in the list, and over it as lifted: that fades as it lands.
-        guard let image = render(lifted: false), let up = render(lifted: true) else { return nil }
-        // The system centers a preview under the finger: around the card, room enough
-        // for the finger to hold it where it held the header.
-        let size = image.size
-        let g = CGPoint(x: min(max(drag.grab.x, 0), size.width), y: min(max(drag.grab.y, 0), size.height))
-        let box = CGSize(width: 2 * max(g.x, size.width - g.x), height: 2 * max(g.y, size.height - g.y))
-        let view = UIView(frame: CGRect(origin: .zero, size: box))
-        let shot = UIImageView(image: image)
-        shot.frame.origin = CGPoint(x: box.width / 2 - g.x, y: box.height / 2 - g.y)
-        view.addSubview(shot)
-        let liftedShot = UIImageView(image: up)
-        liftedShot.frame = shot.frame
-        view.addSubview(liftedShot)
-        liftedLook = liftedShot
-        // The whole box is the preview (the system centers what's visible under the
-        // finger), the card casts the shadow.
-        let parameters = UIDragPreviewParameters()
-        parameters.backgroundColor = .clear
-        parameters.visiblePath = UIBezierPath(rect: view.bounds)
-        parameters.shadowPath = UIBezierPath(roundedRect: shot.frame, cornerRadius: 10)
-        return UIDragPreview(view: view, parameters: parameters)
+        guard let resting = render(lifted: false), let lifted = render(lifted: true) else { return nil }
+        let card = LiftedCard(lifted: lifted, resting: resting)
+        card.frame.origin = frame.origin
+        return card
+    }
+
+    private func removeCard() {
+        card?.removeFromSuperview()
+        card = nil
     }
 
     /// The lifted header: its piece of the card.
@@ -537,7 +543,9 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
 
     func collectionView(_ cv: UICollectionView, dropSessionDidEnter session: any UIDropSession) {
         guard let id = space(of: session) else { return swiftUIDrop?.collectionView?(cv, dropSessionDidEnter: session) ?? () }
-        drag.enter(id, at: session.location(in: cv), in: cv)
+        let p = session.location(in: cv)
+        drag.enter(id, at: p, in: cv)
+        moveCard(id, to: p, in: cv)
     }
 
     func collectionView(_ cv: UICollectionView, dropSessionDidUpdate session: any UIDropSession,
@@ -546,7 +554,9 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
             return swiftUIDrop?.collectionView?(cv, dropSessionDidUpdate: session, withDestinationIndexPath: indexPath)
                 ?? UICollectionViewDropProposal(operation: .cancel)
         }
-        drag.update(at: session.location(in: cv), in: cv)
+        let p = session.location(in: cv)
+        drag.update(at: p, in: cv)
+        if let id = space(of: session) { moveCard(id, to: p, in: cv) }
         // The list's own insertion gap stays shut: the slot is the card's own rows.
         return UICollectionViewDropProposal(operation: .move, intent: .unspecified)
     }
@@ -554,11 +564,14 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
     func collectionView(_ cv: UICollectionView, dropSessionDidExit session: any UIDropSession) {
         guard space(of: session) != nil else { return swiftUIDrop?.collectionView?(cv, dropSessionDidExit: session) ?? () }
         drag.exit()
+        // Taken off the list, the card is back in its place (as on the desktop).
+        if card?.landing == false { card?.isHidden = true }
     }
 
     func collectionView(_ cv: UICollectionView, dropSessionDidEnd session: any UIDropSession) {
         guard space(of: session) != nil else { return swiftUIDrop?.collectionView?(cv, dropSessionDidEnd: session) ?? () }
         drag.end()
+        if card?.landing == false { removeCard() }
     }
 
     /// Let go: the space moves, and the card glides into its slot.
@@ -568,21 +581,73 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
             return
         }
         drag.drop()
-        guard let slot = drag.slotFrame(in: cv) else { return }
-        for item in coordinator.items {
-            // The preview's box is centered where the finger holds the card.
-            let center = CGPoint(x: slot.minX + drag.grab.x, y: slot.minY + drag.grab.y)
-            let animator = coordinator.drop(item.dragItem, to: UIDragPreviewTarget(container: cv, center: center))
-            animator.addAnimations { [weak self] in self?.liftedLook?.alpha = 0 }
-            animator.addCompletion { [drag] _ in drag.landed() }
+        guard let slot = drag.slotFrame(in: cv) else {
+            removeCard()
+            return
         }
-        // Once it lies in its slot, the card itself is there under it.
-        DispatchQueue.main.asyncAfter(deadline: .now() + glide) { [drag] in drag.landed() }
+        // The system's (invisible) preview goes there too, so the drop ends.
+        for item in coordinator.items {
+            coordinator.drop(item.dragItem, to: UIDragPreviewTarget(container: cv, center: CGPoint(x: slot.midX, y: slot.midY)))
+        }
+        // The card glides into its slot, turning into the card in the list on the way;
+        // there, the list shows the card itself, and then this one goes.
+        guard let card else { return drag.landed() }
+        card.isHidden = false
+        card.land(at: slot.origin) { [weak self, weak card] in
+            self?.drag.landed()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                card?.removeFromSuperview()
+                if self?.card === card { self?.card = nil }
+            }
+        }
     }
 }
 
-/// The lifted card a space drag shows under the finger: its header and (unless
-/// hidden) its rows on a raised card with an accent edge, as on the desktop.
+/// The card being dragged, drawn by the list over its rows: raised with an accent
+/// edge and a shadow, as on the desktop; landing, it crossfades to its look in the
+/// list as it glides into its slot.
+final class LiftedCard: UIView {
+    /// The desktop's SETTLE_MS, near enough for a finger.
+    static let landing: TimeInterval = 0.22
+
+    private let resting = UIImageView()
+    private let lifted = UIImageView()
+    private let shadow = UIView()
+    private(set) var landing = false
+
+    init(lifted: UIImage, resting: UIImage) {
+        super.init(frame: CGRect(origin: .zero, size: resting.size))
+        isUserInteractionEnabled = false
+        layer.zPosition = 1000  // over the list's cells, which come and go
+        shadow.frame = bounds
+        shadow.layer.shadowColor = UIColor.black.cgColor
+        shadow.layer.shadowOpacity = 0.35
+        shadow.layer.shadowRadius = 18
+        shadow.layer.shadowOffset = CGSize(width: 0, height: 10)
+        shadow.layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: 10).cgPath
+        self.resting.image = resting
+        self.resting.frame = bounds
+        self.lifted.image = lifted
+        self.lifted.frame = bounds
+        addSubview(shadow)
+        addSubview(self.resting)
+        addSubview(self.lifted)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func land(at origin: CGPoint, completion: @escaping () -> Void) {
+        landing = true
+        UIView.animate(withDuration: Self.landing, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+            self.frame.origin = origin
+            self.lifted.alpha = 0
+            self.shadow.alpha = 0
+        } completion: { _ in completion() }
+    }
+}
+
+/// A space's card as a drag draws it (`LiftedCard`): its header and (unless hidden)
+/// its rows on a raised card with an accent edge, or as it lies in the list.
 struct SpaceDragPreview: View {
     var space: Space
     var width: CGFloat
