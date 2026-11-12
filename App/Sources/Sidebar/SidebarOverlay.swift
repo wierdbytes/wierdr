@@ -1,9 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// The sidebar slid over the panel while the docked one is hidden: a swipe from
-/// the left edge pulls it out with the finger, a swipe left (anywhere, rows
-/// included) or a tap on the dimmed panel puts it back. Its width is
+/// The sidebar slid over the panel while the docked one is hidden: a swipe
+/// right on a terminal or from the left edge pulls it out with the finger, a
+/// swipe left (anywhere, rows included) or a tap on the dimmed panel puts it
+/// back. While the docked one shows, a swipe right does nothing. Its width is
 /// its own, set by its edge like the docked one.
 ///
 /// Ours rather than the split view's: that one slides at the width the system
@@ -48,6 +49,8 @@ struct SidebarOverlay: View {
         .background {
             SidebarOverlayGestures(
                 canOpen: hidden && !controller.sidebarOverlay,
+                // Not from a sub-agent's window: the sidebar would come under it.
+                opensFromTerminal: controller.peek == nil,
                 isOpen: controller.sidebarOverlay,
                 width: width,
                 onDrag: { dragged = min(max($0, 0), width) },
@@ -70,10 +73,13 @@ struct SidebarOverlay: View {
 }
 
 /// The overlay's pans, on the window's root view so they see touches anywhere:
-/// the swipe from the left edge that pulls the sidebar out and the swipe left
-/// that puts it back. Both report how much of the sidebar shows.
+/// the swipe from the left edge and the swipe right on a terminal (before its
+/// own pans; after the key panel's, which closes the open panel that way)
+/// that pull the sidebar out, and the swipe left that puts it back. They
+/// report how much of the sidebar shows.
 private struct SidebarOverlayGestures: UIViewRepresentable {
     var canOpen: Bool
+    var opensFromTerminal: Bool
     var isOpen: Bool
     var width: CGFloat
     var onDrag: (CGFloat) -> Void
@@ -92,6 +98,8 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
         let c = context.coordinator
         c.parent = self
         if c.open.isEnabled != canOpen { c.open.isEnabled = canOpen }
+        let swipeOn = canOpen && opensFromTerminal
+        if c.swipe.isEnabled != swipeOn { c.swipe.isEnabled = swipeOn }
         if c.close.isEnabled != isOpen { c.close.isEnabled = isOpen }
     }
 
@@ -118,27 +126,28 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var parent: SidebarOverlayGestures?
         let open = UIScreenEdgePanGestureRecognizer()
+        /// A swipe right on a terminal.
+        let swipe = UIPanGestureRecognizer()
         let close = UIPanGestureRecognizer()
 
         override init() {
             super.init()
             open.edges = .left
             open.addTarget(self, action: #selector(opening(_:)))
+            swipe.maximumNumberOfTouches = 1
+            swipe.addTarget(self, action: #selector(opening(_:)))
             close.addTarget(self, action: #selector(closing(_:)))
-            open.delegate = self
-            close.delegate = self
+            for g in [open, swipe, close] as [UIGestureRecognizer] { g.delegate = self }
         }
 
         func attach(to view: UIView?) {
             guard let view, open.view !== view else { return }
             detach()
-            view.addGestureRecognizer(open)
-            view.addGestureRecognizer(close)
+            for g in [open, swipe, close] as [UIGestureRecognizer] { view.addGestureRecognizer(g) }
         }
 
         func detach() {
-            open.view?.removeGestureRecognizer(open)
-            close.view?.removeGestureRecognizer(close)
+            for g in [open, swipe, close] as [UIGestureRecognizer] { g.view?.removeGestureRecognizer(g) }
         }
 
         @objc private func opening(_ pan: UIPanGestureRecognizer) {
@@ -160,26 +169,36 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
             }
         }
 
-        // Closing: only a mostly-leftward swipe, and not on the resize handle.
+        // Closing: only a mostly-leftward swipe, and not on the resize handle;
+        // the swipe on a terminal: a mostly-rightward one.
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-            guard g === close, let view = g.view else { return true }
-            let v = close.velocity(in: view)
-            return v.x < 0 && abs(v.x) > abs(v.y)
+            guard g === close || g === swipe, let pan = g as? UIPanGestureRecognizer, let view = g.view else { return true }
+            let v = pan.velocity(in: view)
+            return g === close ? v.x < 0 && abs(v.x) > abs(v.y) : v.x > 0 && v.x > abs(v.y)
         }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            if g === swipe { return WierdrTerminalView.swipeable(touch) }
             guard g === close, let parent, let view = g.view else { return true }
             let x = touch.location(in: view).x
             return x < parent.width - 20 || x > parent.width + 4
         }
 
-        // The edge swipe goes first, as the system's does. Closing goes before a row's
-        // own swipe: leftward it closes, rightward it fails and the row's actions come.
-        // Only before the list's pans: a held finger never fails a pan, so the
-        // long-press menu and a space's lift waiting for it would never come.
+        // On a terminal the key panel's pan goes first: open, the panel closes with a swipe right.
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
+            g === swipe && other.name == PhoneKeyPanelGestures.panName
+        }
+
+        // The edge swipe goes first, as the system's does; the one on a terminal
+        // before its pans only (not the root view's own). Closing goes before a
+        // row's own swipe: leftward it closes, rightward it fails and the row's
+        // actions come. Only before pans: a held finger never fails a pan, so the
+        // long-press menu, a space's lift (or the terminal's menu) waiting for it
+        // would never come.
         func gestureRecognizer(_ g: UIGestureRecognizer,
                                shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            g === open || isRowSwipe(other)
+            if g === swipe { return other is UIPanGestureRecognizer && other.view !== g.view }
+            return g === open || isRowSwipe(other)
         }
 
         // Scrolling may run along with closing.

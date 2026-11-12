@@ -40,6 +40,22 @@ final class WierdrTerminalView: TerminalView {
     var onTap: (() -> Void)?
     /// The name of its double tap that brings the keyboard (the key panel's tap waits for it).
     static let keyboardTapName = "wierdr.terminal.keyboardTap"
+    /// The terminal a touch landed on, if on one itself (not a toast, a key or a button over it).
+    static func under(_ touch: UITouch) -> WierdrTerminalView? {
+        var v = touch.view
+        while let view = v {
+            if let t = view as? WierdrTerminalView { return t }
+            v = view.superview
+        }
+        return nil
+    }
+
+    /// A swipe on a terminal may move a panel (the keys, the sidebar or the
+    /// list): not while a selection is up, which a drag extends.
+    static func swipeable(_ touch: UITouch) -> Bool {
+        under(touch).map { !$0.hasActiveSelection } ?? false
+    }
+
     /// The terminal view that has the keyboard, if any.
     private(set) static weak var keyboardOwner: WierdrTerminalView?
     /// The last touch on the terminal came from a pointer (trackpad, mouse,

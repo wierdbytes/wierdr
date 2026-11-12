@@ -379,6 +379,8 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
     var onDoubleTap: () -> Void
 
     static let edgeWidth: CGFloat = 24
+    /// Its pan's name: the sidebar's and the list's swipes on a terminal wait for it (it closes the open panel).
+    static let panName = "wierdr.keyPanel.pan"
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -435,6 +437,7 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         override init() {
             super.init()
             pan.maximumNumberOfTouches = 1
+            pan.name = PhoneKeyPanelGestures.panName
             pan.addTarget(self, action: #selector(moved(_:)))
             pan.delegate = self
             tap.addTarget(self, action: #selector(tapped(_:)))
@@ -482,17 +485,7 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
             if g.state == .ended { parent?.onDoubleTap() }
         }
 
-        /// The terminal the touch landed on, if on one itself (not a toast, the grip, the puck or a key over it).
-        private func terminal(_ touch: UITouch) -> WierdrTerminalView? {
-            var v = touch.view
-            while let view = v {
-                if let t = view as? WierdrTerminalView { return t }
-                v = view.superview
-            }
-            return nil
-        }
-
-        private func onTerminal(_ touch: UITouch) -> Bool { terminal(touch) != nil }
+        private func onTerminal(_ touch: UITouch) -> Bool { WierdrTerminalView.under(touch) != nil }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             if g === pan { claims = false; fromEdge = false; swiped = nil }
@@ -518,10 +511,10 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
             } else if parent.opensFromEdge, p.x >= area.maxX - PhoneKeyPanelGestures.edgeWidth {
                 claims = true
                 fromEdge = true
-            } else if let t = terminal(touch), !t.hasActiveSelection {
-                // Anywhere on a terminal, but not while a selection is being dragged.
+            } else if WierdrTerminalView.swipeable(touch) {
+                // Anywhere on a terminal.
                 claims = true
-                swiped = t
+                swiped = WierdrTerminalView.under(touch)
             }
             return claims
         }

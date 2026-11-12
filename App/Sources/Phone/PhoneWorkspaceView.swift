@@ -3,11 +3,10 @@ import UIKit
 import WierdrModel
 
 /// The iPhone layout: one pane on the whole screen (`PhonePaneScreen`) and,
-/// slid over it from the left, the list of agents/spaces (`PhoneHome`). The
-/// list takes the screen's width but a dimmed strip at the right, as wide as
-/// the key panel; a tap there, or a swipe left, puts it back; a swipe from the
-/// left edge (with the finger) or the bar's sidebar button brings it out.
-/// Tapping a row shows its pane.
+/// slid over it from the left, the list of agents/spaces (`PhoneHome`), as
+/// wide as the screen. A swipe right on the terminal or from the left edge
+/// (with the finger) or the bar's sidebar button brings it out; a swipe left
+/// (anywhere on it) puts it back. Tapping a row shows its pane.
 ///
 /// Whether the list is out is `controller.compactColumn` (`.sidebar` = out,
 /// `.detail` = the pane alone), the same state the collapsed split view used,
@@ -19,8 +18,8 @@ struct PhoneWorkspaceView: View {
     @State private var size: CGSize = CGSize(width: 430, height: 900)
     @State private var leadingInset: CGFloat = 0
 
-    /// The list's width: the screen's but the strip at the right (fixed, unlike the iPad's).
-    private var listWidth: CGFloat { max(1, size.width - PhoneKeyPanel.width) }
+    /// The list's width: the screen's (fixed, unlike the iPad's).
+    private var listWidth: CGFloat { max(1, size.width) }
 
     var body: some View {
         let open = controller.compactColumn == .sidebar
@@ -29,18 +28,18 @@ struct PhoneWorkspaceView: View {
         ZStack(alignment: .leading) {
             PhonePaneScreen(covered: open)
                 .accessibilityHidden(open)
+            // The pane dims as the list comes over it (out, it covers the pane).
             Color.black.opacity(0.35 * progress)
                 .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { controller.showPanel() }
-                .allowsHitTesting(open)
-                .accessibilityLabel("Close the List")
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHidden(!open)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             PhoneHome()
                 .frame(width: width)
                 .ignoresSafeArea(.keyboard)
-                .overlay(alignment: .trailing) { Hairline(axis: .vertical).ignoresSafeArea() }
+                .overlay(alignment: .trailing) {
+                    // Its edge while it moves (out, its backing runs on into the safe area).
+                    if progress < 1 { Hairline(axis: .vertical).ignoresSafeArea() }
+                }
                 .compositingGroup()
                 .shadow(color: .black.opacity(progress > 0 ? 0.25 : 0), radius: 16)
                 // Hidden: past the left edge, its backing (into the safe area) and shadow too.
@@ -91,10 +90,11 @@ struct PhoneWorkspaceView: View {
 }
 
 /// The list's pans, on the window's root view so they see touches over the
-/// terminal too: the swipe from the left edge that pulls the list out (before
-/// the terminal's own pans) and, while it is out, the swipe left that puts it
-/// back (anywhere on it, rows included: before a row's own swipe). Both report
-/// how much of the list shows.
+/// terminal too: the swipe right that pulls the list out, from the left edge
+/// or anywhere on the terminal (before the terminal's own pans; after the key
+/// panel's, which closes the open panel that way), and, while it is out, the
+/// swipe left that puts it back (anywhere on it, rows included: before a
+/// row's own swipe). Both report how much of the list shows.
 ///
 /// The edge one is a pan that only takes touches starting in the leftmost 24 pt
 /// (rather than `UIScreenEdgePanGestureRecognizer`): same feel, and synthesized
@@ -146,8 +146,10 @@ private struct PhoneListGestures: UIViewRepresentable {
         var parent: PhoneListGestures?
         let open = UIPanGestureRecognizer()
         let close = UIPanGestureRecognizer()
-        /// The current touch began at the edge (only then do others wait for `open`).
+        /// The current touch began at the edge: everything else waits for `open`.
         private var atEdge = false
+        /// It began on the terminal (not at the edge): its pans wait for `open`, `open` for the key panel's.
+        private var onTerminal = false
 
         override init() {
             super.init()
@@ -189,7 +191,13 @@ private struct PhoneListGestures: UIViewRepresentable {
             guard g === open else { return true }
             guard let view = g.view else { return false }
             atEdge = touch.location(in: view).x <= view.safeAreaInsets.left + Self.edgeWidth
-            return atEdge
+            onTerminal = !atEdge && WierdrTerminalView.swipeable(touch)
+            return atEdge || onTerminal
+        }
+
+        // On the terminal the key panel's pan goes first: open, the panel closes with a swipe right.
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
+            g === open && onTerminal && other.name == PhoneKeyPanelGestures.panName
         }
 
         // Opening: only a rightward, mostly horizontal move; closing: a leftward one.
@@ -199,13 +207,17 @@ private struct PhoneListGestures: UIViewRepresentable {
             return g === open ? v.x > 0 && v.x > abs(v.y) : v.x < 0 && -v.x > abs(v.y)
         }
 
-        // From the edge it goes first, as the system's back swipe does. Closing goes
-        // before a row's own swipe: leftward it closes (the row's trailing actions are
-        // in its long-press menu), rightward it fails and the row's leading ones come.
-        // Only before the list's pans: a held finger never fails a pan, so the
-        // long-press menu and a space's lift waiting for it would never come.
+        // From the edge it goes first, as the system's back swipe does; on the
+        // terminal before its pans only (not the root view's own: the key panel's
+        // goes first). Closing goes before a row's own swipe: leftward it closes
+        // (the row's trailing actions are in its long-press menu), rightward it
+        // fails and the row's leading ones come. Only before pans: a held finger
+        // never fails a pan, so the long-press menu, a space's lift (or the
+        // terminal's menu) waiting for it would never come.
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            if g === open { return atEdge }
+            if g === open {
+                return atEdge || (onTerminal && other is UIPanGestureRecognizer && other.view !== g.view)
+            }
             return isRowSwipe(other)
         }
 
