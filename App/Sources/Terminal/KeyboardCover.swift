@@ -12,9 +12,10 @@ import UIKit
 /// the floating keyboard goes, the last one is a 50-pt strip at the bottom
 /// that never goes away). The key bar is always where the cover starts: just
 /// above a docked keyboard, at the bottom under a floating one or with a
-/// hardware keyboard. With no terminal having the keyboard nothing is
-/// covered (the split view has no other text fields; sheets and alerts that
-/// do sit above it).
+/// hardware keyboard. The message field carries an empty accessory for the
+/// same reason (`ComposeAccessory`). With neither having the keyboard
+/// nothing is covered (the split view has no other text fields; sheets and
+/// alerts that do sit above it).
 @MainActor
 @Observable
 final class KeyboardCover {
@@ -55,8 +56,14 @@ final class KeyboardCover {
 
     private func measure(duration: Double) {
         var covered: CGFloat = 0
+        var accessory: (bar: UIView, window: UIWindow)?
         if let owner = WierdrTerminalView.keyboardOwner, owner.isFirstResponder, let window = owner.window,
-           let bar = owner.inputAccessoryView, bar.window != nil, !bar.isHidden, bar.alpha > 0 {
+           let bar = owner.inputAccessoryView {
+            accessory = (bar, window)
+        } else {
+            accessory = ComposeAccessory.active
+        }
+        if let (bar, window) = accessory, bar.window != nil, !bar.isHidden, bar.alpha > 0 {
             // The bar is in the keyboard's own window: go through the screen.
             let screen = window.screen.coordinateSpace
             let top = window.convert(bar.convert(bar.bounds, to: screen), from: screen).minY

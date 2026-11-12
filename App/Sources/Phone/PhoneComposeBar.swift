@@ -2,9 +2,11 @@ import SwiftUI
 import UIKit
 import WierdrModel
 
-/// The iPhone's message field, opened by Type in the key panel: right above
-/// the system keyboard (dictation, autocorrect, any language), a field and a
-/// send button. The text goes to the program as one paste (bracketed when it
+/// The message field, opened by Type in the key panel (or the keyboard icons
+/// of the swipe or the puck): right above the system keyboard (dictation,
+/// autocorrect, any language), a field and a send button. Under the terminal
+/// on the iPhone; across the iPad's panel, in the status bar's place, for the
+/// focused pane. The text goes to the program as one paste (bracketed when it
 /// asked, so line breaks stay in the message), then Return; an empty field
 /// sends just Return. Opened also by a tap on the terminal's right half. It closes
 /// at once, with its keyboard and no animation (send, Hide in the key panel,
@@ -12,6 +14,8 @@ import WierdrModel
 /// add to the message while it is open.
 struct PhoneComposeBar: View {
     var address: String
+    /// The iPad names the pane it goes to (there may be several on screen).
+    var placeholder = "Message"
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.services) private var services
@@ -28,7 +32,7 @@ struct PhoneComposeBar: View {
         // Prose for agents (capitals, corrections); commands for shells (as typed).
         let prose = controller.workspace.terminal(address)?.isAgent ?? true
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message", text: text, axis: .vertical)
+            TextField(placeholder, text: text, axis: .vertical)
                 .font(.ui(16))
                 .foregroundStyle(theme.foreground)
                 .tint(theme.accent)
@@ -73,6 +77,7 @@ struct PhoneComposeBar: View {
         .onChange(of: controller.composing) { _, now in focused = now == address }
         // The keyboard went (Hide, a tap on the terminal, swiped away): the field goes with it.
         .onChange(of: focused) { _, on in
+            if on, !Device.isPhone { ComposeAccessory.attachSoon() }
             if !on, controller.composing == address { controller.composing = nil }
         }
     }
@@ -107,8 +112,76 @@ struct PhoneComposeBar: View {
     }
 }
 
+/// iPad: the message field's keyboard carries an empty, 1-pt input accessory,
+/// so `KeyboardCover` can tell where the keyboard begins (the same way as with
+/// the terminal's key bar: above a docked keyboard, at the bottom under a
+/// floating one). SwiftUI's keyboard safe area is off there; see `KeyboardCover`.
+@MainActor
+enum ComposeAccessory {
+    private static weak var host: UIResponder?
+    private static weak var accessory: UIView?
+
+    /// The accessory and the window of the field carrying it, while that field has the keyboard.
+    static var active: (bar: UIView, window: UIWindow)? {
+        guard let host = host as? UIView, host.isFirstResponder, let window = host.window,
+              let accessory, accessory.window != nil else { return nil }
+        return (accessory, window)
+    }
+
+    /// Hangs it on the text field that has the keyboard, now and again a moment
+    /// later (SwiftUI may make the field first responder after reporting focus).
+    static func attachSoon() {
+        attach()
+        DispatchQueue.main.async { attach() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { attach() }
+    }
+
+    private static func attach() {
+        guard let responder = UIResponder.wierdrFirstResponder else { return }
+        if responder === host, accessory != nil { return }
+        let bar = EmptyAccessory()
+        if let field = responder as? UITextView {
+            field.inputAccessoryView = bar
+            field.reloadInputViews()
+        } else if let field = responder as? UITextField {
+            field.inputAccessoryView = bar
+            field.reloadInputViews()
+        } else {
+            return
+        }
+        host = responder
+        accessory = bar
+    }
+
+    private final class EmptyAccessory: UIView {
+        override init(frame: CGRect) {
+            super.init(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+            autoresizingMask = .flexibleWidth
+            backgroundColor = .clear
+            isUserInteractionEnabled = false
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: 1) }
+    }
+}
+
+extension UIResponder {
+    private static weak var reported: UIResponder?
+
+    /// What has the keyboard now (nil: nothing).
+    static var wierdrFirstResponder: UIResponder? {
+        reported = nil
+        UIApplication.shared.sendAction(#selector(wierdrReportFirstResponder), to: nil, from: nil, for: nil)
+        return reported
+    }
+
+    @objc private func wierdrReportFirstResponder() { UIResponder.reported = self }
+}
+
 extension WorkspaceController {
-    /// Closes the iPhone's message field at once: its keyboard goes without
+    /// Closes the message field at once: its keyboard goes without
     /// sliding, the field without a transition (its text stays as the draft).
     func closeCompose() {
         guard composing != nil else { return }

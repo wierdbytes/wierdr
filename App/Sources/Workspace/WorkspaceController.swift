@@ -24,9 +24,9 @@ final class WorkspaceController {
     var singlePane = false
     /// A new space/tab/pane opens in front of the person (iPhone: the pane screen).
     var revealsNewPanes = false
-    /// The terminal whose message field (iPhone) is open, above the keyboard.
+    /// The terminal whose message field is open, above the keyboard (`PhoneComposeBar`).
     var composing: String?
-    /// Unsent message text per terminal address (iPhone message field).
+    /// Unsent message text per terminal address (the message field).
     var drafts: [String: String] = [:]
 
     // MARK: Dialogs

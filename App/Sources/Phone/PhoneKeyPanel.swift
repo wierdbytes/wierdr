@@ -3,16 +3,17 @@ import UIKit
 import PhotosUI
 import WierdrModel
 
-/// The iPhone's keys, at the right edge: a swipe from the right edge (or a
-/// tap on the grip there) slides out a narrow column of large keys over the
-/// terminal, within the right thumb's reach, with or without the keyboard
-/// (then above it). The column has no backing and the keys are translucent,
-/// so it hides as little of the terminal as it can. It scrolls past its
-/// ends, so the first and the last key can come to the thumb: about a third
-/// of the screen up from its bottom (with the keyboard up, the first one to
-/// the middle of the column above it, and ⏎ no higher than its bottom);
-/// each time it opens with ⏎ at its bottom, where the keys an agent asks
-/// for are (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys, the keyboard
+/// The key panel, at the side of the terminal: on the iPhone a swipe from the
+/// right edge (or a tap on the grip there), on the iPad the puck, slides out a
+/// narrow column of large keys over the terminal, within the thumb's reach,
+/// with or without the keyboard (then above it); see `KeyPanelLayer`. The
+/// column has no backing and the keys are translucent, so it hides as little
+/// of the terminal as it can. It scrolls past its ends, so the first and the
+/// last key can come to the thumb: about a third of the screen up from its
+/// bottom on the iPhone, the puck's height on the iPad (with the keyboard up,
+/// the first one to the middle of the column above it, and ⏎ no higher than its bottom);
+/// each time it opens with ⏎ at its bottom (on the iPad at the puck's height,
+/// `opensAtRest`), where the keys an agent asks for are (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys, the keyboard
 /// and inserting (text, a photo, a copied image) above. Keys don't close
 /// it, so ↓ ↓ ⏎ is three taps; a swipe to the right or a tap on the terminal
 /// does. Type opens the message field above the keyboard (`PhoneComposeBar`);
@@ -21,8 +22,13 @@ struct PhoneKeyPanel: View {
     var address: String
     /// On screen (even partly): each time it comes out, it starts at its bottom.
     var shown: Bool
-    /// The window's height (where a third of the screen from the bottom is).
-    var screenHeight: CGFloat
+    /// Where the first or the last key comes to rest, in global coordinates
+    /// (under the thumb; 0: unknown, the column's middle).
+    var restY: CGFloat
+    /// It comes out with ⏎ at `restY` rather than at its bottom (the iPad: the
+    /// thumb is at the puck, the column's bottom may be far below it). Not with
+    /// the keyboard up: then ⏎ goes no higher than the bottom.
+    var opensAtRest = false
     var close: () -> Void
 
     @Environment(WorkspaceController.self) private var controller
@@ -40,6 +46,7 @@ struct PhoneKeyPanel: View {
     static let width: CGFloat = 96
     fileprivate static let keyHeight: CGFloat = 52
     private static let bottomID = "bottom"
+    private static let enterID = "enter"
 
     var body: some View {
         let session = services.terminalSession(address)
@@ -113,6 +120,7 @@ struct PhoneKeyPanel: View {
                 group {
                     key("esc", .escape, a11y: "Escape")
                     key("⏎", .enter, symbol: "return", prominent: true, a11y: "Return")
+                        .id(Self.enterID)
                 }
                 .padding(.bottom, 12)
                 .id(Self.bottomID)
@@ -121,14 +129,14 @@ struct PhoneKeyPanel: View {
             .padding(.top, top)
             .padding(.bottom, bottom - 12)
         }
-        .onChange(of: shown) { _, shown in if shown { proxy.scrollTo(Self.bottomID, anchor: .bottom) } }
+        .onChange(of: shown) { _, shown in if shown { toStart(proxy, rest: rest, typing: typing) } }
         .task(id: frame.height) {
             // The keyboard came or went (or the screen turned): ⏎ back at the
             // bottom, once the scroll view has finished growing or shrinking.
             guard shown else { return }
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
-            withAnimation(.snappy(duration: 0.25)) { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+            withAnimation(.snappy(duration: 0.25)) { toStart(proxy, rest: rest, typing: typing) }
         }
         }
         // Only the top and height (not x, which the back swipe moves every frame).
@@ -152,12 +160,19 @@ struct PhoneKeyPanel: View {
         .accessibilityLabel("Key Panel")
     }
 
+    /// Where it starts each time it comes out: ⏎ at the bottom, or at the rest line (`opensAtRest`).
+    private func toStart(_ proxy: ScrollViewProxy, rest: CGFloat, typing: Bool) {
+        guard opensAtRest, !typing, frame.height > 0 else { return proxy.scrollTo(Self.bottomID, anchor: .bottom) }
+        // ⏎'s point this far down it lands as far down the column: its middle, near enough, on the line.
+        proxy.scrollTo(Self.enterID, anchor: UnitPoint(x: 0.5, y: min(max(rest / frame.height, 0), 1)))
+    }
+
     /// Where the first or the last key comes to rest at the end of the
-    /// scroll, from the column's top: a third of the screen up from its
-    /// bottom; with the keyboard up, the middle of the column (above it).
+    /// scroll, from the column's top: `restY`; with the keyboard up, the
+    /// middle of the column (above it).
     private func restLine(typing: Bool) -> CGFloat {
-        guard !typing, screenHeight > 0 else { return frame.height / 2 }
-        return min(max(screenHeight * 2 / 3 - frame.minY, Self.keyHeight), frame.height - Self.keyHeight)
+        guard !typing, restY > 0 else { return frame.height / 2 }
+        return min(max(restY - frame.minY, Self.keyHeight), frame.height - Self.keyHeight)
     }
 
     private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -334,9 +349,10 @@ struct PhoneKeyPanelGrip: View {
 /// The panel's gestures. Placed behind the terminal, it fills the terminal's
 /// area (where they start) and puts its recognizers on the window's root
 /// view, so they see touches over the terminal too (like the back swipe).
-/// Closed, a pan from the area's right edge pulls the panel out; open, a
-/// rightward pan anywhere in the area pushes it back, and a tap on the
-/// terminal beside it closes it. While a keyboard is up (the terminal's or
+/// Closed, a pan from the area's right edge pulls the panel out (iPhone; on
+/// the iPad, whose edge is Slide Over's, the puck does); open, a pan toward
+/// its side anywhere in the area pushes it back, and a tap on the terminal
+/// beside it closes it. While a keyboard is up (the terminal's or
 /// the message field's), a tap on the terminal hides it instead, the panel
 /// first if both are. Otherwise taps are the terminal's own (a click for
 /// the program; on the iPhone they don't bring the keyboard). Their pans
@@ -345,6 +361,10 @@ struct PhoneKeyPanelGrip: View {
 struct PhoneKeyPanelGestures: UIViewRepresentable {
     var enabled: Bool
     var isOpen: Bool
+    /// The panel's side: it closes with a swipe toward it.
+    var side: KeyPanelSide = .trailing
+    /// Closed, a swipe from the area's trailing edge pulls it out.
+    var opensFromEdge = true
     /// A keyboard is up (the terminal's or the message field's): a tap on the terminal hides it.
     var keyboardUp = false
     /// The finger's travel (leftward is negative) and where it is, in the terminal's area.
@@ -368,7 +388,8 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
     func updateUIView(_ anchor: Anchor, context: Context) {
         let c = context.coordinator
         c.parent = self
-        if c.pan.isEnabled != enabled { c.pan.isEnabled = enabled }
+        let panOn = enabled && (isOpen || opensFromEdge)
+        if c.pan.isEnabled != panOn { c.pan.isEnabled = panOn }
         let tapOn = enabled && (isOpen || keyboardUp)
         if c.tap.isEnabled != tapOn { c.tap.isEnabled = tapOn }
     }
@@ -461,18 +482,24 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
             if g === tap {
                 guard onTerminal(touch) else { return false }
                 // Open panel: beside it (its keys take their own taps); a keyboard up: anywhere.
-                if parent.isOpen { return p.x < area.maxX - PhoneKeyPanel.width }
-                return parent.keyboardUp
+                if parent.isOpen {
+                    return parent.side == .trailing ? p.x < area.maxX - PhoneKeyPanel.width
+                                                    : p.x > area.minX + PhoneKeyPanel.width
+                }
+                // A click with a pointer (trackpad, Universal Control) is a click, as on a Mac.
+                return parent.keyboardUp && touch.type != .indirectPointer
             }
-            claims = parent.isOpen || p.x >= area.maxX - PhoneKeyPanelGestures.edgeWidth
+            claims = parent.isOpen || (parent.opensFromEdge && p.x >= area.maxX - PhoneKeyPanelGestures.edgeWidth)
             return claims
         }
 
-        // Closed: only a leftward, mostly horizontal move; open: a rightward one.
+        // Closed: only a mostly horizontal move away from the side (leftward
+        // from the right edge); open: one toward it.
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard g === pan, let parent, let view = g.view else { return true }
             let v = pan.velocity(in: view)
-            let dx = parent.isOpen ? v.x : -v.x
+            let toward = parent.side == .trailing ? v.x : -v.x
+            let dx = parent.isOpen ? toward : -toward
             return dx > 0 && dx > abs(v.y)
         }
 

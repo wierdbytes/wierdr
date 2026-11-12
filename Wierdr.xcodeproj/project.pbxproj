@@ -36,6 +36,7 @@
 		622613C1FB10D809676F9DEB /* HostKeyAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0163470CB1971C7092B25002 /* HostKeyAlert.swift */; };
 		63C26ED88B9251D6B612E00B /* Icons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B31D6E8D3C59D052EA1953BB /* Icons.xcassets */; };
 		663DD5DB3F4E821E4CBC1689 /* OFL-JetBrainsMono.txt in Resources */ = {isa = PBXBuildFile; fileRef = 01C3406FAFCF5644EFEE9E8C /* OFL-JetBrainsMono.txt */; };
+		66527F0DB6CF7D2C27CADBD5 /* KeyPanelLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24CFA2C9F9D15FF3073EDD5A /* KeyPanelLayer.swift */; };
 		6679ED6C6B8022148808B45C /* PhoneKeyPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56720A2FB2275CAC4539183 /* PhoneKeyPanel.swift */; };
 		6906CB2012BEE68B90983619 /* LICENSE-SymbolsNerdFont.txt in Resources */ = {isa = PBXBuildFile; fileRef = DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */; };
 		7A57026423B9387BD4E6A220 /* Device.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0666454A0F3654CFD8BB3434 /* Device.swift */; };
@@ -88,6 +89,7 @@
 		1AF2BC817415DFF36FE83826 /* PaneTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneTreeView.swift; sourceTree = "<group>"; };
 		20A5417D9BCC91A5B4906C41 /* SpaceHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceHeader.swift; sourceTree = "<group>"; };
 		24C773688B33E3F0413C5204 /* KeyboardCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCover.swift; sourceTree = "<group>"; };
+		24CFA2C9F9D15FF3073EDD5A /* KeyPanelLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyPanelLayer.swift; sourceTree = "<group>"; };
 		2E36CF13C460CDEB0145C6CE /* WorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceView.swift; sourceTree = "<group>"; };
 		3970FD27B3DF671D83DC038E /* TerminalSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSession.swift; sourceTree = "<group>"; };
 		3E32A6DFB0783950D3599945 /* DebugAutoConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugAutoConnect.swift; sourceTree = "<group>"; };
@@ -185,6 +187,7 @@
 				4DF4DC8DC9C71BD0EE764E63 /* App */,
 				F1139F7204035CAD7AD316D8 /* Connect */,
 				3D9AD108B8047EE3DC8CC847 /* Debug */,
+				B629BAA51B2D539F66E57DE3 /* Input */,
 				159A75AA07BB46132E6E8F2A /* Panel */,
 				95566650718B10E2EDF825A1 /* Phone */,
 				50A26599A8ACB78F53FCEFFB /* Session */,
@@ -309,6 +312,14 @@
 				65E66B1D03C119D0686AC190 /* PhoneWorkspaceView.swift */,
 			);
 			path = Phone;
+			sourceTree = "<group>";
+		};
+		B629BAA51B2D539F66E57DE3 /* Input */ = {
+			isa = PBXGroup;
+			children = (
+				24CFA2C9F9D15FF3073EDD5A /* KeyPanelLayer.swift */,
+			);
+			path = Input;
 			sourceTree = "<group>";
 		};
 		C31BACBD440CB6BC0A75178C /* Fonts */ = {
@@ -466,6 +477,7 @@
 				A5A665F63667AD58A3437D8E /* HostSession.swift in Sources */,
 				B9A532B17350C2B1BDB29084 /* Icons.swift in Sources */,
 				87A14C8CC3053545CC2E8FCF /* ImageForAgent.swift in Sources */,
+				66527F0DB6CF7D2C27CADBD5 /* KeyPanelLayer.swift in Sources */,
 				BC5F03E81D285DF5CBC65E43 /* KeyboardCover.swift in Sources */,
 				3369452A0EEE814CFC410FF6 /* LimitsPanel.swift in Sources */,
 				60DFCEE352A3DD2104A9AE02 /* LiveServices.swift in Sources */,
@@ -570,7 +582,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -637,7 +649,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

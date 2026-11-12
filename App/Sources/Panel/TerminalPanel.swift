@@ -2,11 +2,16 @@ import SwiftUI
 import WierdrModel
 
 /// The work column: tab bar, the active tab's panes on `canvas`, the status bar.
+/// Over the panes, the key panel and the puck that brings it and the keyboards
+/// (`KeyPanelLayer`), for the focused pane; while its message field is open
+/// (`PhoneComposeBar`, above the keyboard), the field takes the status bar's place.
 struct TerminalPanel: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
+    @State private var keys = KeyPanelState()
 
     var body: some View {
+        let address = controller.focusedPane?.terminal
         VStack(spacing: 0) {
             TabBar()
             Group {
@@ -19,11 +24,21 @@ struct TerminalPanel: View {
             .padding(8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(theme.canvas)
-            .overlay(alignment: .bottomTrailing) { ToastStack().padding(16) }
-            StatusBar()
+            .keyPanel(address: address, covered: controller.sidebarOverlay, state: $keys)
+            .overlay(alignment: .bottomTrailing) { ToastStack().padding(16).padding(.trailing, keys.trailingInset) }
+            if let address, controller.composing == address {
+                // No transition: it comes and goes with its keyboard, at once.
+                PhoneComposeBar(address: address, placeholder: "Message to \(Format.paneName(controller.workspace.terminal(address)))")
+                    .id(address)
+            } else {
+                StatusBar()
+            }
         }
         .background(theme.chrome.ignoresSafeArea())
         .overlay(alignment: .top) { ConnectionBanner() }
+        // Another pane: the message field closes (its draft stays).
+        .onChange(of: address) { controller.composing = nil }
+        .onDisappear { controller.composing = nil }
     }
 }
 

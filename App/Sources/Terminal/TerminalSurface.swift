@@ -6,9 +6,10 @@ import UIKit
 /// (connecting / reconnecting / process exited / error).
 ///
 /// - `isFocused`: the pane is the focused one on this screen. Becoming focused
-///   gives the terminal the keyboard only when that does not pop the on-screen
-///   keyboard by surprise: with a hardware keyboard, or when another terminal
-///   had the keyboard already. A tap always does (and shows the keyboard).
+///   gives the terminal the keyboard only when another terminal had it
+///   already (it follows the focus). A click with a pointer does too
+///   (`WierdrTerminalView.tapsTakeKeyboard`); a finger's tap doesn't: the
+///   keyboard comes from the key panel's swipe or puck (`KeyPanelLayer`).
 /// - `onTap`: the user tapped/clicked the terminal (focus the pane).
 struct TerminalSurface: View {
     let session: TerminalSession
@@ -44,8 +45,7 @@ struct TerminalSurfaceRepresentable: UIViewRepresentable {
         let c = context.coordinator
         let view = session.terminalView
         if isFocused && !c.wasFocused {
-            let takeKeyboard = WierdrTerminalView.hardwareKeyboardConnected
-                || (WierdrTerminalView.keyboardOwner != nil && WierdrTerminalView.keyboardOwner !== view)
+            let takeKeyboard = WierdrTerminalView.keyboardOwner != nil && WierdrTerminalView.keyboardOwner !== view
             if takeKeyboard {
                 DispatchQueue.main.async {
                     if view.window != nil { view.requestKeyboard() }

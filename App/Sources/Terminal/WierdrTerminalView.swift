@@ -40,10 +40,16 @@ final class WierdrTerminalView: TerminalView {
     var onTap: (() -> Void)?
     /// The terminal view that has the keyboard, if any.
     private(set) static weak var keyboardOwner: WierdrTerminalView?
-    /// A tap gives the terminal the keyboard (iPad). On the iPhone it doesn't:
-    /// a tap is a click for the program, and the keyboard comes only when
-    /// asked for (`requestKeyboard`: the key panel's swipe, switching panes).
-    let tapsTakeKeyboard = !Device.isPhone
+    /// The last touch on the terminal came from a pointer (trackpad, mouse,
+    /// Universal Control), not a finger.
+    fileprivate(set) var lastTouchWasPointer = false
+    /// A click with a pointer gives the terminal the keyboard (iPad), as on a
+    /// Mac: typing goes where you clicked. A finger's tap doesn't: it is a
+    /// click for the program, and the keyboard comes only when asked for
+    /// (`requestKeyboard`: the key panel's swipe or puck, switching panes
+    /// while another terminal has it). Not `GCKeyboard`: it reports a keyboard
+    /// while only the on-screen one is there (seen on the iPad).
+    var tapsTakeKeyboard: Bool { !Device.isPhone && lastTouchWasPointer }
     /// Set while the keyboard is asked for on purpose (see `tapsTakeKeyboard`).
     private var keyboardRequested = false
 
@@ -85,15 +91,15 @@ final class WierdrTerminalView: TerminalView {
         indicatorStyle = theme.isDark ? .white : .black
     }
 
-    /// A hardware keyboard is (probably) attached: focusing a pane then gives it
-    /// the keyboard without popping the on-screen one.
+    /// `GCKeyboard` sees a keyboard (the lab's log only: it also says so with
+    /// just the on-screen keyboard, see `tapsTakeKeyboard`).
     static var hardwareKeyboardConnected: Bool { GCKeyboard.coalesced != nil }
 
-    /// A tap always takes the keyboard (iPad). SwiftTerm spends the first tap
-    /// of an unfocused terminal only on focus, except when the program tracks
-    /// the mouse (pi, vim with `mouse=a`, ...): then it forwards the click and
-    /// stays unfocused, so the keyboard never shows. The click still reaches
-    /// the program either way. On the iPhone a tap never takes it.
+    /// A tap takes the keyboard when `tapsTakeKeyboard`. SwiftTerm spends the
+    /// first tap of an unfocused terminal only on focus, except when the
+    /// program tracks the mouse (pi, vim with `mouse=a`, ...): then it forwards
+    /// the click and stays unfocused, so the keyboard never shows. The click
+    /// still reaches the program either way. Otherwise a tap never takes it.
     @objc private func touched() {
         if tapsTakeKeyboard, !isFirstResponder { _ = becomeFirstResponder() }
         onTap?()
@@ -159,7 +165,7 @@ final class WierdrTerminalView: TerminalView {
     // MARK: Focus
 
     override func becomeFirstResponder() -> Bool {
-        // iPhone: SwiftTerm's own tap (and UIKit restoring focus) doesn't bring the keyboard.
+        // Taps that don't take it: SwiftTerm's own tap (and UIKit restoring focus) doesn't bring the keyboard.
         if !tapsTakeKeyboard, !keyboardRequested, !isFirstResponder { return false }
         let wasFirst = isFirstResponder
         let ok = super.becomeFirstResponder()
@@ -240,9 +246,14 @@ final class WierdrTerminalView: TerminalView {
     }
 }
 
-/// Lets our "user touched the terminal" recognizer run beside SwiftTerm's own.
+/// Lets our "user touched the terminal" recognizer run beside SwiftTerm's own,
+/// and notes whether the touch is a finger's or a pointer's (`tapsTakeKeyboard`).
 private final class TouchPassthrough: NSObject, UIGestureRecognizerDelegate {
     @MainActor static let shared = TouchPassthrough()
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        (g.view as? WierdrTerminalView)?.lastTouchWasPointer = touch.type == .indirectPointer
+        return true
+    }
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool { false }
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool { false }
