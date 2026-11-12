@@ -27,20 +27,27 @@ public struct PushRegistry: Codable, Hashable, Sendable {
         public var startToken: String
         /// When the app wrote it (UNIX seconds).
         public var updated: Double
+        /// Whether the device showed a Wierdr activity when the app wrote it (nil: unknown).
+        /// `false` after a start means it's gone (dismissed, the app reinstalled): the
+        /// pusher starts it there again.
+        public var hasActivity: Bool?
 
-        public init(name: String, bundle: String, env: String, startToken: String, updated: Double) {
+        public init(name: String, bundle: String, env: String, startToken: String, updated: Double,
+                    hasActivity: Bool? = nil) {
             self.name = name; self.bundle = bundle; self.env = env
-            self.startToken = startToken; self.updated = updated
+            self.startToken = startToken; self.updated = updated; self.hasActivity = hasActivity
         }
 
         enum CodingKeys: String, CodingKey {
             case name, bundle, env, updated
             case startToken = "start_token"
+            case hasActivity = "has_activity"
         }
 
         /// The same registration, whenever written.
         public func same(as other: Device) -> Bool {
             name == other.name && bundle == other.bundle && env == other.env && startToken == other.startToken
+                && hasActivity == other.hasActivity
         }
     }
 

@@ -8,8 +8,9 @@ import WierdrActivity
 /// The app's part in the agents Live Activity, which `wierdr-push` on the Mac
 /// starts, updates and ends through APNs: this device's push-to-start token goes
 /// into the connected computer's `wierdr-push` document (`PushRegistry`) each time
-/// a session goes live and whenever the token or the person's Live Activities
-/// setting changes; a second activity (a start that crossed an end) is ended.
+/// a session goes live and whenever the token, the person's Live Activities setting
+/// or whether an activity is shown changes (gone after a start: the pusher starts it
+/// again); a second activity (a start that crossed an end) is ended.
 @MainActor
 @Observable
 final class LiveActivities {
@@ -56,9 +57,29 @@ final class LiveActivities {
             }
         }
         Task { [weak self] in
-            for await _ in Activity<AgentsActivityAttributes>.activityUpdates { self?.tidy() }
+            for await activity in Activity<AgentsActivityAttributes>.activityUpdates {
+                guard let self else { return }
+                self.tidy()
+                self.publish()
+                self.watch(activity)
+            }
         }
+        for activity in Activity<AgentsActivityAttributes>.activities { watch(activity) }
         tidy()
+    }
+
+    /// An activity ending or dismissed changes what the entry says (`hasActivity`).
+    private func watch(_ activity: Activity<AgentsActivityAttributes>) {
+        Task { [weak self] in
+            for await _ in activity.activityStateUpdates { self?.publish() }
+        }
+    }
+
+    /// Whether this iPhone shows a Wierdr activity now.
+    private var hasActivity: Bool {
+        Activity<AgentsActivityAttributes>.activities.contains {
+            $0.activityState == .active || $0.activityState == .stale
+        }
     }
 
     /// A session went live on `host`: register there.
@@ -85,7 +106,8 @@ final class LiveActivities {
         guard let id = UIDevice.current.identifierForVendor?.uuidString else { return }
         let entry: PushRegistry.Device? = enabled ? token.map {
             PushRegistry.Device(name: UIDevice.current.name, bundle: Bundle.main.bundleIdentifier ?? "pw.xff.wierdr",
-                                env: Self.apnsEnvironment, startToken: $0, updated: Date().timeIntervalSince1970)
+                                env: Self.apnsEnvironment, startToken: $0, updated: Date().timeIntervalSince1970,
+                                hasActivity: hasActivity)
         } : nil
         if enabled && entry == nil { registration = .waiting; return }
         publishing?.cancel()

@@ -89,6 +89,27 @@ private let channels = [lane.key: "CHAN=="]
         #expect(p.step(now: at(2), summary: s, host: "mac", devices: [:], channels: channels) == [.end(lane: lane, channel: "CHAN==", state: s)])
     }
 
+    @Test func startsAgainOnADeviceThatLostIt() {
+        var p = Planner()
+        let s = state([agent("t1", .working)])
+        _ = p.step(now: at(0), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+        var gone = phone
+        gone.hasActivity = false
+        // Written while the start was on its way: not yet.
+        gone.updated = at(5).timeIntervalSince1970
+        #expect(p.step(now: at(6), summary: s, host: "mac", devices: ["d": gone], channels: channels).isEmpty)
+        // Written well after it: start it there again, once.
+        gone.updated = at(60).timeIntervalSince1970
+        #expect(p.step(now: at(61), summary: s, host: "mac", devices: ["d": gone], channels: channels)
+                == [.start(lane: lane, channel: "CHAN==", device: "d", token: "aa11", state: s,
+                           alert: .init(title: "mac", body: "1 working", sound: false))])
+        #expect(p.step(now: at(62), summary: s, host: "mac", devices: ["d": gone], channels: channels).isEmpty)
+        // It's there now.
+        gone.hasActivity = true
+        gone.updated = at(70).timeIntervalSince1970
+        #expect(p.step(now: at(71), summary: s, host: "mac", devices: ["d": gone], channels: channels).isEmpty)
+    }
+
     @Test func restartsBeforeEightHours() {
         var p = Planner()
         let s = state([agent("t1", .working)])

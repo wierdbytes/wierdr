@@ -50,7 +50,13 @@ public struct Planner: Sendable {
         public var inactiveSince: Double?
         /// The last update failed: send the state again.
         public var dirty: Bool = false
+        /// Device id → when it was started there (a later "no activity" means it's gone).
+        public var startedOn: [String: Double]?
     }
+
+    /// A device's activity counts as gone when the app says so this long after its start
+    /// (the start may still be on its way when the app writes).
+    static let goneGrace: TimeInterval = 15
 
     public enum Action: Hashable, Sendable {
         /// Push-to-start on one device, subscribed to the channel.
@@ -117,9 +123,17 @@ public struct Planner: Sendable {
                                      host: host, now: t, sound: false)
                     continue
                 }
-                // Devices that registered since (or got a new token): start it there too.
+                // Devices that registered since (or got a new token), or where it's gone
+                // (dismissed, the app reinstalled: the app wrote so after the start): start it there.
                 var joined: [String: PushRegistry.Device] = [:]
-                for (id, d) in laneDevices where r.devices[id] != d.startToken { joined[id] = d }
+                for (id, d) in laneDevices {
+                    if r.devices[id] != d.startToken {
+                        joined[id] = d
+                    } else if d.hasActivity == false,
+                              d.updated > (r.startedOn?[id] ?? r.startedAt) + Self.goneGrace {
+                        joined[id] = d
+                    }
+                }
                 r.devices = r.devices.filter { laneDevices[$0.key] != nil }
                 if !joined.isEmpty {
                     for id in joined.keys.sorted() {
@@ -127,6 +141,7 @@ public struct Planner: Sendable {
                         actions.append(.start(lane: lane, channel: r.channel, device: id, token: d.startToken,
                                               state: summary, alert: startAlert(summary, host: host, sound: false)))
                         r.devices[id] = d.startToken
+                        r.startedOn = (r.startedOn ?? [:]).merging([id: t]) { $1 }
                     }
                 }
                 if r.dirty || !summary.sameContent(as: r.last) {
@@ -161,6 +176,7 @@ public struct Planner: Sendable {
             actions.append(.start(lane: lane, channel: channel, device: id, token: d.startToken,
                                   state: summary, alert: startAlert(summary, host: host, sound: sound)))
             r.devices[id] = d.startToken
+            r.startedOn = (r.startedOn ?? [:]).merging([id: t]) { $1 }
         }
         running[lane.key] = r
         return actions
