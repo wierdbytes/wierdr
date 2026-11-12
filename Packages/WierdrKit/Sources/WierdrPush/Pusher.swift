@@ -220,7 +220,7 @@ public final class Pusher {
             let payload = ActivityPayload.update(state: s, alert: alert, stale: stale, now: now)
             do {
                 try await apns.broadcast(channel: channel, bundle: lane.bundle, env: lane.env, payload: payload,
-                                         priority: priority, expiration: stale)
+                                         priority: priority)
                 log("update p\(priority): \(Self.describe(s))\(alert.map { " — alert \($0.title): \($0.body)" } ?? "")")
                 return true
             } catch let e as APNsError where e.isBadChannel {
@@ -236,7 +236,7 @@ public final class Pusher {
             let payload = ActivityPayload.end(state: s, dismissal: now.addingTimeInterval(-1), now: now)
             do {
                 try await apns.broadcast(channel: channel, bundle: lane.bundle, env: lane.env, payload: payload,
-                                         priority: 10, expiration: now.addingTimeInterval(3600))
+                                         priority: 10)
                 log("end")
             } catch {
                 log("end failed: \(error)")
@@ -251,7 +251,7 @@ public final class Pusher {
         return ActivitySummary.line(s) + (agents.isEmpty ? "" : " [\(agents.joined(separator: ", "))]")
     }
 
-    /// Ends every running activity now (`wierdr-push reset`).
+    /// Ends every running activity now and drops the channels (`wierdr-push reset`).
     public func endAll() async {
         let now = Date()
         for r in planner.running.values {
@@ -261,6 +261,13 @@ public final class Pusher {
         planner.running = [:]
         state.running = [:]
         state.badTokens = []
+        // Spare channels too: the next start makes a new one.
+        for (key, channel) in state.channels {
+            let parts = key.split(separator: " ")
+            guard parts.count == 2, let env = APNsEnvironment(rawValue: String(parts[1])) else { continue }
+            try? await apns.deleteChannel(channel, bundle: String(parts[0]), env: env)
+        }
+        state.channels = [:]
         state.save(stateURL)
     }
 }

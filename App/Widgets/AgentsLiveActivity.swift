@@ -146,7 +146,7 @@ private struct AgentLine: View {
                 .lineLimit(1)
                 .fixedSize()
             // As in the sidebar (`28m`); wierdr-push refreshes it when it would change.
-            if let age = AgentAge.label(since: agent.sinceDate, now: .now) {
+            if let age = AgentAge.coarse(since: agent.sinceDate, now: .now) {
                 Text(age)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(Palette.dim)

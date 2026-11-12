@@ -155,10 +155,13 @@ public enum AgentAge {
         return "\(s / 86_400)d"
     }
 
-    /// The label without its seconds (all of the first minute is one value): what
-    /// a refresh follows, at most once a minute.
-    public static func tick(since: Date?, now: Date) -> String? {
+    /// The Live Activity's label: the first minute is `<1m` (its seconds would stand
+    /// still until the next refresh), then as the sidebar. It changes when `tick` does.
+    public static func coarse(since: Date?, now: Date) -> String? {
         guard let since else { return nil }
-        return now.timeIntervalSince(since) < 60 ? "s" : label(since: since, now: now)
+        return now.timeIntervalSince(since) < 60 ? "<1m" : label(since: since, now: now)
     }
+
+    /// What a refresh follows, at most once a minute: the shown `coarse` label.
+    public static func tick(since: Date?, now: Date) -> String? { coarse(since: since, now: now) }
 }

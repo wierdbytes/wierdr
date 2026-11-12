@@ -105,7 +105,9 @@ final class LiveConnector {
     }
 
     func scenePhaseChanged(_ phase: ScenePhase) {
-        if phase == .active { active?.resume() }
+        guard phase == .active else { return }
+        active?.resume()
+        LiveActivities.shared.foreground()
     }
 
     private static func passwordKey(_ id: UUID) -> String { "host-\(id.uuidString)" }

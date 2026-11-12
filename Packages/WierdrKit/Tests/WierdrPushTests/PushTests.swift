@@ -274,6 +274,17 @@ private let channels = [lane.key: "CHAN=="]
         #expect(AgentLink.address(in: URL(string: "https://agent?t=x")!) == nil)
     }
 
+    @Test func agesReadAsInTheSidebarButTheFirstMinute() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        func ago(_ s: Double) -> Date { now.addingTimeInterval(-s) }
+        #expect(AgentAge.label(since: ago(42), now: now) == "42s")
+        #expect(AgentAge.coarse(since: ago(42), now: now) == "<1m")
+        #expect(AgentAge.coarse(since: ago(21 * 60 + 45), now: now) == "21m")
+        #expect(AgentAge.coarse(since: ago(110 * 60), now: now) == "1h")
+        #expect(AgentAge.coarse(since: ago(3 * 86_400 + 5), now: now) == "3d")
+        #expect(AgentAge.coarse(since: nil, now: now) == nil)
+    }
+
     @Test func registryUsesSnakeCaseAndSurvivesGarbage() throws {
         let r = PushRegistry(devices: ["d": phone])
         let json = String(decoding: r.encoded(), as: UTF8.self)

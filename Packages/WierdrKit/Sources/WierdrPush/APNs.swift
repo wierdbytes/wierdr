@@ -87,24 +87,25 @@ public final class APNsClient: Sendable {
         _ = try await send(r)
     }
 
-    /// Sends an update or end on a channel. `expiration`: until when APNs keeps it
-    /// for an offline device (the channel stores the most recent message).
+    /// Sends an update or end on a channel. The channel stores nothing: a device
+    /// that's offline gets the next one (`apns-expiration: 0`, which such a channel requires).
     public func broadcast(channel: String, bundle: String, env: APNsEnvironment, payload: Data,
-                          priority: Int, expiration: Date) async throws {
+                          priority: Int) async throws {
         var r = request("https://\(env.pushHost)/4/broadcasts/apps/\(bundle)")
         r.setValue(channel, forHTTPHeaderField: "apns-channel-id")
         r.setValue("liveactivity", forHTTPHeaderField: "apns-push-type")
         r.setValue(String(priority), forHTTPHeaderField: "apns-priority")
-        r.setValue(String(Int(expiration.timeIntervalSince1970)), forHTTPHeaderField: "apns-expiration")
+        r.setValue("0", forHTTPHeaderField: "apns-expiration")
         r.httpBody = payload
         _ = try await send(r)
     }
 
-    /// A new channel for Live Activity broadcasts that keeps the most recent
-    /// message for devices that are offline. Returns its id.
+    /// A new channel for Live Activity broadcasts. It stores no messages: a channel
+    /// that keeps the most recent one has a much smaller publishing budget (APNs
+    /// answered 429 TooManyRequests after ~20 updates in 13 minutes).
     public func createChannel(bundle: String, env: APNsEnvironment) async throws -> String {
         var r = request("\(env.manageURL)/1/apps/\(bundle)/channels")
-        r.httpBody = Data(#"{"message-storage-policy":1,"push-type":"LiveActivity"}"#.utf8)
+        r.httpBody = Data(#"{"message-storage-policy":0,"push-type":"LiveActivity"}"#.utf8)
         let response = try await send(r)
         guard let id = response.value(forHTTPHeaderField: "apns-channel-id"), !id.isEmpty else {
             throw APNsError(status: response.statusCode, reason: "NoChannelId")

@@ -34,6 +34,7 @@ final class LiveActivities {
     @ObservationIgnored private var host: String?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var publishing: Task<Void, Never>?
+    @ObservationIgnored private var owesFresh = false
 
     private init() {}
 
@@ -87,7 +88,14 @@ final class LiveActivities {
         guard started else { return }
         self.core = core
         self.host = host
-        publish()
+        publish(fresh: true)
+    }
+
+    /// Back in the foreground: say again what this iPhone shows (an activity gone
+    /// meanwhile — dismissed, the app reinstalled — is started again by the pusher).
+    func foreground() {
+        tidy()
+        publish(fresh: true)
     }
 
     /// The session closed: nothing to write to until the next one.
@@ -101,7 +109,12 @@ final class LiveActivities {
 
     /// Writes (or removes) this device's entry in the connected computer's
     /// `wierdr-push` document; compare-and-swap, a few tries.
-    private func publish() {
+    /// `fresh`: write even when nothing changed, so `updated` says this is how things
+    /// are now (the pusher starts the activity again on a device that has none since
+    /// after its start).
+    private func publish(fresh: Bool = false) {
+        // A later publish (that cancels this one) still writes when a fresh one is owed.
+        if fresh { owesFresh = true }
         guard let core, let host else { return }
         guard let id = UIDevice.current.identifierForVendor?.uuidString else { return }
         let entry: PushRegistry.Device? = enabled ? token.map {
@@ -113,8 +126,9 @@ final class LiveActivities {
         publishing?.cancel()
         publishing = Task { [weak self] in
             do {
-                try await Self.write(entry, id: id, on: core)
+                try await Self.write(entry, id: id, on: core, fresh: self?.owesFresh ?? false)
                 guard !Task.isCancelled else { return }
+                self?.owesFresh = false
                 self?.registration = entry == nil ? .off : .registered(host: host)
             } catch {
                 guard !Task.isCancelled else { return }
@@ -123,11 +137,12 @@ final class LiveActivities {
         }
     }
 
-    private static func write(_ entry: PushRegistry.Device?, id: String, on core: CoreConnection) async throws {
+    private static func write(_ entry: PushRegistry.Device?, id: String, on core: CoreConnection,
+                              fresh: Bool) async throws {
         for _ in 0..<5 {
             let doc = try await core.getDoc(PushRegistry.documentName)
             var registry = doc.value == .null ? PushRegistry() : PushRegistry.decode(try doc.value.data())
-            if let entry, let old = registry.devices[id], old.same(as: entry) { return }
+            if !fresh, let entry, let old = registry.devices[id], old.same(as: entry) { return }
             if entry == nil && registry.devices[id] == nil { return }
             registry.devices[id] = entry
             do {
