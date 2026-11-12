@@ -99,23 +99,36 @@ private let channels = [lane.key: "CHAN=="]
         #expect(p.step(now: at(600), summary: s, host: "mac", devices: ["d": phone], channels: channels).count == 1)
     }
 
-    @Test func showsNothingActiveAtOnceAndEndsAfterAWhile() {
+    @Test func showsNothingActiveAtOnceAndEndsAfterTwoHours() {
         var p = Planner()
-        _ = p.step(now: at(0), summary: state([agent("t1", .done)]), host: "mac", devices: ["d": phone], channels: channels)
-        let done = state([agent("t1", .done)])
-        _ = p.step(now: at(10), summary: done, host: "mac", devices: ["d": phone], channels: channels)
+        let wait = p.settings.endDelay
+        #expect(wait == 2 * 3600)
+        _ = p.step(now: at(0), summary: state([agent("t1", .working)]), host: "mac", devices: ["d": phone], channels: channels)
+        _ = p.step(now: at(10), summary: state([agent("t1", .done)]), host: "mac", devices: ["d": phone], channels: channels)
         // Seen on another client: the devices show it at once (priority 10)…
         let idle = state([], idle: 1)
         #expect(p.step(now: at(20), summary: idle, host: "mac", devices: ["d": phone], channels: channels)
                 == [.update(lane: lane, channel: "CHAN==", state: idle, priority: 10, alert: nil)])
         #expect(p.step(now: at(30), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
-        // …back to work within the delay: it goes on.
+        // …an agent set to work within the hold is an update, no start (no alert, no buzz).
         let working = state([agent("t1", .working)])
-        #expect(p.step(now: at(35), summary: working, host: "mac", devices: ["d": phone], channels: channels).count == 1)
-        _ = p.step(now: at(40), summary: idle, host: "mac", devices: ["d": phone], channels: channels)
-        #expect(p.step(now: at(59), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
-        #expect(p.step(now: at(60), summary: idle, host: "mac", devices: ["d": phone], channels: channels)
+        #expect(p.step(now: at(1800), summary: working, host: "mac", devices: ["d": phone], channels: channels)
+                == [.update(lane: lane, channel: "CHAN==", state: working, priority: 10, alert: nil)])
+        _ = p.step(now: at(1900), summary: idle, host: "mac", devices: ["d": phone], channels: channels)
+        #expect(p.step(now: at(1900 + wait - 1), summary: idle, host: "mac", devices: ["d": phone],
+                       channels: channels).allSatisfy { if case .end = $0 { false } else { true } })
+        #expect(p.step(now: at(1900 + wait), summary: idle, host: "mac", devices: ["d": phone], channels: channels)
                 == [.end(lane: lane, channel: "CHAN==", state: idle)])
+        #expect(p.running.isEmpty)
+    }
+
+    @Test func anIdleActivityNearEightHoursJustEnds() {
+        var p = Planner()
+        _ = p.step(now: at(0), summary: state([agent("t1", .working)]), host: "mac", devices: ["d": phone], channels: channels)
+        let idle = state([], idle: 1)
+        _ = p.step(now: at(7 * 3600), summary: idle, host: "mac", devices: ["d": phone], channels: channels)
+        #expect(p.step(now: at(7.75 * 3600), summary: idle, host: "mac", devices: ["d": phone],
+                       channels: [lane.key: "NEW=="]) == [.end(lane: lane, channel: "CHAN==", state: idle)])
         #expect(p.running.isEmpty)
     }
 

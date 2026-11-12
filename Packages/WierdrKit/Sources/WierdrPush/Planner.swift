@@ -22,9 +22,11 @@ public struct Planner: Sendable {
     public typealias State = AgentsActivityAttributes.ContentState
 
     public struct Settings: Sendable {
-        /// Nothing active for this long ends the activity (a short break in a turn
-        /// doesn't); the devices show the idle state meanwhile.
-        public var endDelay: TimeInterval = 20
+        /// Nothing active for this long ends the activity; the devices show the idle
+        /// state meanwhile. Long, because a start must carry an alert (ActivityKit drops
+        /// a push-to-start without one), and that buzzes the phone: while it's up, an
+        /// agent set to work is a plain update.
+        public var endDelay: TimeInterval = 2 * 3600
         /// A start for done agents only waits this long: one another client looks at
         /// right away (or a blip) starts nothing.
         public var doneStartDelay: TimeInterval = 5
@@ -132,12 +134,15 @@ public struct Planner: Sendable {
                 }
                 r.inactiveSince = since
             }
-            if active, t - r.startedAt >= settings.maxAge, let fresh = channels[key], fresh != r.channel {
-                // A fresh activity (on a channel of its own) before ActivityKit ends this one.
+            if t - r.startedAt >= settings.maxAge, !active || channels[key].map({ $0 != r.channel }) == true {
+                // Before ActivityKit ends it: a fresh one (on a channel of its own) while
+                // agents are at it, else just the end.
                 actions.append(.end(lane: lane, channel: r.channel, state: summary))
                 running[key] = nil
-                actions += start(lane: lane, devices: laneDevices, channel: fresh, summary: summary,
-                                 host: host, now: t, sound: false)
+                if active, let fresh = channels[key] {
+                    actions += start(lane: lane, devices: laneDevices, channel: fresh, summary: summary,
+                                     host: host, now: t, sound: false)
+                }
                 continue
             }
             // Devices that registered since (or got a new token), or where it's gone
