@@ -358,6 +358,43 @@ final class TouchCounter: UIGestureRecognizer {
     }
 }
 
+/// A see-through view over the window while the list's own space drag lasts, a
+/// drop target for it wherever the list isn't (the panel's SwiftUI hosting view
+/// has its own drop target, for the tab pills, which would take the drag there):
+/// letting go off the list is a drop heard at once, so the card flies back straight
+/// away instead of after the system's cancel animation. Over the list it isn't
+/// there for hit testing, and the list takes the drag.
+@MainActor
+final class SpaceOffListDrop: UIView, UIDropInteractionDelegate {
+    private weak var owner: SpaceListDragDrop?
+
+    init(owner: SpaceListDragDrop) {
+        self.owner = owner
+        super.init(frame: .zero)
+        backgroundColor = .clear
+        autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addInteraction(UIDropInteraction(delegate: self))
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        owner?.isOffList(point, in: self) == true ? self : nil
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
+        owner?.owns(session) ?? false
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
+        UIDropProposal(operation: .move)
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
+        owner?.letGoOffList()
+    }
+}
+
 /// What a space drag carries: the space, for the list it's dropped on.
 final class SpaceDragContext: NSObject {
     let space: String
@@ -384,6 +421,9 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
     private var card: LiftedCard?
     private var session: (any UIDragSession)?
     private var follower: CADisplayLink?
+    /// Over the window while the card is dragged: hears it let go off the list at
+    /// once (the drag itself ends only after the system's own animations).
+    private lazy var offList = SpaceOffListDrop(owner: self)
 
     /// The header the touch now down lifted (nil: it lifted something else).
     private var lifted: (space: String?, touch: Int)?
@@ -420,6 +460,7 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
     }
 
     func detach() {
+        offList.removeFromSuperview()
         guard let list else { return }
         list.removeGestureRecognizer(touches)
         if list.dragDelegate === self { list.dragDelegate = swiftUIDrag }
@@ -504,6 +545,8 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
         let made = makeCard(id, in: cv)
         drag.begin(id, in: cv)
         guard let window = cv.window, let made else { return }
+        offList.frame = window.bounds
+        window.addSubview(offList)
         made.frame.origin = cv.convert(made.frame.origin, to: window)
         window.addSubview(made)
         card = made
@@ -525,6 +568,13 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
         follower?.invalidate()
         follower = nil
         session = nil
+        offList.removeFromSuperview()
+    }
+
+    /// Whether `point` (in `view`) is off the list.
+    func isOffList(_ point: CGPoint, in view: UIView) -> Bool {
+        guard let list, list.window != nil else { return false }
+        return !list.convert(list.bounds, to: view).contains(point)
     }
 
     /// The card glides into `slot` (in the list), turning into its look there; then
@@ -568,10 +618,23 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
         card = nil
     }
 
+    /// This list's drag, now over `session`.
+    func owns(_ session: any UIDropSession) -> Bool {
+        guard let mine = self.session, let theirs = session.localDragSession else { return false }
+        return mine as AnyObject === theirs as AnyObject
+    }
+
+    /// Let go off the list: the card flies back at once.
+    func letGoOffList() {
+        stopFollowing()
+        if let list { flyBack(in: list) }
+    }
+
     /// Let go off the list (or the drag was called off): the card flies back into its
     /// slot, where it was.
     private func flyBack(in cv: UICollectionView) {
         guard let card, !card.landing else { return }
+        card.landing = true  // no longer follows; flies back once
         drag.exit()
         // The slot is back where the card was once the list has laid that out.
         DispatchQueue.main.async { [weak self, weak cv] in
@@ -687,7 +750,7 @@ final class LiftedCard: UIView {
     private let resting = UIImageView()
     private let lifted = UIImageView()
     private let shadow = UIView()
-    private(set) var landing = false
+    var landing = false
 
     init(lifted: UIImage, resting: UIImage) {
         super.init(frame: CGRect(origin: .zero, size: resting.size))
