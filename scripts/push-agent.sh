@@ -2,7 +2,7 @@
 # wierdr-push on this Mac: the daemon behind Wierdr's agents Live Activity
 # (docs/live-activity.md). Runs as a launchd agent of the logged-in user.
 #
-#   scripts/push-agent.sh install     release build → ~/.local/bin/wierdr-push, LaunchAgent, start
+#   scripts/push-agent.sh install     release build → ~/.local/share/wierdr-push (+ ~/.local/bin link), LaunchAgent, start
 #   scripts/push-agent.sh uninstall   stop and remove the LaunchAgent (the binary stays)
 #   scripts/push-agent.sh restart     restart it (after editing ~/.config/wierdr/push.json)
 #   scripts/push-agent.sh status      launchd state + `wierdr-push status`
@@ -15,14 +15,20 @@ cd "$(dirname "$0")/.."
 
 LABEL=pw.xff.wierdr.push
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-BIN="$HOME/.local/bin/wierdr-push"
+# The binary needs its resource bundle (WierdrKit_WierdrModel.bundle: programs.json) beside it.
+DIR="$HOME/.local/share/wierdr-push"
+BIN="$DIR/wierdr-push"
+LINK="$HOME/.local/bin/wierdr-push"
 LOG="$HOME/Library/Logs/wierdr-push.log"
 DOMAIN="gui/$(id -u)"
 
 install() {
   (cd Packages/WierdrKit && swift build -c release --product wierdr-push 2>&1 | grep -E "error|Compiling|Build complete" | tail -3)
-  mkdir -p "$(dirname "$BIN")" "$(dirname "$PLIST")"
+  mkdir -p "$DIR" "$(dirname "$LINK")" "$(dirname "$PLIST")"
+  rm -rf "$DIR/wierdr-push" "$DIR"/*.bundle
   cp Packages/WierdrKit/.build/release/wierdr-push "$BIN"
+  cp -R Packages/WierdrKit/.build/release/*.bundle "$DIR/"
+  ln -sf "$BIN" "$LINK"
   [ -f "$HOME/.config/wierdr/push.json" ] || echo "note: no ~/.config/wierdr/push.json yet (see the top of this script)"
   cat > "$PLIST" <<PL
 <?xml version="1.0" encoding="UTF-8"?>

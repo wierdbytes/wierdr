@@ -84,7 +84,7 @@ iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)         
    cat > ~/.config/wierdr/push.json <<'EOF'
    {"key_file": "~/.config/wierdr/AuthKey_XXXXXXXXXX.p8", "key_id": "XXXXXXXXXX", "team_id": "AUL4CCB2XY"}
    EOF
-   scripts/push-agent.sh install      # release-сборка, ~/.local/bin/wierdr-push, LaunchAgent
+   scripts/push-agent.sh install      # release-сборка → ~/.local/share/wierdr-push (+ ссылка в ~/.local/bin), LaunchAgent
    ```
 3. Поставить на iPhone сборку с Live Activity (`make ipa && scripts/iphone.sh install`) и
    один раз открыть Wierdr, подключённый к этому Mac. В **Settings → Live Activity**
