@@ -22,12 +22,18 @@ public struct Planner: Sendable {
     public typealias State = AgentsActivityAttributes.ContentState
 
     public struct Settings: Sendable {
-        /// Nothing active for this long ends the activity (a short break in a turn doesn't).
+        /// Nothing active for this long ends the activity (a short break in a turn
+        /// doesn't); the devices show the idle state meanwhile.
         public var endDelay: TimeInterval = 20
+        /// A start for done agents only waits this long: one another client looks at
+        /// right away (or a blip) starts nothing.
+        public var doneStartDelay: TimeInterval = 5
         /// ActivityKit ends an activity after 8 hours; start a fresh one a bit before.
         public var maxAge: TimeInterval = 7.75 * 3600
-        /// Updates without an alert at most this often (priority 5, coalesced).
+        /// Updates that change no status (titles, models) at most this often (priority 5).
         public var minInterval: TimeInterval = 5
+        /// The shown ages (`28m`) are refreshed at most this often, when one would change.
+        public var tickInterval: TimeInterval = 60
         /// An update this often anyway, moving the stale date on.
         public var heartbeat: TimeInterval = 10 * 60
         /// The activity reads stale this long after the last push (the Mac asleep, off line).
@@ -70,6 +76,8 @@ public struct Planner: Sendable {
     public var settings = Settings()
     /// By lane key.
     public var running: [String: Running] = [:]
+    /// Since when only done agents are active (the start waits `doneStartDelay`).
+    var doneSince: Double?
 
     public init(settings: Settings = Settings(), running: [String: Running] = [:]) {
         self.settings = settings
@@ -100,71 +108,91 @@ public struct Planner: Sendable {
             running[key] = nil
         }
 
+        // Only done agents and nothing running: wait a moment before starting.
+        let doneOnly = active && summary.working == 0 && summary.blocked == 0
+        if !doneOnly { doneSince = nil } else if doneSince == nil { doneSince = t }
+
         for key in lanes.keys.sorted() {
             let (lane, laneDevices) = lanes[key]!
-            if var r = running[key] {
-                if !active {
-                    let since = r.inactiveSince ?? t
-                    if t - since >= settings.endDelay {
-                        actions.append(.end(lane: lane, channel: r.channel, state: summary))
-                        running[key] = nil
-                    } else {
-                        r.inactiveSince = since
-                        running[key] = r
-                    }
-                    continue
-                }
-                r.inactiveSince = nil
-                if t - r.startedAt >= settings.maxAge, let fresh = channels[key], fresh != r.channel {
-                    // A fresh activity (on a channel of its own) before ActivityKit ends this one.
-                    actions.append(.end(lane: lane, channel: r.channel, state: summary))
-                    running[key] = nil
-                    actions += start(lane: lane, devices: laneDevices, channel: fresh, summary: summary,
-                                     host: host, now: t, sound: false)
-                    continue
-                }
-                // Devices that registered since (or got a new token), or where it's gone
-                // (dismissed, the app reinstalled: the app wrote so after the start): start it there.
-                var joined: [String: PushRegistry.Device] = [:]
-                for (id, d) in laneDevices {
-                    if r.devices[id] != d.startToken {
-                        joined[id] = d
-                    } else if d.hasActivity == false,
-                              d.updated > (r.startedOn?[id] ?? r.startedAt) + Self.goneGrace {
-                        joined[id] = d
-                    }
-                }
-                r.devices = r.devices.filter { laneDevices[$0.key] != nil }
-                if !joined.isEmpty {
-                    for id in joined.keys.sorted() {
-                        let d = joined[id]!
-                        actions.append(.start(lane: lane, channel: r.channel, device: id, token: d.startToken,
-                                              state: summary, alert: startAlert(summary, host: host, sound: false)))
-                        r.devices[id] = d.startToken
-                        r.startedOn = (r.startedOn ?? [:]).merging([id: t]) { $1 }
-                    }
-                }
-                if r.dirty || !summary.sameContent(as: r.last) {
-                    let alert = Self.alert(from: r.last, to: summary)
-                    if alert != nil || t - r.lastSentAt >= settings.minInterval {
-                        actions.append(.update(lane: lane, channel: r.channel, state: summary,
-                                               priority: alert == nil ? 5 : 10, alert: alert))
-                        r.last = summary
-                        r.lastSentAt = t
-                        r.dirty = false
-                    }
-                } else if t - r.lastSentAt >= settings.heartbeat {
-                    actions.append(.update(lane: lane, channel: r.channel, state: summary, priority: 5, alert: nil))
-                    r.last = summary
-                    r.lastSentAt = t
-                }
-                running[key] = r
-            } else if active, let channel = channels[key] {
+            guard var r = running[key] else {
+                guard active, let channel = channels[key] else { continue }
+                if doneOnly, t - (doneSince ?? t) < settings.doneStartDelay { continue }
                 actions += start(lane: lane, devices: laneDevices, channel: channel, summary: summary,
                                  host: host, now: t, sound: summary.blocked > 0)
+                continue
             }
+            if active {
+                r.inactiveSince = nil
+            } else {
+                let since = r.inactiveSince ?? t
+                if t - since >= settings.endDelay {
+                    actions.append(.end(lane: lane, channel: r.channel, state: summary))
+                    running[key] = nil
+                    continue
+                }
+                r.inactiveSince = since
+            }
+            if active, t - r.startedAt >= settings.maxAge, let fresh = channels[key], fresh != r.channel {
+                // A fresh activity (on a channel of its own) before ActivityKit ends this one.
+                actions.append(.end(lane: lane, channel: r.channel, state: summary))
+                running[key] = nil
+                actions += start(lane: lane, devices: laneDevices, channel: fresh, summary: summary,
+                                 host: host, now: t, sound: false)
+                continue
+            }
+            // Devices that registered since (or got a new token), or where it's gone
+            // (dismissed, the app reinstalled: the app wrote so after the start): start it there.
+            r.devices = r.devices.filter { laneDevices[$0.key] != nil }
+            for id in laneDevices.keys.sorted() where active {
+                let d = laneDevices[id]!
+                let gone = d.hasActivity == false && d.updated > (r.startedOn?[id] ?? r.startedAt) + Self.goneGrace
+                guard r.devices[id] != d.startToken || gone else { continue }
+                actions.append(.start(lane: lane, channel: r.channel, device: id, token: d.startToken,
+                                      state: summary, alert: startAlert(summary, host: host, sound: false)))
+                r.devices[id] = d.startToken
+                r.startedOn = (r.startedOn ?? [:]).merging([id: t]) { $1 }
+            }
+            if let update = update(from: r, to: summary, now: t) {
+                actions.append(.update(lane: lane, channel: r.channel, state: summary,
+                                       priority: update.priority, alert: update.alert))
+                r.last = summary
+                r.lastSentAt = t
+                r.dirty = false
+            }
+            running[key] = r
         }
         return actions
+    }
+
+    /// Whether to update a running activity now, and how: a status change (also to
+    /// nothing active, so another client's look shows at once) or an alert right
+    /// away with priority 10; other changes coalesced with priority 5; a refresh when
+    /// a shown age would change; a heartbeat.
+    private func update(from r: Running, to summary: State, now t: Double)
+        -> (priority: Int, alert: ActivityPayload.Alert?)? {
+        let elapsed = t - r.lastSentAt
+        if r.dirty || !summary.sameContent(as: r.last) {
+            let alert = Self.alert(from: r.last, to: summary)
+            if alert != nil || Self.statusChanged(from: r.last, to: summary) { return (10, alert) }
+            return elapsed >= settings.minInterval || r.dirty ? (5, nil) : nil
+        }
+        if elapsed >= settings.tickInterval,
+           Self.ticks(summary, at: t) != Self.ticks(r.last, at: r.lastSentAt) {
+            return (5, nil)
+        }
+        return elapsed >= settings.heartbeat ? (5, nil) : nil
+    }
+
+    /// Counts, or which agents show with which status, differ.
+    static func statusChanged(from old: State, to new: State) -> Bool {
+        [old.blocked, old.done, old.working, old.idle] != [new.blocked, new.done, new.working, new.idle]
+            || old.agents.map { "\($0.id) \($0.status.rawValue)" } != new.agents.map { "\($0.id) \($0.status.rawValue)" }
+    }
+
+    /// The shown ages, without seconds.
+    static func ticks(_ s: State, at t: Double) -> [String?] {
+        let now = Date(timeIntervalSince1970: t)
+        return s.agents.map { AgentAge.tick(since: $0.sinceDate, now: now) }
     }
 
     private mutating func start(lane: Lane, devices: [String: PushRegistry.Device], channel: String,

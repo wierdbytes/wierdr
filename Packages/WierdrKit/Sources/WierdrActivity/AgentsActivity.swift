@@ -139,3 +139,26 @@ public enum AgentLink {
         return c.queryItems?.first { $0.name == "t" }?.value.flatMap { $0.isEmpty ? nil : $0 }
     }
 }
+
+// MARK: - Age
+
+/// How long an agent has been in its status, as the sidebar writes it: `56s`,
+/// `28m`, `3h`, `2d`. The Live Activity draws it when rendered; `wierdr-push`
+/// sends an update when a shown one would change (`tick`).
+public enum AgentAge {
+    public static func label(since: Date?, now: Date) -> String? {
+        guard let since else { return nil }
+        let s = max(0, Int(now.timeIntervalSince(since)))
+        if s < 60 { return "\(s)s" }
+        if s < 3600 { return "\(s / 60)m" }
+        if s < 86_400 { return "\(s / 3600)h" }
+        return "\(s / 86_400)d"
+    }
+
+    /// The label without its seconds (all of the first minute is one value): what
+    /// a refresh follows, at most once a minute.
+    public static func tick(since: Date?, now: Date) -> String? {
+        guard let since else { return nil }
+        return now.timeIntervalSince(since) < 60 ? "s" : label(since: since, now: now)
+    }
+}

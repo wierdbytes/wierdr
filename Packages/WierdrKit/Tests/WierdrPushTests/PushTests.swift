@@ -42,18 +42,53 @@ private let channels = [lane.key: "CHAN=="]
         #expect(p.step(now: at(3), summary: working, host: "mac", devices: ["d": phone], channels: channels) == [])
     }
 
-    @Test func updatesAreCoalescedButAlertsGoAtOnce() {
+    @Test func statusChangesGoAtOnceOtherChangesAreCoalesced() {
         var p = Planner()
         _ = p.step(now: at(0), summary: state([agent("t1", .working)]), host: "mac", devices: ["d": phone], channels: channels)
         let two = state([agent("t1", .working), agent("t2", .working)])
-        #expect(p.step(now: at(2), summary: two, host: "mac", devices: ["d": phone], channels: channels) == [], "within minInterval: wait")
-        #expect(p.step(now: at(5), summary: two, host: "mac", devices: ["d": phone], channels: channels) == [.update(lane: lane, channel: "CHAN==", state: two, priority: 5, alert: nil)])
-        let blocked = state([agent("t2", .blocked, title: "Allow rm?"), agent("t1", .working)])
-        #expect(p.step(now: at(6), summary: blocked, host: "mac", devices: ["d": phone], channels: channels) == [.update(lane: lane, channel: "CHAN==", state: blocked, priority: 10,
-                                alert: .init(title: "Needs you", body: "Allow rm? — wierdr", sound: true))])
+        #expect(p.step(now: at(1), summary: two, host: "mac", devices: ["d": phone], channels: channels)
+                == [.update(lane: lane, channel: "CHAN==", state: two, priority: 10, alert: nil)])
+        let renamed = state([agent("t1", .working, title: "Renamed"), agent("t2", .working)])
+        #expect(p.step(now: at(2), summary: renamed, host: "mac", devices: ["d": phone], channels: channels) == [],
+                "a title only: within minInterval, wait")
+        #expect(p.step(now: at(6), summary: renamed, host: "mac", devices: ["d": phone], channels: channels)
+                == [.update(lane: lane, channel: "CHAN==", state: renamed, priority: 5, alert: nil)])
+        let blocked = state([agent("t2", .blocked, title: "Allow rm?"), agent("t1", .working, title: "Renamed")])
+        #expect(p.step(now: at(7), summary: blocked, host: "mac", devices: ["d": phone], channels: channels)
+                == [.update(lane: lane, channel: "CHAN==", state: blocked, priority: 10,
+                            alert: .init(title: "Needs you", body: "Allow rm? — wierdr", sound: true))])
         let done = state([agent("t2", .blocked, title: "Allow rm?"), agent("t1", .done, title: "Fix it")])
-        #expect(p.step(now: at(7), summary: done, host: "mac", devices: ["d": phone], channels: channels) == [.update(lane: lane, channel: "CHAN==", state: done, priority: 10,
-                                alert: .init(title: "Done", body: "Fix it — wierdr", sound: false))])
+        #expect(p.step(now: at(8), summary: done, host: "mac", devices: ["d": phone], channels: channels)
+                == [.update(lane: lane, channel: "CHAN==", state: done, priority: 10,
+                            alert: .init(title: "Done", body: "Fix it — wierdr", sound: false))])
+    }
+
+    @Test func shownAgesAreRefreshedOnceAMinute() {
+        var p = Planner()
+        var a = agent("t1", .working)
+        a.since = at(0).timeIntervalSince1970
+        let s = state([a])
+        _ = p.step(now: at(0), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+        #expect(p.step(now: at(59), summary: s, host: "mac", devices: ["d": phone], channels: channels) == [], "0s…59s")
+        #expect(p.step(now: at(60), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+                == [.update(lane: lane, channel: "CHAN==", state: s, priority: 5, alert: nil)], "1m")
+        #expect(p.step(now: at(100), summary: s, host: "mac", devices: ["d": phone], channels: channels) == [])
+        #expect(p.step(now: at(120), summary: s, host: "mac", devices: ["d": phone], channels: channels).count == 1, "2m")
+    }
+
+    @Test func aStartForDoneAgentsOnlyWaitsAMoment() {
+        var p = Planner()
+        let done = state([agent("t1", .done)])
+        #expect(p.step(now: at(0), summary: done, host: "mac", devices: ["d": phone], channels: channels) == [])
+        // Looked at elsewhere right away: nothing started.
+        #expect(p.step(now: at(2), summary: state([], idle: 1), host: "mac", devices: ["d": phone], channels: channels) == [])
+        #expect(p.step(now: at(3), summary: done, host: "mac", devices: ["d": phone], channels: channels) == [])
+        let started = p.step(now: at(8), summary: done, host: "mac", devices: ["d": phone], channels: channels)
+        guard case .start? = started.first else { Issue.record("\(started)"); return }
+        // A working agent starts at once.
+        var q = Planner()
+        #expect(q.step(now: at(0), summary: state([agent("t1", .working)]), host: "mac", devices: ["d": phone],
+                       channels: channels).count == 1)
     }
 
     @Test func heartbeatMovesTheStaleDate() {
@@ -64,16 +99,23 @@ private let channels = [lane.key: "CHAN=="]
         #expect(p.step(now: at(600), summary: s, host: "mac", devices: ["d": phone], channels: channels).count == 1)
     }
 
-    @Test func endsAfterAWhileWithNothingActive() {
+    @Test func showsNothingActiveAtOnceAndEndsAfterAWhile() {
         var p = Planner()
-        _ = p.step(now: at(0), summary: state([agent("t1", .working)]), host: "mac", devices: ["d": phone], channels: channels)
+        _ = p.step(now: at(0), summary: state([agent("t1", .done)]), host: "mac", devices: ["d": phone], channels: channels)
+        let done = state([agent("t1", .done)])
+        _ = p.step(now: at(10), summary: done, host: "mac", devices: ["d": phone], channels: channels)
+        // Seen on another client: the devices show it at once (priority 10)…
         let idle = state([], idle: 1)
-        #expect(p.step(now: at(10), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
-        // Back to work within the delay: it goes on.
-        #expect(p.step(now: at(15), summary: state([agent("t1", .working)]), host: "mac", devices: ["d": phone], channels: channels) == [])
-        #expect(p.step(now: at(20), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
-        #expect(p.step(now: at(39), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
-        #expect(p.step(now: at(40), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [.end(lane: lane, channel: "CHAN==", state: idle)])
+        #expect(p.step(now: at(20), summary: idle, host: "mac", devices: ["d": phone], channels: channels)
+                == [.update(lane: lane, channel: "CHAN==", state: idle, priority: 10, alert: nil)])
+        #expect(p.step(now: at(30), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
+        // …back to work within the delay: it goes on.
+        let working = state([agent("t1", .working)])
+        #expect(p.step(now: at(35), summary: working, host: "mac", devices: ["d": phone], channels: channels).count == 1)
+        _ = p.step(now: at(40), summary: idle, host: "mac", devices: ["d": phone], channels: channels)
+        #expect(p.step(now: at(59), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
+        #expect(p.step(now: at(60), summary: idle, host: "mac", devices: ["d": phone], channels: channels)
+                == [.end(lane: lane, channel: "CHAN==", state: idle)])
         #expect(p.running.isEmpty)
     }
 

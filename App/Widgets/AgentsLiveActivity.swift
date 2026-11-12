@@ -124,7 +124,7 @@ private struct LockScreenView: View {
 
 // MARK: - Pieces
 
-/// One agent: status, program, title; its space and model; how long in this status.
+/// One agent: status, program, title, its space, how long in this status.
 private struct AgentLine: View {
     var agent: AgentsActivityAttributes.Agent
 
@@ -145,13 +145,14 @@ private struct AgentLine: View {
                 .foregroundStyle(Palette.muted)
                 .lineLimit(1)
                 .fixedSize()
-            if let since = agent.sinceDate {
-                // Counts up by itself (m:ss, h:mm:ss), no pushes needed.
-                Text(timerInterval: min(since, .now)...Date.distantFuture, countsDown: false)
-                    .font(.system(size: 12).monospacedDigit())
+            // As in the sidebar (`28m`); wierdr-push refreshes it when it would change.
+            if let age = AgentAge.label(since: agent.sinceDate, now: .now) {
+                Text(age)
+                    .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(Palette.dim)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: 50, alignment: .trailing)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .frame(minWidth: 30, alignment: .trailing)
             }
         }
         .frame(maxWidth: .infinity)

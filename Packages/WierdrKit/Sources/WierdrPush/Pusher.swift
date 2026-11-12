@@ -204,7 +204,7 @@ public final class Pusher {
                                                 channel: channel, alert: alert, stale: stale, now: now)
             do {
                 try await apns.start(token: token, bundle: lane.bundle, env: lane.env, payload: payload)
-                log("start on \(devices[device]?.name ?? device): \(ActivitySummary.line(s))")
+                log("start on \(devices[device]?.name ?? device): \(Self.describe(s))")
                 return true
             } catch let e as APNsError where e.isBadToken {
                 log("start on \(devices[device]?.name ?? device): \(e); forgetting its token")
@@ -221,7 +221,7 @@ public final class Pusher {
             do {
                 try await apns.broadcast(channel: channel, bundle: lane.bundle, env: lane.env, payload: payload,
                                          priority: priority, expiration: stale)
-                log("update: \(ActivitySummary.line(s))\(alert.map { " — alert \($0.title): \($0.body)" } ?? "")")
+                log("update p\(priority): \(Self.describe(s))\(alert.map { " — alert \($0.title): \($0.body)" } ?? "")")
                 return true
             } catch let e as APNsError where e.isBadChannel {
                 log("update: \(e); a new activity on a new channel")
@@ -236,13 +236,19 @@ public final class Pusher {
             let payload = ActivityPayload.end(state: s, dismissal: now.addingTimeInterval(-1), now: now)
             do {
                 try await apns.broadcast(channel: channel, bundle: lane.bundle, env: lane.env, payload: payload,
-                                         priority: 5, expiration: now.addingTimeInterval(3600))
+                                         priority: 10, expiration: now.addingTimeInterval(3600))
                 log("end")
             } catch {
                 log("end failed: \(error)")
             }
             return true
         }
+    }
+
+    /// `1 done · 1 working [done t9h "Title", working t5w "Title"]` for the log.
+    static func describe(_ s: ActivitySummary.State) -> String {
+        let agents = s.agents.map { "\($0.status.rawValue) \($0.id) \"\($0.title.prefix(30))\"" }
+        return ActivitySummary.line(s) + (agents.isEmpty ? "" : " [\(agents.joined(separator: ", "))]")
     }
 
     /// Ends every running activity now (`wierdr-push reset`).
