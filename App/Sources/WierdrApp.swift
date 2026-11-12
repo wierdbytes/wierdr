@@ -1,4 +1,5 @@
 import SwiftUI
+import WierdrActivity
 import WierdrModel
 
 @main
@@ -9,6 +10,7 @@ struct WierdrApp: App {
 
     init() {
         AppFont.checkRegistered()
+        LiveActivities.shared.start()
         let connector = LiveConnector()
         _connector = State(initialValue: connector)
         _app = State(initialValue: AppModel(services: connector.services))
@@ -39,6 +41,7 @@ struct WierdrApp: App {
                 // `-demo YES` (UserDefaults `demo`) opens the demo directly (screenshots, UI tests).
                 if UserDefaults.standard.bool(forKey: "demo"), app.mode == .none { app.startDemo() }
                 #if DEBUG
+                await LiveActivityDemo.run()
                 await DebugAutoConnect.run(app)
                 #endif
                 if !UserDefaults.standard.bool(forKey: "demo") { await app.reconnectLastHost() }
@@ -66,6 +69,10 @@ struct WierdrApp: App {
             }
             .environment(connector)
             .hostKeyAlert(connector.active)
+            .onOpenURL { url in
+                guard let address = AgentLink.address(in: url) else { return }
+                Task { await app.openAgent(address) }
+            }
     }
 }
 

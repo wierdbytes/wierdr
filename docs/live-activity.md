@@ -1,0 +1,115 @@
+# Live Activity агентов
+
+Пока хоть один агент работает, закончил (и ты ещё не смотрел) или ждёт тебя, на экране
+блокировки iPhone, в Dynamic Island и в Smart Stack часов висит Live Activity Wierdr.
+В ней:
+
+- счётчики по статусам: `! 1 · ● 2 · ◔ 3` (нужен ты, закончил, работает), как группы
+  списка агентов на iPhone (агент считается там же, куда его поставил бы самый срочный
+  его саб‑агент);
+- до 4 агентов (в Dynamic Island до 3) в порядке списка: статус, иконка программы,
+  заголовок строки, спейс (и машина, если агент не на этом компьютере), сколько агент в
+  этом статусе (тикает сам);
+- тап по агенту открывает Wierdr сразу на его панели (`wierdr://agent?t=<адрес>`).
+
+Когда агент начинает ждать тебя, экран загорается, Dynamic Island раскрывается и звучит
+звук: «Needs you — <заголовок> — <спейс>». Когда агент закончил, экран тоже загорается и
+остров раскрывается, но без звука. Если все агенты простаивают дольше 20 с, Live Activity
+закрывается, а когда кто‑то снова начинает работать, открывается новая.
+
+## Как это устроено
+
+```
+iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)                 APNs
+ ActivityKit: push-to-start token ──SSH──▶ документ `wierdr-push` в ядре
+                                           wierdr-push: зеркало ядра (WorkspaceEngine,
+                                           только чтение) → сводка → Planner
+                                             start (на токен устройства) ─────────────▶ ─┐
+                                             update / end (broadcast на канал) ───────▶ ─┤
+ Lock Screen / Dynamic Island ◀────────────────────────────────────────────────────────── ┘
+```
+
+- **Регистрация.** Приложение получает от ActivityKit push‑to‑start токен и, когда сессия
+  становится живой (а также при смене токена или настройки Live Activities), записывает свою
+  запись в документ `wierdr-push` того компьютера, к которому подключено: имя, bundle id,
+  окружение APNs (`aps-environment` из профиля) и токен. Запись идёт через `doc.set` с CAS.
+  Если Live Activities для Wierdr выключены, запись удаляется.
+- **`wierdr-push`** на Mac (launchd, `scripts/push-agent.sh`). Это `WorkspaceEngine` в
+  режиме только чтения над локальным `hc connect`, то есть тот же разбор, что в приложении.
+  Раз в секунду он строит сводку (`ActivitySummary`: `Workspace.inbox`, общий со списком
+  агентов на iPhone) и отдаёт её `Planner`. Тот решает, что слать:
+  - есть активные агенты и нет активности → **push‑to‑start** на токен каждого устройства с
+    `input-push-channel` (iOS 18), так что активность сразу подписана на канал;
+  - сводка изменилась → **broadcast update** на канал. Если агент стал «нужен ты» или
+    «закончил», update уходит сразу, с alert и `apns-priority: 10`. Остальные изменения
+    идут с priority 5 не чаще раза в 5 с. Если изменений нет, раз в 10 мин уходит
+    heartbeat, чтобы сдвинуть `stale-date` (25 мин). Если Mac уснул, активность через
+    25 мин помечается «Not updated»;
+  - нет активных агентов 20 с → **broadcast end**, активность убирается сразу;
+  - активность живёт 7 ч 45 мин → end и новый start (ActivityKit сам закрывает её через 8 ч);
+  - новое устройство или новый токен → start только на нём, на тот же канал.
+- **Канал** создаётся один раз на (bundle id, окружение) с политикой «хранить последнее
+  сообщение», так что выключенный телефон получит актуальное состояние, когда снова
+  окажется в сети. Каналы, идущие активности и отвергнутые токены лежат в
+  `~/.config/wierdr/push-state.json`, поэтому перезапуск демона продолжает ту же
+  активность.
+- **Подпись запросов**: токен JWT (ES256) от `.p8` ключа APNs команды, переиспользуется
+  50 мин; HTTP/2 через `URLSession`.
+- Приложение, если на телефоне оказалось две активности Wierdr (start разминулся с end),
+  оставляет последнюю.
+
+Код: `Packages/WierdrKit/Sources/WierdrActivity` (атрибуты, состояние, документ, ссылка;
+общий для приложения, виджета и Mac), `WierdrPush` (`ActivitySummary`, `Planner`,
+`ActivityPayload`, `APNsClient`, `Pusher`), `wierdr-push` (CLI); в приложении
+`App/Sources/Activity/LiveActivities.swift` и виджет `App/Widgets/`.
+
+## Настройка (один раз)
+
+1. **developer.apple.com → Certificates, IDs & Profiles**, команда `AUL4CCB2XY`:
+   - **Keys → +**: включить *Apple Push Notifications service (APNs)* (окружение
+     Sandbox & Production), скачать `AuthKey_XXXXXXXXXX.p8`. Ключ скачивается один раз.
+   - **Identifiers → `pw.xff.wierdr`**: у *Push Notifications* должна стоять галка
+     **Broadcast Capability**. Сам Push Notifications Xcode включает автоматически при
+     первой сборке с `aps-environment`, а Broadcast нужно отметить вручную, иначе каналы
+     не создаются.
+2. На Mac:
+   ```sh
+   mkdir -p ~/.config/wierdr && mv ~/Downloads/AuthKey_XXXXXXXXXX.p8 ~/.config/wierdr/
+   cat > ~/.config/wierdr/push.json <<'EOF'
+   {"key_file": "~/.config/wierdr/AuthKey_XXXXXXXXXX.p8", "key_id": "XXXXXXXXXX", "team_id": "AUL4CCB2XY"}
+   EOF
+   scripts/push-agent.sh install      # release-сборка, ~/.local/bin/wierdr-push, LaunchAgent
+   ```
+3. Поставить на iPhone сборку с Live Activity (`make ipa && scripts/iphone.sh install`) и
+   один раз открыть Wierdr, подключённый к этому Mac. В **Settings → Live Activity**
+   должно стать «On mentoair».
+4. Первая Live Activity придёт с вопросом iOS «Allow Live Activities from Wierdr?» → Allow.
+
+Проверка и обслуживание:
+
+```sh
+scripts/push-agent.sh status   # launchd + конфиг, устройства, канал, идущая активность, сводка сейчас
+scripts/push-agent.sh log      # что и когда отправлено (start/update/end, ошибки APNs)
+wierdr-push reset              # закончить идущую активность и забыть её (и отвергнутые токены)
+```
+
+Посмотреть активность без APNs в симуляторе (DEBUG):
+`xcrun simctl launch <sim> pw.xff.wierdr -demo YES -live-activity-demo YES`, затем
+заблокировать экран (`scripts/iphone-sim.sh` с WDA: `curl -X POST localhost:<port>/wda/lock`).
+
+## Ограничения
+
+- Только iPhone. На iPad iOS не показывает Live Activities сторонних приложений, поэтому
+  ActivityKit там выключен и запись не делается.
+- `wierdr-push` должен работать на том компьютере, к которому подключается телефон: он
+  читает документ `wierdr-push` из своего ядра. Агенты с машин, добавленных в это ядро
+  (`hc machine add`), в сводку попадают.
+- Mac должен быть включён и не спать. Иначе активность через 25 мин показывает
+  «Not updated», а закроется по таймауту ActivityKit.
+- Если смахнуть активность, она вернётся только при следующем старте: после того как все
+  агенты 20 с простояли, а потом кто‑то снова начал работать.
+- Сборки подписаны development‑профилем, значит окружение APNs — sandbox. Для
+  TestFlight или App Store оно станет `production`. Приложение берёт окружение из
+  профиля, демон создаёт канал на каждое окружение.
+- Бюджет пушей задаёт iOS. Priority 10 уходит только с alert, остальное идёт с priority 5,
+  плюс `NSSupportsLiveActivitiesFrequentUpdates`.

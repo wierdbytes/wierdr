@@ -47,33 +47,13 @@ enum Format {
     }
 
     /// Strip leading non-letter/digit characters (spinner glyphs, bullets) and trim.
-    static func cleanTitle(_ s: String?) -> String {
-        guard let s else { return "" }
-        let trimmed = s.drop { !($0.isLetter || $0.isNumber) }
-        return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    static func cleanTitle(_ s: String?) -> String { AgentText.cleanTitle(s) }
 
     /// A terminal title worth showing: not the program name/key, not a path, no `@`.
-    static func isTelling(_ title: String, program: Program) -> Bool {
-        let t = cleanTitle(title)
-        if t.isEmpty { return false }
-        let lower = t.lowercased()
-        if lower == program.name.lowercased() || lower == program.key.lowercased() { return false }
-        if t.hasPrefix("~") || t.hasPrefix("/") || t.contains("@") { return false }
-        return true
-    }
+    static func isTelling(_ title: String, program: Program) -> Bool { AgentText.isTelling(title, program: program) }
 
-    /// Agent row title (§10.4): status message, else tab name (named and ≠ program),
-    /// else a telling title, else program name, else tab name, else address.
-    static func agentTitle(_ t: TerminalInfo, tab: Tab?) -> String {
-        let msg = cleanTitle(t.message)
-        if !msg.isEmpty { return msg }
-        if let tab, !tab.name.isEmpty, tab.name.lowercased() != t.program.name.lowercased() { return tab.name }
-        if isTelling(t.title, program: t.program) { return cleanTitle(t.title) }
-        if !t.program.name.isEmpty { return t.program.name }
-        if let tab { return tab.displayName }
-        return t.address
-    }
+    /// Agent row title (§10.4): `AgentText.title`.
+    static func agentTitle(_ t: TerminalInfo, tab: Tab?) -> String { AgentText.title(t, tab: tab) }
 
     /// A sub-agent's title under its parent (`kidLabel`): its own word (pi's
     /// session name), else a telling title, else its name (`hc run --name`), its

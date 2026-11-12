@@ -1,0 +1,214 @@
+import Crypto
+import Foundation
+import Testing
+@testable import WierdrPush
+import WierdrActivity
+import WierdrModel
+
+typealias State = AgentsActivityAttributes.ContentState
+typealias Agent = AgentsActivityAttributes.Agent
+
+private func agent(_ id: String, _ status: AgentStatusWord, title: String? = nil) -> Agent {
+    Agent(id: id, title: title ?? "task \(id)", space: "wierdr", status: status, since: 1_700_000_000,
+          model: "Opus 5.5", icon: "program.claude")
+}
+
+private func state(_ agents: [Agent], idle: Int = 0) -> State {
+    State(blocked: agents.filter { $0.status == .blocked }.count, done: agents.filter { $0.status == .done }.count,
+          working: agents.filter { $0.status == .working }.count, idle: idle, agents: agents, at: 0)
+}
+
+private let phone = PushRegistry.Device(name: "iPhone", bundle: "pw.xff.wierdr", env: "development",
+                                        startToken: "aa11", updated: 0)
+private let lane = Lane(bundle: "pw.xff.wierdr", env: .development)
+private let channels = [lane.key: "CHAN=="]
+
+@Suite struct PlannerTests {
+    func at(_ s: Double) -> Date { Date(timeIntervalSince1970: 1_800_000_000 + s) }
+
+    @Test func startsWhenAnAgentWorksAndOnlyWithAChannel() {
+        var p = Planner()
+        let working = state([agent("t1", .working)])
+        #expect(p.step(now: at(0), summary: state([], idle: 2), host: "mac", devices: ["d": phone], channels: channels) == [])
+        #expect(p.step(now: at(1), summary: working, host: "mac", devices: ["d": phone], channels: [:]) == [])
+        let actions = p.step(now: at(2), summary: working, host: "mac", devices: ["d": phone], channels: channels)
+        guard case let .start(l, channel, device, token, s, alert)? = actions.first, actions.count == 1 else {
+            Issue.record("\(actions)"); return
+        }
+        #expect(l == lane); #expect(channel == "CHAN=="); #expect(device == "d")
+        #expect(token == "aa11"); #expect(s == working)
+        #expect(alert == .init(title: "mac", body: "1 working", sound: false))
+        // Nothing new: nothing to send.
+        #expect(p.step(now: at(3), summary: working, host: "mac", devices: ["d": phone], channels: channels) == [])
+    }
+
+    @Test func updatesAreCoalescedButAlertsGoAtOnce() {
+        var p = Planner()
+        _ = p.step(now: at(0), summary: state([agent("t1", .working)]), host: "mac", devices: ["d": phone], channels: channels)
+        let two = state([agent("t1", .working), agent("t2", .working)])
+        #expect(p.step(now: at(2), summary: two, host: "mac", devices: ["d": phone], channels: channels) == [], "within minInterval: wait")
+        #expect(p.step(now: at(5), summary: two, host: "mac", devices: ["d": phone], channels: channels) == [.update(lane: lane, channel: "CHAN==", state: two, priority: 5, alert: nil)])
+        let blocked = state([agent("t2", .blocked, title: "Allow rm?"), agent("t1", .working)])
+        #expect(p.step(now: at(6), summary: blocked, host: "mac", devices: ["d": phone], channels: channels) == [.update(lane: lane, channel: "CHAN==", state: blocked, priority: 10,
+                                alert: .init(title: "Needs you", body: "Allow rm? — wierdr", sound: true))])
+        let done = state([agent("t2", .blocked, title: "Allow rm?"), agent("t1", .done, title: "Fix it")])
+        #expect(p.step(now: at(7), summary: done, host: "mac", devices: ["d": phone], channels: channels) == [.update(lane: lane, channel: "CHAN==", state: done, priority: 10,
+                                alert: .init(title: "Done", body: "Fix it — wierdr", sound: false))])
+    }
+
+    @Test func heartbeatMovesTheStaleDate() {
+        var p = Planner()
+        let s = state([agent("t1", .working)])
+        _ = p.step(now: at(0), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+        #expect(p.step(now: at(599), summary: s, host: "mac", devices: ["d": phone], channels: channels) == [])
+        #expect(p.step(now: at(600), summary: s, host: "mac", devices: ["d": phone], channels: channels).count == 1)
+    }
+
+    @Test func endsAfterAWhileWithNothingActive() {
+        var p = Planner()
+        _ = p.step(now: at(0), summary: state([agent("t1", .working)]), host: "mac", devices: ["d": phone], channels: channels)
+        let idle = state([], idle: 1)
+        #expect(p.step(now: at(10), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
+        // Back to work within the delay: it goes on.
+        #expect(p.step(now: at(15), summary: state([agent("t1", .working)]), host: "mac", devices: ["d": phone], channels: channels) == [])
+        #expect(p.step(now: at(20), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
+        #expect(p.step(now: at(39), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [])
+        #expect(p.step(now: at(40), summary: idle, host: "mac", devices: ["d": phone], channels: channels) == [.end(lane: lane, channel: "CHAN==", state: idle)])
+        #expect(p.running.isEmpty)
+    }
+
+    @Test func aNewDeviceJoinsAndAGoneOneEndsIt() {
+        var p = Planner()
+        let s = state([agent("t1", .working)])
+        _ = p.step(now: at(0), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+        var pad = phone
+        pad.startToken = "bb22"
+        let actions = p.step(now: at(1), summary: s, host: "mac", devices: ["d": phone, "e": pad], channels: channels)
+        #expect(actions == [.start(lane: lane, channel: "CHAN==", device: "e", token: "bb22", state: s,
+                                        alert: .init(title: "mac", body: "1 working", sound: false))])
+        #expect(p.step(now: at(2), summary: s, host: "mac", devices: [:], channels: channels) == [.end(lane: lane, channel: "CHAN==", state: s)])
+    }
+
+    @Test func restartsBeforeEightHours() {
+        var p = Planner()
+        let s = state([agent("t1", .working)])
+        _ = p.step(now: at(0), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+        let actions = p.step(now: at(7.75 * 3600), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+        #expect(actions.count == 2)
+        guard case .end = actions[0], case .start = actions[1] else { Issue.record("\(actions)"); return }
+        #expect(p.running[lane.key]?.startedAt == at(7.75 * 3600).timeIntervalSince1970)
+    }
+
+    @Test func aFailedUpdateIsSentAgain() {
+        var p = Planner()
+        let s = state([agent("t1", .working)])
+        _ = p.step(now: at(0), summary: s, host: "mac", devices: ["d": phone], channels: channels)
+        p.resend(lane: lane)
+        #expect(p.step(now: at(10), summary: s, host: "mac", devices: ["d": phone], channels: channels) == [.update(lane: lane, channel: "CHAN==", state: s, priority: 5, alert: nil)])
+    }
+}
+
+@Suite struct PayloadTests {
+    @Test func startPayloadDecodesAsActivityKitWould() throws {
+        let s = state([agent("lf/t1", .blocked, title: "Allow rm?"), agent("t2", .working)], idle: 3)
+        let data = ActivityPayload.start(attributes: .init(host: "mentoair"), state: s, channel: "CHAN==",
+                                         alert: .init(title: "mentoair", body: "1 needs you", sound: true),
+                                         stale: Date(timeIntervalSince1970: 2000), now: Date(timeIntervalSince1970: 1000))
+        let aps = try #require((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["aps"] as? [String: Any])
+        #expect(aps["event"] as? String == "start")
+        #expect(aps["timestamp"] as? Int == 1000)
+        #expect(aps["stale-date"] as? Int == 2000)
+        #expect(aps["input-push-channel"] as? String == "CHAN==")
+        #expect(aps["attributes-type"] as? String == "AgentsActivityAttributes")
+        #expect((aps["alert"] as? [String: Any])?["sound"] as? String == "default")
+        #expect(aps["input-push-token"] == nil)
+        let state = try JSONSerialization.data(withJSONObject: aps["content-state"]!)
+        #expect(try JSONDecoder().decode(State.self, from: state) == s)
+        let attrs = try JSONSerialization.data(withJSONObject: aps["attributes"]!)
+        #expect(try JSONDecoder().decode(AgentsActivityAttributes.self, from: attrs).host == "mentoair")
+    }
+
+    @Test func fittingKeepsPushesSmall() {
+        let long = String(repeating: "x", count: 900)
+        let s = state((0..<5).map { agent("t\($0)", .working, title: long) })
+        let fit = ActivityPayload.fitting(s)
+        #expect(fit.agents.count < 5)
+        #expect(fit.working == 5, "counts stay")
+        let data = ActivityPayload.update(state: fit, alert: nil, stale: Date(), now: Date())
+        #expect(data.count < 4096)
+    }
+}
+
+@Suite struct SignerTests {
+    @Test func jWTIsSignedWithTheKey() throws {
+        let key = P256.Signing.PrivateKey()
+        let signer = try APNsSigner(p8: key.pemRepresentation, keyID: "KEY123", teamID: "TEAM456")
+        let token = signer.token(now: Date(timeIntervalSince1970: 1_700_000_000))
+        let parts = token.split(separator: ".").map(String.init)
+        #expect(parts.count == 3)
+        func decode(_ s: String) -> Data {
+            var b = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+            while b.count % 4 != 0 { b += "=" }
+            return Data(base64Encoded: b)!
+        }
+        let header = try JSONSerialization.jsonObject(with: decode(parts[0])) as? [String: String]
+        #expect(header == ["alg": "ES256", "kid": "KEY123"])
+        let claims = try JSONSerialization.jsonObject(with: decode(parts[1])) as? [String: Any]
+        #expect(claims?["iss"] as? String == "TEAM456")
+        #expect(claims?["iat"] as? Int == 1_700_000_000)
+        let sig = try P256.Signing.ECDSASignature(rawRepresentation: decode(parts[2]))
+        #expect(key.publicKey.isValidSignature(sig, for: Data("\(parts[0]).\(parts[1])".utf8)))
+        // Reused within the hour.
+        #expect(signer.token(now: Date(timeIntervalSince1970: 1_700_000_000 + 600)) == token)
+    }
+}
+
+@Suite struct SummaryTests {
+    @Test func inboxBecomesCountsAndUrgentRows() {
+        let claude = Program(key: "claude", name: "Claude Code", iconAsset: "program.claude", tint: false, isAgent: true)
+        func term(_ a: String, _ s: AgentStatus, msg: String? = nil) -> TerminalInfo {
+            TerminalInfo(address: a, program: claude, status: s, message: msg,
+                         statusChangedAt: Date(timeIntervalSince1970: 1_700_000_000.4))
+        }
+        let space = Space(id: "sp1", machine: nil, name: "", displayName: "wierdr", folder: "/x", tabs: [], color: "#123456")
+        func item(_ t: TerminalInfo) -> InboxItem {
+            InboxItem(row: SidebarRow(kind: .agent, paneID: "p" + t.address, tabID: "tb1", terminal: t), space: space)
+        }
+        let inbox = [
+            InboxGroup(status: .blocked, items: [item(term("t1", .blocked, msg: "• Allow rm?"))]),
+            InboxGroup(status: .working, items: [item(term("t2", .working))]),
+            InboxGroup(status: .idle, items: [item(term("t3", .idle)), item(term("t4", .idle))]),
+        ]
+        let s = ActivitySummary.state(of: inbox, tab: { _ in nil }, now: Date(timeIntervalSince1970: 5))
+        let counts: [Int] = [s.blocked, s.done, s.working, s.idle]
+        #expect(counts == [1, 0, 1, 2])
+        #expect(s.agents.map { $0.id } == ["t1", "t2"], "no idle rows")
+        #expect(s.agents[0].title == "Allow rm?")
+        #expect(s.agents[0].status == .blocked)
+        #expect(s.agents[1].title == "Claude Code")
+        #expect(s.agents[1].since == 1_700_000_000)
+        #expect(s.agents[1].spaceColor == "#123456")
+        #expect(!s.agents[1].tint)
+        #expect(ActivitySummary.line(s) == "1 needs you · 1 working")
+        #expect(s.top == .blocked)
+    }
+}
+
+@Suite struct SharedTypeTests {
+    @Test func agentLinkRoundTrip() {
+        let url = AgentLink.url(address: "lf/t1")
+        #expect(url.scheme == "wierdr")
+        #expect(AgentLink.address(in: url) == "lf/t1")
+        #expect(AgentLink.address(in: URL(string: "wierdr://agent")!) == nil)
+        #expect(AgentLink.address(in: URL(string: "https://agent?t=x")!) == nil)
+    }
+
+    @Test func registryUsesSnakeCaseAndSurvivesGarbage() throws {
+        let r = PushRegistry(devices: ["d": phone])
+        let json = String(decoding: r.encoded(), as: UTF8.self)
+        #expect(json.contains("\"start_token\":\"aa11\""), "\(json)")
+        #expect(PushRegistry.decode(r.encoded()) == r)
+        #expect(PushRegistry.decode(Data("null".utf8)) == PushRegistry())
+        #expect(PushRegistry.decode(nil) == PushRegistry())
+    }
+}

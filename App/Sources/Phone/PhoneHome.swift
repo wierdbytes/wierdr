@@ -170,14 +170,8 @@ struct AgentsInbox: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
-    private struct Item: Identifiable {
-        var row: SidebarRow
-        var space: Space
-        var id: String { row.paneID }
-    }
-
     var body: some View {
-        let groups = self.groups
+        let groups = controller.workspace.inbox
         ScrollViewReader { proxy in
             List {
                 ForEach(groups, id: \.status) { group in
@@ -214,28 +208,6 @@ struct AgentsInbox: View {
                 guard let id else { return }
                 withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(controller.listID(ofPane: id)) }
             }
-        }
-    }
-
-    private var groups: [(status: AgentStatus, items: [Item])] {
-        let ws = controller.workspace
-        var byStatus: [AgentStatus: [Item]] = [:]
-        for space in ws.spaces {
-            for row in ws.sidebarRows(for: space) where row.kind == .agent {
-                // An agent goes where its most urgent sub-agent would (one needs you: so does it).
-                guard let status = row.urgency ?? row.terminal?.status else { continue }
-                byStatus[status, default: []].append(Item(row: row, space: space))
-            }
-        }
-        return [AgentStatus.blocked, .done, .working, .idle].compactMap { status in
-            guard let items = byStatus[status], !items.isEmpty else { return nil }
-            return (status, items.sorted { a, b in
-                let ta = a.row.terminal, tb = b.row.terminal
-                if ta?.pinned != tb?.pinned { return ta?.pinned == true }
-                let da = ta?.statusChangedAt ?? .distantPast, db = tb?.statusChangedAt ?? .distantPast
-                if da != db { return da > db }
-                return a.row.paneID < b.row.paneID
-            })
         }
     }
 

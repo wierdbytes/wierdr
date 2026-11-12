@@ -46,6 +46,8 @@ final class HostSession {
     @ObservationIgnored private var wakeUp: CheckedContinuation<Void, Never>?
     @ObservationIgnored private var waitID = 0
     @ObservationIgnored private var liveWatch: Task<Void, Never>?
+    /// Each new connection, once its workspace is live (the Live Activity registration).
+    @ObservationIgnored var onLive: ((CoreConnection, String) -> Void)?
 
     init(endpoint: Endpoint, dark: Bool, fontSize: CGFloat) {
         self.endpoint = endpoint
@@ -202,7 +204,11 @@ final class HostSession {
         liveWatch = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self, self.current === core else { return }
-                if self.workspace.phase == .live { self.state = .live; return }
+                if self.workspace.phase == .live {
+                    self.state = .live
+                    self.onLive?(core, self.coreName ?? self.endpoint.address)
+                    return
+                }
                 try? await Task.sleep(for: .milliseconds(50))
             }
         }

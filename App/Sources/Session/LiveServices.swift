@@ -64,6 +64,7 @@ final class LiveConnector {
         let dark = UITraitCollection.current.userInterfaceStyle != .light
         let fontSize = CGFloat(UserDefaults.standard.object(forKey: TerminalFonts.sizeKey) as? Double ?? Double(TerminalFonts.defaultSize))
         let session = HostSession(endpoint: endpoint, dark: dark, fontSize: fontSize)
+        session.onLive = { core, name in LiveActivities.shared.connected(core, host: name) }
         active = session
         #if DEBUG
         DebugHooks.type = { [weak session] text, address in
@@ -99,6 +100,7 @@ final class LiveConnector {
     func disconnect() async {
         guard let session = active else { return }
         active = nil
+        LiveActivities.shared.disconnected()
         await session.stop()
     }
 

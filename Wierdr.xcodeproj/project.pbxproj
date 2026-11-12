@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0E1CCC69D66751AABAD36B2A /* SidebarOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BBD742BB5614E0A3EFA587E /* SidebarOverlay.swift */; };
+		1642D3D62190FEAC7BF951F2 /* WierdrWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A5885A899767CC54AA835E1D /* WierdrWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1B05101B71E742280AB023DD /* WierdrTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90B1F34C74D7CADD79F2C52 /* WierdrTerminalView.swift */; };
 		1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */; };
 		1D99092A103C9305E6D01ACD /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF1A4D9E311EDC3924AE60C /* ConnectView.swift */; };
@@ -16,7 +17,7 @@
 		281ACDB6C96A9C6546DFB23D /* TerminalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B698C0B918748FB60826385 /* TerminalSurface.swift */; };
 		293313B9597429F72BDC4358 /* JetBrainsMono-Italic-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */; };
 		2A3D21E671673CE9B484D247 /* SymbolsNerdFont-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C08C4C79EED0725EFF2BDA7 /* SymbolsNerdFont-Regular.ttf */; };
-		2C98A2A2E414AC5E23D584D7 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 5414B4EB3559CA74F9238D6D /* SwiftTerm */; };
+		2C98A2A2E414AC5E23D584D7 /* WierdrActivity in Frameworks */ = {isa = PBXBuildFile; productRef = 7A12E64658370AD428D4E972 /* WierdrActivity */; };
 		2E06A6541CC6433528080868 /* Chrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7056E4DE60E7F76AD6B1A7D3 /* Chrome.swift */; };
 		3129E5A3E56BC7C93B4845AF /* TabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFF448659A8E45E54D69258 /* TabBar.swift */; };
 		32C255CFEF873AE041940D6E /* TerminalSessionPool.swift in Sources */ = {isa = PBXBuildFile; fileRef = F859D6049AABA66F33A95A82 /* TerminalSessionPool.swift */; };
@@ -26,8 +27,10 @@
 		39A219759107203CC4B7ABF8 /* WorkspaceCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D0D83266FC227D2F050C23 /* WorkspaceCommands.swift */; };
 		3DC5E946BB41856BBC6EED50 /* OFL-Geist.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8089262433D04F1C14D569AE /* OFL-Geist.txt */; };
 		3E7FF8899E7032CB014CC131 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3FDE13B0AE2E033B2732E515 /* Assets.xcassets */; };
+		4644493CA268E755C5403BE7 /* WierdrActivity in Frameworks */ = {isa = PBXBuildFile; productRef = 78F256C7F7F70BA4D29A65F0 /* WierdrActivity */; };
 		47BF8AAE6DBDAC87A6FE6A20 /* programs.json in Resources */ = {isa = PBXBuildFile; fileRef = 60C13DE55007AF44DEA645DC /* programs.json */; };
 		47BFA075FFDB3DD630E66FA2 /* SpaceHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A5417D9BCC91A5B4906C41 /* SpaceHeader.swift */; };
+		4B704ED73B2F9DB9B717E328 /* Icons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B31D6E8D3C59D052EA1953BB /* Icons.xcassets */; };
 		53D04AE9997992E9BBE12C7A /* Format.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12EDAF530116B45FFE732B07 /* Format.swift */; };
 		57035D2E92266855712F81FF /* WierdrModel in Frameworks */ = {isa = PBXBuildFile; productRef = FAD500E79D2A09A7B26072EE /* WierdrModel */; };
 		5BD604DAF4EF2A94EE0366F5 /* PhoneWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65E66B1D03C119D0686AC190 /* PhoneWorkspaceView.swift */; };
@@ -53,7 +56,9 @@
 		9CF692D9846CA0F210A5C27A /* SidebarResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */; };
 		9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD1D033D2D7C97DEF34DCD0 /* Previews.swift */; };
 		9F4371D40DBE38454BC60FC8 /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A94262DB139809864F08002 /* AppServices.swift */; };
+		A33C61072ABF9838EE2A68CD /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 5414B4EB3559CA74F9238D6D /* SwiftTerm */; };
 		A5A665F63667AD58A3437D8E /* HostSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B9899D1F0993F0A4EEFB4B /* HostSession.swift */; };
+		B5B1FD18194956E82415185A /* AgentsLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */; };
 		B643253F51979CBEAB68A2E0 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */; };
 		B8A0A0249281AC1ADF72D8AF /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F94D9E6DF287A91E86496D /* SidebarView.swift */; };
 		B9A532B17350C2B1BDB29084 /* Icons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C1DF8AA9B4279A363143AD /* Icons.swift */; };
@@ -61,8 +66,10 @@
 		C95DFE56B643D6F96FE2DA27 /* SidebarRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B772A5D1E7F406A5629C045 /* SidebarRows.swift */; };
 		CC6CA5DD5FA692EB2E3DF779 /* QuickSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBDB08858052E955C8F9E69B /* QuickSwitcher.swift */; };
 		CF542979C43FBE032AEA0771 /* PhoneHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8759F1896EBC5B50A01F9AE /* PhoneHome.swift */; };
+		D025F02BB8E45BEADA711A3A /* LiveActivities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 351E2DA61EC61DF8DAEDBC58 /* LiveActivities.swift */; };
 		D7AFED70E6931C8C8A62CF86 /* PhonePaneScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0B2B00097718F38D346BA9 /* PhonePaneScreen.swift */; };
 		DAF4CA99A9D2B3EDDCCBBFA6 /* TerminalViewProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97C6BD950A0C47F6B5C9FFDC /* TerminalViewProvider.swift */; };
+		E2F038B36F830D478AD82211 /* WierdrWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057B9322AE6CCBE3260E5568 /* WierdrWidgets.swift */; };
 		E641C6D379526278652AAD39 /* ModelAliases.swift in Sources */ = {isa = PBXBuildFile; fileRef = B80B3C068CD2BFADEDBF7680 /* ModelAliases.swift */; };
 		E855C0D8271FC22D92E3CAB9 /* WorkspaceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95EECB6B23A9B256ADC3200B /* WorkspaceController.swift */; };
 		EAC16D41AEBCC5EC9EC37FEB /* SpacesList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAB055678CBEED35D324983 /* SpacesList.swift */; };
@@ -73,11 +80,37 @@
 		FA794EAE57AB99AD1B479A7B /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BA0F685C194597C14F60C3 /* TerminalTheme.swift */; };
 		FA851B87A69FC31C5019FC6B /* PhoneComposeBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95BC46D90E3D3C496622C4CA /* PhoneComposeBar.swift */; };
 		FE68228E3BC4FFF12901741C /* TerminalSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3970FD27B3DF671D83DC038E /* TerminalSession.swift */; };
+		FFF085F26F93DD76B88BEA24 /* LiveActivityDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3EB0A0AFF104DECDC52251 /* LiveActivityDemo.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		1AB71FA0F9E71CAE41B00F97 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 95A83474B65B03686ABAE6A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EAA264D94578DFE3107A4D09;
+			remoteInfo = WierdrWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		CA913AA921BDF757056C1B24 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1642D3D62190FEAC7BF951F2 /* WierdrWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0163470CB1971C7092B25002 /* HostKeyAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostKeyAlert.swift; sourceTree = "<group>"; };
 		01C3406FAFCF5644EFEE9E8C /* OFL-JetBrainsMono.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-JetBrainsMono.txt"; sourceTree = "<group>"; };
+		057B9322AE6CCBE3260E5568 /* WierdrWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WierdrWidgets.swift; sourceTree = "<group>"; };
 		05E8C38F15A5E472A6E9D8BB /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		0666454A0F3654CFD8BB3434 /* Device.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Device.swift; sourceTree = "<group>"; };
 		0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Variable.ttf"; sourceTree = "<group>"; };
@@ -89,10 +122,12 @@
 		14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalKeyBar.swift; sourceTree = "<group>"; };
 		1A26A269D22F1730952287B9 /* TerminalLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalLabView.swift; sourceTree = "<group>"; };
 		1AF2BC817415DFF36FE83826 /* PaneTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneTreeView.swift; sourceTree = "<group>"; };
+		1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentsLiveActivity.swift; sourceTree = "<group>"; };
 		20A5417D9BCC91A5B4906C41 /* SpaceHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceHeader.swift; sourceTree = "<group>"; };
 		24C773688B33E3F0413C5204 /* KeyboardCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCover.swift; sourceTree = "<group>"; };
 		24CFA2C9F9D15FF3073EDD5A /* KeyPanelLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyPanelLayer.swift; sourceTree = "<group>"; };
 		2E36CF13C460CDEB0145C6CE /* WorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceView.swift; sourceTree = "<group>"; };
+		351E2DA61EC61DF8DAEDBC58 /* LiveActivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
 		384B24F496E887AC8E036AF3 /* SubAgentPeek.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubAgentPeek.swift; sourceTree = "<group>"; };
 		3970FD27B3DF671D83DC038E /* TerminalSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSession.swift; sourceTree = "<group>"; };
 		3E32A6DFB0783950D3599945 /* DebugAutoConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugAutoConnect.swift; sourceTree = "<group>"; };
@@ -111,6 +146,7 @@
 		73B8BBCCDAF57164EE74D110 /* DemoTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoTerminalView.swift; sourceTree = "<group>"; };
 		8089262433D04F1C14D569AE /* OFL-Geist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-Geist.txt"; sourceTree = "<group>"; };
 		8A94262DB139809864F08002 /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
+		8B3EB0A0AFF104DECDC52251 /* LiveActivityDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityDemo.swift; sourceTree = "<group>"; };
 		95BC46D90E3D3C496622C4CA /* PhoneComposeBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneComposeBar.swift; sourceTree = "<group>"; };
 		95EECB6B23A9B256ADC3200B /* WorkspaceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceController.swift; sourceTree = "<group>"; };
 		95F98EDA00D58F322E07186C /* WierdrKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WierdrKit; path = Packages/WierdrKit; sourceTree = SOURCE_ROOT; };
@@ -121,6 +157,7 @@
 		A3B9899D1F0993F0A4EEFB4B /* HostSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostSession.swift; sourceTree = "<group>"; };
 		A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Italic-Variable.ttf"; sourceTree = "<group>"; };
 		A56720A2FB2275CAC4539183 /* PhoneKeyPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneKeyPanel.swift; sourceTree = "<group>"; };
+		A5885A899767CC54AA835E1D /* WierdrWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = WierdrWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A6654E2F2DE8CC92909567AD /* TerminalPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalPanel.swift; sourceTree = "<group>"; };
 		ABD1D033D2D7C97DEF34DCD0 /* Previews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Previews.swift; sourceTree = "<group>"; };
 		AE0B2B00097718F38D346BA9 /* PhonePaneScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhonePaneScreen.swift; sourceTree = "<group>"; };
@@ -140,9 +177,18 @@
 		DEFF448659A8E45E54D69258 /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
 		F859D6049AABA66F33A95A82 /* TerminalSessionPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionPool.swift; sourceTree = "<group>"; };
 		F8F94D9E6DF287A91E86496D /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		FE150153042D0CA31A91D6D1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		5C7F2CDA7CF13F30F0CAA8BC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4644493CA268E755C5403BE7 /* WierdrActivity in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		89B17A604DE381E1A3391ACC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -150,7 +196,8 @@
 				F247CF5AF89B8F79CB38DA41 /* HerdrCore in Frameworks */,
 				2603EB8A5D761C502BED791F /* HerdrSSH in Frameworks */,
 				57035D2E92266855712F81FF /* WierdrModel in Frameworks */,
-				2C98A2A2E414AC5E23D584D7 /* SwiftTerm in Frameworks */,
+				2C98A2A2E414AC5E23D584D7 /* WierdrActivity in Frameworks */,
+				A33C61072ABF9838EE2A68CD /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -190,6 +237,7 @@
 			isa = PBXGroup;
 			children = (
 				12BEB38073DA12C77FA628AC /* WierdrApp.swift */,
+				F28F437FB04A548DA9513B33 /* Activity */,
 				4DF4DC8DC9C71BD0EE764E63 /* App */,
 				F1139F7204035CAD7AD316D8 /* Connect */,
 				3D9AD108B8047EE3DC8CC847 /* Debug */,
@@ -211,6 +259,7 @@
 			isa = PBXGroup;
 			children = (
 				3E32A6DFB0783950D3599945 /* DebugAutoConnect.swift */,
+				8B3EB0A0AFF104DECDC52251 /* LiveActivityDemo.swift */,
 				1A26A269D22F1730952287B9 /* TerminalLabView.swift */,
 			);
 			path = Debug;
@@ -220,6 +269,7 @@
 			isa = PBXGroup;
 			children = (
 				3F148D55F4969B78423C1E75 /* Wierdr.app */,
+				A5885A899767CC54AA835E1D /* WierdrWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -328,6 +378,16 @@
 			path = Input;
 			sourceTree = "<group>";
 		};
+		B8703E18A36EED8C7C01A1A8 /* Widgets */ = {
+			isa = PBXGroup;
+			children = (
+				1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */,
+				FE150153042D0CA31A91D6D1 /* Info.plist */,
+				057B9322AE6CCBE3260E5568 /* WierdrWidgets.swift */,
+			);
+			path = Widgets;
+			sourceTree = "<group>";
+		};
 		C31BACBD440CB6BC0A75178C /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
@@ -347,6 +407,7 @@
 			children = (
 				EFD3CC082A60C7ED00864293 /* Resources */,
 				2EA2787168C17FC715145BA0 /* Sources */,
+				B8703E18A36EED8C7C01A1A8 /* Widgets */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -379,6 +440,14 @@
 			path = Connect;
 			sourceTree = "<group>";
 		};
+		F28F437FB04A548DA9513B33 /* Activity */ = {
+			isa = PBXGroup;
+			children = (
+				351E2DA61EC61DF8DAEDBC58 /* LiveActivities.swift */,
+			);
+			path = Activity;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -389,21 +458,44 @@
 				F862E9DB21CD302CB67C9B60 /* Sources */,
 				90EEB49B7ED31CAEDE3F7A71 /* Resources */,
 				89B17A604DE381E1A3391ACC /* Frameworks */,
+				CA913AA921BDF757056C1B24 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A942C3F07465F7DD745A5790 /* PBXTargetDependency */,
 			);
 			name = Wierdr;
 			packageProductDependencies = (
 				D4DFE261604A49E49A1A80AC /* HerdrCore */,
 				8129A5BF2F3516F166B530D1 /* HerdrSSH */,
 				FAD500E79D2A09A7B26072EE /* WierdrModel */,
+				7A12E64658370AD428D4E972 /* WierdrActivity */,
 				5414B4EB3559CA74F9238D6D /* SwiftTerm */,
 			);
 			productName = Wierdr;
 			productReference = 3F148D55F4969B78423C1E75 /* Wierdr.app */;
 			productType = "com.apple.product-type.application";
+		};
+		EAA264D94578DFE3107A4D09 /* WierdrWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CAC6B32DD51E2D19C13898CF /* Build configuration list for PBXNativeTarget "WierdrWidgets" */;
+			buildPhases = (
+				4F96247CDBBDAD9906B40B8A /* Sources */,
+				ECFADD2CFF9F2CCA38565C86 /* Resources */,
+				5C7F2CDA7CF13F30F0CAA8BC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WierdrWidgets;
+			packageProductDependencies = (
+				78F256C7F7F70BA4D29A65F0 /* WierdrActivity */,
+			);
+			productName = WierdrWidgets;
+			productReference = A5885A899767CC54AA835E1D /* WierdrWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -415,6 +507,10 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					286A67CEADBE557B7E99E136 = {
+						DevelopmentTeam = AUL4CCB2XY;
+						ProvisioningStyle = Automatic;
+					};
+					EAA264D94578DFE3107A4D09 = {
 						DevelopmentTeam = AUL4CCB2XY;
 						ProvisioningStyle = Automatic;
 					};
@@ -439,6 +535,7 @@
 			projectRoot = "";
 			targets = (
 				286A67CEADBE557B7E99E136 /* Wierdr */,
+				EAA264D94578DFE3107A4D09 /* WierdrWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -461,9 +558,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		ECFADD2CFF9F2CCA38565C86 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4B704ED73B2F9DB9B717E328 /* Icons.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		4F96247CDBBDAD9906B40B8A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B5B1FD18194956E82415185A /* AgentsLiveActivity.swift in Sources */,
+				E2F038B36F830D478AD82211 /* WierdrWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F862E9DB21CD302CB67C9B60 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -486,6 +600,8 @@
 				66527F0DB6CF7D2C27CADBD5 /* KeyPanelLayer.swift in Sources */,
 				BC5F03E81D285DF5CBC65E43 /* KeyboardCover.swift in Sources */,
 				3369452A0EEE814CFC410FF6 /* LimitsPanel.swift in Sources */,
+				D025F02BB8E45BEADA711A3A /* LiveActivities.swift in Sources */,
+				FFF085F26F93DD76B88BEA24 /* LiveActivityDemo.swift in Sources */,
 				60DFCEE352A3DD2104A9AE02 /* LiveServices.swift in Sources */,
 				E641C6D379526278652AAD39 /* ModelAliases.swift in Sources */,
 				5FDBC03A3DEB37359A821DEB /* PaneTreeView.swift in Sources */,
@@ -525,12 +641,21 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		A942C3F07465F7DD745A5790 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EAA264D94578DFE3107A4D09 /* WierdrWidgets */;
+			targetProxy = 1AB71FA0F9E71CAE41B00F97 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
 		0A64100C0A8BA014B9B9A488 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = App/Wierdr.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -590,7 +715,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -619,6 +744,25 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		317BA150D95D5F52156F695B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Widgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Wierdr;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = pw.xff.wierdr.widgets;
+				PRODUCT_NAME = WierdrWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -657,7 +801,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -687,6 +831,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = App/Wierdr.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -711,6 +856,25 @@
 			};
 			name = Debug;
 		};
+		CA69C524E9099640C4C560B6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Widgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Wierdr;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = pw.xff.wierdr.widgets;
+				PRODUCT_NAME = WierdrWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -728,6 +892,15 @@
 			buildConfigurations = (
 				8DD7B34A5E6DF5F84C2F7197 /* Debug */,
 				0A64100C0A8BA014B9B9A488 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CAC6B32DD51E2D19C13898CF /* Build configuration list for PBXNativeTarget "WierdrWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				317BA150D95D5F52156F695B /* Debug */,
+				CA69C524E9099640C4C560B6 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -757,6 +930,14 @@
 			isa = XCSwiftPackageProductDependency;
 			package = EE2D5E6ADC3BB968AFE880FC /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
+		};
+		78F256C7F7F70BA4D29A65F0 /* WierdrActivity */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WierdrActivity;
+		};
+		7A12E64658370AD428D4E972 /* WierdrActivity */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WierdrActivity;
 		};
 		8129A5BF2F3516F166B530D1 /* HerdrSSH */ = {
 			isa = XCSwiftPackageProductDependency;

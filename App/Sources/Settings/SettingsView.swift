@@ -61,6 +61,9 @@ struct SettingsView: View {
                         onDisconnect()
                     }
                 }
+                if Device.isPhone && !isDemo {
+                    LiveActivitySection()
+                }
                 Section("About") {
                     LabeledContent("Version", value: Self.version)
                     NavigationLink("Acknowledgements") { LicensesView() }
@@ -79,6 +82,33 @@ struct SettingsView: View {
         let v = info?["CFBundleShortVersionString"] as? String ?? "?"
         let b = info?["CFBundleVersion"] as? String ?? "?"
         return "\(v) (\(b))"
+    }
+}
+
+/// Where the agents Live Activity stands on this iPhone: registered with the
+/// connected computer (its `wierdr-push` drives it), or why not.
+private struct LiveActivitySection: View {
+    private var activities: LiveActivities { .shared }
+
+    var body: some View {
+        Section {
+            switch activities.registration {
+            case .registered(let host):
+                LabeledContent("Live Activity", value: "On \(host)")
+            case .off:
+                LabeledContent("Live Activity", value: "Off")
+                Button("Turn On in Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                }
+            case .waiting:
+                LabeledContent("Live Activity", value: "Waiting")
+            case .failed(let message):
+                LabeledContent("Live Activity", value: "Not registered")
+                Text(message).font(.footnote).foregroundStyle(.secondary)
+            }
+        } footer: {
+            Text("Your agents on the Lock Screen and in the Dynamic Island, while any is working, done or needs you. `wierdr-push` on the computer sends them (docs/live-activity.md).")
+        }
     }
 }
 

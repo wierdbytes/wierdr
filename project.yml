@@ -11,7 +11,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.2.0"
-    CURRENT_PROJECT_VERSION: "16"
+    CURRENT_PROJECT_VERSION: "17"
 packages:
   WierdrKit:
     path: Packages/WierdrKit
@@ -32,7 +32,10 @@ targets:
         product: HerdrSSH
       - package: WierdrKit
         product: WierdrModel
+      - package: WierdrKit
+        product: WierdrActivity
       - package: SwiftTerm
+      - target: WierdrWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: pw.xff.wierdr
@@ -51,9 +54,19 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: YES
+    entitlements:
+      path: App/Wierdr.entitlements
+      properties:
+        aps-environment: development
     info:
       path: App/Info.plist
       properties:
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        CFBundleURLTypes:
+          - CFBundleURLName: pw.xff.wierdr
+            CFBundleURLSchemes:
+              - wierdr
         UIAppFonts:
           - Geist-Variable.ttf
           - JetBrainsMono-Variable.ttf
@@ -62,6 +75,31 @@ targets:
         NSBonjourServices:
           - _ssh._tcp
         UIApplicationSupportsIndirectInputEvents: true
+  # The agents Live Activity (App/Widgets); `wierdr-push` on the Mac drives it.
+  WierdrWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: App/Widgets
+      - path: App/Resources/Icons.xcassets
+    dependencies:
+      - package: WierdrKit
+        product: WierdrActivity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pw.xff.wierdr.widgets
+        PRODUCT_NAME: WierdrWidgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Wierdr
+        SKIP_INSTALL: YES
+    info:
+      path: App/Widgets/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
 schemes:
   Wierdr:
     build:

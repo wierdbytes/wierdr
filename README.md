@@ -39,16 +39,21 @@ https://<mac>.<tailnet>.ts.net/wierdr/ → «Установить» (или `mak
 - [docs/architecture.md](docs/architecture.md) — слои и устройство кода.
 - [docs/hc-protocol-client.md](docs/hc-protocol-client.md) — клиент протокола herdr-core.
 - [docs/ssh.md](docs/ssh.md) — SSH, ключи, known hosts.
+- [docs/live-activity.md](docs/live-activity.md) — Live Activity агентов на iPhone (Lock Screen,
+  Dynamic Island): `wierdr-push` на Mac, APNs, настройка.
 - [docs/research/](docs/research/) — разбор модели herdr-app и спецификация UI твоего сетапа.
 
 ## Структура
 
 ```
 App/                    SwiftUI-приложение (iPad + iPhone, одна сборка; App/Sources/Phone — раскладка iPhone)
-Packages/WierdrKit/     HerdrCore · HerdrSSH · WierdrModel · wierdr-cli (+ тесты)
+App/Widgets/            виджет-расширение: Live Activity агентов
+Packages/WierdrKit/     HerdrCore · HerdrSSH · WierdrModel · WierdrActivity · WierdrPush ·
+                        wierdr-cli · wierdr-push (+ тесты)
 Design/icons/           SVG-иконки Herdr → App/Resources/Icons.xcassets (scripts/gen-assets.py)
 project.yml             XcodeGen → Wierdr.xcodeproj
 Makefile                project · test · sim · sim-iphone · device · install · install-iphone · ipa
 scripts/                ipad.sh / iphone.sh (физические устройства: скриншоты, тапы, install по tailnet),
-                        iphone-sim.sh (симулятор), ota.sh (установка по воздуху)
+                        iphone-sim.sh (симулятор), ota.sh (установка по воздуху),
+                        push-agent.sh (wierdr-push в launchd)
 ```

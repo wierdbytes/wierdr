@@ -204,7 +204,8 @@ Wierdr (`pw.xff.wierdr`) — нативное приложение для iPad �
 `Packages/WierdrKit` — всё, кроме UI (общее для iPad и iPhone):
 `HerdrCore` (протокол herdr-core: фреймы, JSON‑RPC, attach‑стримы, события, документы),
 `HerdrSSH` (SSH‑транспорт, ключи, known hosts), `WierdrModel` (живая модель + команды,
-`WorkspaceEngine`), `wierdr-cli` (отладка на Mac: `wierdr-cli ws`, `ls`, `doc`, `events`, `attach`).
+`WorkspaceEngine`), `wierdr-cli` (отладка на Mac: `wierdr-cli ws`, `ls`, `doc`, `events`, `attach`),
+`WierdrActivity` / `WierdrPush` / `wierdr-push` (Live Activity агентов, §7).
 `App/Sources` — SwiftUI. Подробно: `docs/architecture.md`, `docs/hc-protocol-client.md`,
 `docs/ssh.md`. Тесты: `make test` (unit), `WIERDR_LIVE=1` / `WIERDR_SSH_LIVE=1` — живые.
 
@@ -309,6 +310,16 @@ Wierdr (`pw.xff.wierdr`) — нативное приложение для iPad �
   выгружает приложения в фоне). После Disconnect в настройках — нет, до следующего Connect.
 - Альбомная ориентация: то же самое, полоса панелей скрыта ради высоты.
 - «Прочитано» (`herdr.seen`) — только для панели на экране; в списке ничего не отмечается.
+- **Live Activity агентов** (экран блокировки, Dynamic Island, Smart Stack часов) — пока
+  какой‑нибудь агент работает, закончил или ждёт тебя, и даже когда Wierdr закрыт. Счётчики
+  `! ● ◔`, до 4 самых срочных агентов в порядке списка (статус, иконка, заголовок, спейс,
+  сколько в этом статусе), тап по агенту открывает его панель. «Нужен ты» зажигает экран со
+  звуком, «закончил» — без звука. Её шлёт `wierdr-push` на Mac через APNs; приложение
+  регистрирует iPhone в ядре при подключении (Settings → Live Activity: «On <компьютер>»).
+  Настройка и устройство: [live-activity.md](live-activity.md).
+
+![Live Activity](screenshots/iphone-live-activity.png)
+
 - Тексты «This iPhone's key», «Install This iPhone's Key on …» и т. п. называют устройство.
 
 ![iPhone pane](screenshots/iphone-pane-dark.png)

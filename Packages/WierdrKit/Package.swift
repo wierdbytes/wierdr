@@ -8,8 +8,14 @@
 //                plus key management (Ed25519 via CryptoKit, Keychain).
 //   WierdrModel  The Herdr world as the app shows it: spaces, tabs, panes,
 //                agents, statuses (from the `herdr-app` document + terminals).
+//   WierdrActivity  The agents Live Activity's data (attributes, content state)
+//                and the `wierdr-push` registration document: Foundation only,
+//                shared by the app, its widget extension and the Mac's pusher.
+//   WierdrPush   The Mac side of the Live Activity: the summary of a workspace,
+//                when to start/update/end it, APNs (token auth, broadcast channels).
 //   wierdr-cli   macOS-only debugging tool: talks to the local core through
 //                `hc connect` and prints what the model sees.
+//   wierdr-push  macOS daemon (launchd): drives the Live Activity from the local core.
 import PackageDescription
 
 let swift5: [SwiftSetting] = [.swiftLanguageMode(.v5)]
@@ -21,7 +27,10 @@ let package = Package(
         .library(name: "HerdrCore", targets: ["HerdrCore"]),
         .library(name: "HerdrSSH", targets: ["HerdrSSH"]),
         .library(name: "WierdrModel", targets: ["WierdrModel"]),
+        .library(name: "WierdrActivity", targets: ["WierdrActivity"]),
+        .library(name: "WierdrPush", targets: ["WierdrPush"]),
         .executable(name: "wierdr-cli", targets: ["wierdr-cli"]),
+        .executable(name: "wierdr-push", targets: ["wierdr-push"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.80.0"),
@@ -52,6 +61,23 @@ let package = Package(
             resources: [.copy("Resources/programs.json")],
             swiftSettings: swift5
         ),
+        .target(
+            name: "WierdrActivity",
+            swiftSettings: swift5
+        ),
+        .target(
+            name: "WierdrPush",
+            dependencies: [
+                "HerdrCore", "WierdrModel", "WierdrActivity",
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
+            swiftSettings: swift5
+        ),
+        .executableTarget(
+            name: "wierdr-push",
+            dependencies: ["HerdrCore", "WierdrModel", "WierdrActivity", "WierdrPush"],
+            swiftSettings: swift5
+        ),
         .executableTarget(
             name: "wierdr-cli",
             dependencies: ["HerdrCore", "HerdrSSH", "WierdrModel"],
@@ -65,6 +91,12 @@ let package = Package(
         .testTarget(
             name: "HerdrSSHTests",
             dependencies: ["HerdrSSH", "HerdrCore"],
+            swiftSettings: swift5
+        ),
+        .testTarget(
+            name: "WierdrPushTests",
+            dependencies: ["WierdrPush", "WierdrActivity", "WierdrModel", "HerdrCore",
+                           .product(name: "Crypto", package: "swift-crypto")],
             swiftSettings: swift5
         ),
         .testTarget(
