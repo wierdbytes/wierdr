@@ -37,8 +37,9 @@ extension View {
 /// under way, the message field's icon beside the panel, below the finger; let
 /// go on it and the field comes (the panel goes). The terminal's own keyboard
 /// comes with a double tap on the terminal (`WierdrTerminalView`).
-/// Taps on the terminal are clicks for the program; while a keyboard is up, a
-/// tap hides it; with the panel out, a tap beside it puts the panel back. While
+/// Taps on the terminal are clicks for the program and its pans scroll it, with
+/// a keyboard up too; a double tap hides the keyboard (the message field with
+/// it); with the panel out, a tap beside it puts the panel back. While
 /// the area is `covered` (the list, the sidebar overlay), the panel and the
 /// keyboards go and the gestures rest.
 struct KeyPanelLayer: ViewModifier {
@@ -82,11 +83,9 @@ struct KeyPanelLayer: ViewModifier {
                     keyboardUp: keyboardUp,
                     onDrag: { x, p in moved(x, at: p) },
                     onEnd: { projected, p in released(projected: projected, at: p) },
-                    // The panel first; then the keyboard (and the message field), at once.
-                    onTap: {
-                        if state.open { return setPanel(open: false) }
-                        hideKeyboards()
-                    }
+                    onTap: { setPanel(open: false) },
+                    // The keyboard (and the message field), at once; the panel stays.
+                    onDoubleTap: { hideKeyboards() }
                 )
             }
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { area = $0 }
@@ -112,7 +111,7 @@ struct KeyPanelLayer: ViewModifier {
     // MARK: Keyboards
 
     /// The terminal has the keyboard, or the message field is open: a finger's
-    /// tap on the terminal hides it (a pointer's click doesn't, see `PhoneKeyPanelGestures`).
+    /// double tap on the terminal hides it (a pointer's doesn't, see `PhoneKeyPanelGestures`).
     private var keyboardUp: Bool {
         guard let address else { return false }
         return controller.composing == address || services.terminalSession(address)?.hasKeyboardFocus == true

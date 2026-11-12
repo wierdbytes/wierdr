@@ -8,7 +8,8 @@ import WierdrModel
 /// keyboards come (`KeyPanelLayer`: a swipe from the right edge on the
 /// iPhone, the puck in a narrow iPad window). Under the terminal only the
 /// message field while it is open, above the keyboard. Taps on the terminal
-/// are clicks for the program; while a keyboard is up, a tap hides it.
+/// are clicks for the program, with a keyboard up too; a double tap brings the
+/// terminal's keyboard or hides the one that is up.
 /// The list (`PhoneHome`) slides over it; while it is out (`covered`), the
 /// panel and the keyboards go and the swipes rest. A sub-agent opened from the
 /// list (`controller.peek`) shows here in its parent's place, as any agent

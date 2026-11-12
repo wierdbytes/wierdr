@@ -352,12 +352,12 @@ struct PhoneKeyPanelGrip: View {
 /// Closed, a pan from the area's right edge pulls the panel out (iPhone; on
 /// the iPad, whose edge is Slide Over's, the puck does); open, a pan toward
 /// its side anywhere in the area pushes it back, and a tap on the terminal
-/// beside it closes it. While a keyboard is up (the terminal's or
-/// the message field's), a tap on the terminal hides it instead, the panel
-/// first if both are. Otherwise taps are the terminal's own (a click for
-/// the program, a double tap its keyboard). Their pans
-/// (the terminal's scrolling, selection and mouse, the panel's scrolling)
-/// wait for it, so a swipe that moves the panel does nothing else.
+/// beside it closes it. While a keyboard is up (the terminal's or the
+/// message field's), a double tap on the terminal hides it (beside the
+/// panel too: then the panel's tap waits for it). Otherwise taps are the
+/// terminal's own (a click for the program, with a keyboard up too; a double
+/// tap brings its keyboard), as are its pans (scrolling, selection, mouse),
+/// except a swipe that moves the panel: they wait for it.
 struct PhoneKeyPanelGestures: UIViewRepresentable {
     var enabled: Bool
     var isOpen: Bool
@@ -365,14 +365,16 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
     var side: KeyPanelSide = .trailing
     /// Closed, a swipe from the area's trailing edge pulls it out.
     var opensFromEdge = true
-    /// A keyboard is up (the terminal's or the message field's): a tap on the terminal hides it.
+    /// A keyboard is up (the terminal's or the message field's): a double tap on the terminal hides it.
     var keyboardUp = false
     /// The finger's travel (leftward is negative) and where it is, in the terminal's area.
     var onDrag: (CGFloat, CGPoint) -> Void
     /// Where the panel would come to rest at the finger's speed (translation), and where the finger left.
     var onEnd: (CGFloat, CGPoint) -> Void
-    /// A tap on the terminal while the panel or a keyboard is up: closes or hides it.
+    /// A tap on the terminal beside the open panel: closes it.
     var onTap: () -> Void
+    /// A double tap on the terminal while a keyboard is up: hides it.
+    var onDoubleTap: () -> Void
 
     static let edgeWidth: CGFloat = 24
 
@@ -390,8 +392,10 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         c.parent = self
         let panOn = enabled && (isOpen || opensFromEdge)
         if c.pan.isEnabled != panOn { c.pan.isEnabled = panOn }
-        let tapOn = enabled && (isOpen || keyboardUp)
+        let tapOn = enabled && isOpen
         if c.tap.isEnabled != tapOn { c.tap.isEnabled = tapOn }
+        let doubleTapOn = enabled && keyboardUp
+        if c.doubleTap.isEnabled != doubleTapOn { c.doubleTap.isEnabled = doubleTapOn }
     }
 
     static func dismantleUIView(_ anchor: Anchor, coordinator: Coordinator) {
@@ -419,6 +423,7 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         weak var anchor: Anchor?
         let pan = UIPanGestureRecognizer()
         let tap = UITapGestureRecognizer()
+        let doubleTap = UITapGestureRecognizer()
         /// The current pan may move the panel (it began where it should): others' pans wait for it.
         private var claims = false
 
@@ -430,6 +435,10 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
             tap.addTarget(self, action: #selector(tapped(_:)))
             tap.delegate = self
             tap.isEnabled = false
+            doubleTap.numberOfTapsRequired = 2
+            doubleTap.addTarget(self, action: #selector(doubleTapped(_:)))
+            doubleTap.delegate = self
+            doubleTap.isEnabled = false
         }
 
         func attach(to view: UIView?) {
@@ -437,11 +446,11 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
             detach()
             view.addGestureRecognizer(pan)
             view.addGestureRecognizer(tap)
+            view.addGestureRecognizer(doubleTap)
         }
 
         func detach() {
-            pan.view?.removeGestureRecognizer(pan)
-            tap.view?.removeGestureRecognizer(tap)
+            for g in [pan, tap, doubleTap] as [UIGestureRecognizer] { g.view?.removeGestureRecognizer(g) }
         }
 
         @objc private func moved(_ g: UIPanGestureRecognizer) {
@@ -458,6 +467,10 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
 
         @objc private func tapped(_ g: UITapGestureRecognizer) {
             if g.state == .ended { parent?.onTap() }
+        }
+
+        @objc private func doubleTapped(_ g: UITapGestureRecognizer) {
+            if g.state == .ended { parent?.onDoubleTap() }
         }
 
         /// The touch landed on the terminal itself (not a toast, the grip or a key over it).
@@ -480,15 +493,14 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
             // Beside the terminal's rows only (not over the top bar); to its
             // right is the edge (or, in landscape, the safe area up to it).
             guard p.y >= area.minY, p.y <= area.maxY, p.x >= area.minX else { return false }
-            if g === tap {
+            if g === tap || g === doubleTap {
                 guard onTerminal(touch) else { return false }
-                // Open panel: beside it (its keys take their own taps); a keyboard up: anywhere.
-                if parent.isOpen {
-                    return parent.side == .trailing ? p.x < area.maxX - PhoneKeyPanel.width
-                                                    : p.x > area.minX + PhoneKeyPanel.width
-                }
-                // A click with a pointer (trackpad, Universal Control) is a click, as on a Mac.
-                return parent.keyboardUp && touch.type != .indirectPointer
+                // A pointer's double click (trackpad, Universal Control) is the terminal's, as on a Mac.
+                if g === doubleTap, touch.type == .indirectPointer { return false }
+                // Open panel: beside it (its keys take their own taps); else anywhere.
+                guard parent.isOpen else { return true }
+                return parent.side == .trailing ? p.x < area.maxX - PhoneKeyPanel.width
+                                                : p.x > area.minX + PhoneKeyPanel.width
             }
             claims = parent.isOpen || (parent.opensFromEdge && p.x >= area.maxX - PhoneKeyPanelGestures.edgeWidth)
             return claims
@@ -507,9 +519,13 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
         // The terminal's and the panel's pans wait for the panel's (it fails
         // at once on a vertical move). Not the keys' presses: a held arrow
         // would wait until the finger lifts. Not the root view's own (the back
-        // swipe). The tap it takes beats the terminal's taps (click, word).
+        // swipe). The taps it takes beat the terminal's (click, double tap):
+        // with a keyboard up, a click waits to see that no second tap comes.
+        // The panel's tap waits for the double tap too (it hides the keyboard
+        // beside the open panel).
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            if g === tap { return other is UITapGestureRecognizer && other.view !== g.view }
+            if g === doubleTap, other === tap { return true }
+            if g === tap || g === doubleTap { return other is UITapGestureRecognizer && other.view !== g.view }
             guard claims, other.view !== g.view else { return false }
             return parent?.isOpen == true ? other is UIPanGestureRecognizer : true
         }

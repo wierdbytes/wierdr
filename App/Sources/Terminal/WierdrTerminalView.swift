@@ -81,10 +81,12 @@ final class WierdrTerminalView: TerminalView {
         touch.delaysTouchesEnded = false
         touch.delegate = TouchPassthrough.shared
         addGestureRecognizer(touch)
-        // A finger's double tap brings the keyboard. SwiftTerm's taps wait for
-        // it: its double tap (select a word) and triple (a line) never come from
-        // a finger, and a double tap is no click (its single tap fails too).
-        // A pointer's double and triple clicks stay SwiftTerm's.
+        // A finger's double tap brings the keyboard (while one is up, the key
+        // panel's double tap hides it first: this one waits for it, see
+        // `PhoneKeyPanelGestures`). SwiftTerm's taps wait for it: its double tap
+        // (select a word) and triple (a line) never come from a finger, and a
+        // double tap is no click (its single tap fails too). A pointer's double
+        // and triple clicks stay SwiftTerm's.
         let keyboardTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
         keyboardTap.numberOfTapsRequired = 2
         keyboardTap.delegate = KeyboardDoubleTap.shared
@@ -122,10 +124,14 @@ final class WierdrTerminalView: TerminalView {
         onTap?()
     }
 
-    /// A finger's double tap: the keyboard (nothing goes to the program).
+    /// A finger's double tap: the keyboard, or away with it (nothing goes to the program).
     @objc private func doubleTapped(_ g: UITapGestureRecognizer) {
         guard g.state == .ended else { return }
-        requestKeyboard()
+        if isFirstResponder {
+            UIView.performWithoutAnimation { _ = resignFirstResponder() }
+        } else {
+            requestKeyboard()
+        }
     }
 
     /// Gives the terminal the keyboard on purpose (also on the iPhone, where taps don't).

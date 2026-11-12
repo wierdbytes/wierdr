@@ -10,7 +10,7 @@ import WierdrModel
 /// asked, so line breaks stay in the message), then Return; an empty field
 /// sends just Return. Opened also by a tap on the terminal's right half. It closes
 /// at once, with its keyboard and no animation (send, Hide in the key panel,
-/// a tap on the terminal); its text stays as the terminal's draft. Photo, Image and Paste in the key panel
+/// a double tap on the terminal); its text stays as the terminal's draft. Photo, Image and Paste in the key panel
 /// add to the message while it is open.
 struct PhoneComposeBar: View {
     var address: String
@@ -75,7 +75,7 @@ struct PhoneComposeBar: View {
         .sensoryFeedback(.impact(weight: .light), trigger: sent)
         .onAppear { focused = true }
         .onChange(of: controller.composing) { _, now in focused = now == address }
-        // The keyboard went (Hide, a tap on the terminal, swiped away): the field goes with it.
+        // The keyboard went (Hide, a double tap on the terminal, swiped away): the field goes with it.
         .onChange(of: focused) { _, on in
             if on, !Device.isPhone { ComposeAccessory.attachSoon() }
             if !on, controller.composing == address { controller.composing = nil }
