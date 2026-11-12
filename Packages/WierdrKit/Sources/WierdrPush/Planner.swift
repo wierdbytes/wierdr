@@ -34,8 +34,6 @@ public struct Planner: Sendable {
         public var maxAge: TimeInterval = 7.75 * 3600
         /// Updates that change no status (titles, models) at most this often (priority 5).
         public var minInterval: TimeInterval = 5
-        /// The shown ages (`28m`) are refreshed at most this often, when one would change.
-        public var tickInterval: TimeInterval = 60
         /// An update this often anyway, moving the stale date on.
         public var heartbeat: TimeInterval = 10 * 60
         /// The activity reads stale this long after the last push (the Mac asleep, off line).
@@ -171,8 +169,8 @@ public struct Planner: Sendable {
 
     /// Whether to update a running activity now, and how: a status change (also to
     /// nothing active, so another client's look shows at once) or an alert right
-    /// away with priority 10; other changes coalesced with priority 5; a refresh when
-    /// a shown age would change; a heartbeat.
+    /// away with priority 10; other changes coalesced with priority 5; a heartbeat.
+    /// (The ages count by themselves on the device.)
     private func update(from r: Running, to summary: State, now t: Double)
         -> (priority: Int, alert: ActivityPayload.Alert?)? {
         let elapsed = t - r.lastSentAt
@@ -181,10 +179,6 @@ public struct Planner: Sendable {
             if alert != nil || Self.statusChanged(from: r.last, to: summary) { return (10, alert) }
             return elapsed >= settings.minInterval || r.dirty ? (5, nil) : nil
         }
-        if elapsed >= settings.tickInterval,
-           Self.ticks(summary, at: t) != Self.ticks(r.last, at: r.lastSentAt) {
-            return (5, nil)
-        }
         return elapsed >= settings.heartbeat ? (5, nil) : nil
     }
 
@@ -192,12 +186,6 @@ public struct Planner: Sendable {
     static func statusChanged(from old: State, to new: State) -> Bool {
         [old.blocked, old.done, old.working, old.idle] != [new.blocked, new.done, new.working, new.idle]
             || old.agents.map { "\($0.id) \($0.status.rawValue)" } != new.agents.map { "\($0.id) \($0.status.rawValue)" }
-    }
-
-    /// The shown ages, without seconds.
-    static func ticks(_ s: State, at t: Double) -> [String?] {
-        let now = Date(timeIntervalSince1970: t)
-        return s.agents.map { AgentAge.tick(since: $0.sinceDate, now: now) }
     }
 
     private mutating func start(lane: Lane, devices: [String: PushRegistry.Device], channel: String,

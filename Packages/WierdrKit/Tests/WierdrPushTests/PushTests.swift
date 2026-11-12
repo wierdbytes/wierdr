@@ -63,19 +63,6 @@ private let channels = [lane.key: "CHAN=="]
                             alert: .init(title: "Done", body: "Fix it — wierdr", sound: false))])
     }
 
-    @Test func shownAgesAreRefreshedOnceAMinute() {
-        var p = Planner()
-        var a = agent("t1", .working)
-        a.since = at(0).timeIntervalSince1970
-        let s = state([a])
-        _ = p.step(now: at(0), summary: s, host: "mac", devices: ["d": phone], channels: channels)
-        #expect(p.step(now: at(59), summary: s, host: "mac", devices: ["d": phone], channels: channels) == [], "0s…59s")
-        #expect(p.step(now: at(60), summary: s, host: "mac", devices: ["d": phone], channels: channels)
-                == [.update(lane: lane, channel: "CHAN==", state: s, priority: 5, alert: nil)], "1m")
-        #expect(p.step(now: at(100), summary: s, host: "mac", devices: ["d": phone], channels: channels) == [])
-        #expect(p.step(now: at(120), summary: s, host: "mac", devices: ["d": phone], channels: channels).count == 1, "2m")
-    }
-
     @Test func aStartForDoneAgentsOnlyWaitsAMoment() {
         var p = Planner()
         let done = state([agent("t1", .done)])
@@ -285,17 +272,6 @@ private let channels = [lane.key: "CHAN=="]
         #expect(AgentLink.address(in: url) == "lf/t1")
         #expect(AgentLink.address(in: URL(string: "wierdr://agent")!) == nil)
         #expect(AgentLink.address(in: URL(string: "https://agent?t=x")!) == nil)
-    }
-
-    @Test func agesReadAsInTheSidebarButTheFirstMinute() {
-        let now = Date(timeIntervalSince1970: 1_000_000)
-        func ago(_ s: Double) -> Date { now.addingTimeInterval(-s) }
-        #expect(AgentAge.label(since: ago(42), now: now) == "42s")
-        #expect(AgentAge.coarse(since: ago(42), now: now) == "<1m")
-        #expect(AgentAge.coarse(since: ago(21 * 60 + 45), now: now) == "21m")
-        #expect(AgentAge.coarse(since: ago(110 * 60), now: now) == "1h")
-        #expect(AgentAge.coarse(since: ago(3 * 86_400 + 5), now: now) == "3d")
-        #expect(AgentAge.coarse(since: nil, now: now) == nil)
     }
 
     @Test func registryUsesSnakeCaseAndSurvivesGarbage() throws {

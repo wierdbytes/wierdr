@@ -1,5 +1,4 @@
 import Foundation
-import WierdrActivity
 import WierdrModel
 
 /// Text rules of the sidebar and the panel (ui-spec §10.4, §4.9, §8).
@@ -21,8 +20,15 @@ enum Format {
         return v == v.rounded() ? "\(Int(v))M" : String(format: "%.1fM", v)
     }
 
-    /// `56s`, `28m`, `3h`, `2d` (`AgentAge`, shared with the Live Activity).
-    static func age(since date: Date?, now: Date) -> String? { AgentAge.label(since: date, now: now) }
+    /// `56s`, `28m`, `3h`, `2d`.
+    static func age(since date: Date?, now: Date) -> String? {
+        guard let date else { return nil }
+        let s = max(0, Int(now.timeIntervalSince(date)))
+        if s < 60 { return "\(s)s" }
+        if s < 3600 { return "\(s / 60)m" }
+        if s < 86_400 { return "\(s / 3600)h" }
+        return "\(s / 86_400)d"
+    }
 
     /// `$HOME` → `~` (connected computer's home, else a `/Users/x`/`/home/x` prefix).
     static func tilde(_ path: String?, home: String?) -> String {

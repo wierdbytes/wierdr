@@ -58,6 +58,7 @@
 		9F4371D40DBE38454BC60FC8 /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A94262DB139809864F08002 /* AppServices.swift */; };
 		A33C61072ABF9838EE2A68CD /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 5414B4EB3559CA74F9238D6D /* SwiftTerm */; };
 		A5A665F63667AD58A3437D8E /* HostSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B9899D1F0993F0A4EEFB4B /* HostSession.swift */; };
+		A8A992B35F53658971A79996 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F884493E41282F237E5D6C75 /* Assets.xcassets */; };
 		B5B1FD18194956E82415185A /* AgentsLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */; };
 		B643253F51979CBEAB68A2E0 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */; };
 		B8A0A0249281AC1ADF72D8AF /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F94D9E6DF287A91E86496D /* SidebarView.swift */; };
@@ -176,6 +177,7 @@
 		DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "LICENSE-SymbolsNerdFont.txt"; sourceTree = "<group>"; };
 		DEFF448659A8E45E54D69258 /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
 		F859D6049AABA66F33A95A82 /* TerminalSessionPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionPool.swift; sourceTree = "<group>"; };
+		F884493E41282F237E5D6C75 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F8F94D9E6DF287A91E86496D /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		FE150153042D0CA31A91D6D1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -382,6 +384,7 @@
 			isa = PBXGroup;
 			children = (
 				1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */,
+				F884493E41282F237E5D6C75 /* Assets.xcassets */,
 				FE150153042D0CA31A91D6D1 /* Info.plist */,
 				057B9322AE6CCBE3260E5568 /* WierdrWidgets.swift */,
 			);
@@ -562,6 +565,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A8A992B35F53658971A79996 /* Assets.xcassets in Resources */,
 				4B704ED73B2F9DB9B717E328 /* Icons.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -715,7 +719,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -801,7 +805,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

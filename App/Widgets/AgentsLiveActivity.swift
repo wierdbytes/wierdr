@@ -10,7 +10,7 @@ import WierdrActivity
 struct AgentsLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: AgentsActivityAttributes.self) { context in
-            LockScreenView(host: context.attributes.host, state: context.state, stale: context.isStale)
+            LockScreenView(state: context.state, stale: context.isStale)
                 .activityBackgroundTint(Palette.background)
                 .activitySystemActionForegroundColor(.white)
                 .widgetURL(context.state.agents.first.map { AgentLink.url(address: $0.id) })
@@ -19,8 +19,8 @@ struct AgentsLiveActivity: Widget {
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     HStack(spacing: 6) {
-                        HerdrMark(size: 16)
-                        Text(context.attributes.host)
+                        AppMark(size: 16)
+                        Text("Wierdr")
                             .font(.system(size: 14, weight: .semibold))
                             .lineLimit(1)
                     }
@@ -32,7 +32,7 @@ struct AgentsLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 6) {
-                        ForEach(s.agents.prefix(3)) { agent in
+                        ForEach(s.agents.prefix(2)) { agent in
                             Link(destination: AgentLink.url(address: agent.id)) { AgentLine(agent: agent) }
                         }
                         if s.agents.isEmpty {
@@ -51,7 +51,7 @@ struct AgentsLiveActivity: Widget {
                             .foregroundStyle(Palette.color(top))
                     }
                 } else {
-                    HerdrMark(size: 14)
+                    AppMark(size: 14)
                 }
             } compactTrailing: {
                 if let next = AgentStatusWord.urgent.first(where: { $0 != s.top && s.count($0) > 0 }) {
@@ -60,11 +60,11 @@ struct AgentsLiveActivity: Widget {
                         Text("\(s.count(next))").font(.system(size: 14, weight: .semibold)).monospacedDigit()
                             .foregroundStyle(Palette.color(next))
                     }
-                } else if let first = s.agents.first {
-                    ProgramGlyph(agent: first, size: 15)
+                } else {
+                    AppMark(size: 15)
                 }
             } minimal: {
-                if let top = s.top { StatusMark(status: top, size: 13) } else { HerdrMark(size: 14) }
+                if let top = s.top { StatusMark(status: top, size: 13) } else { AppMark(size: 14) }
             }
             .widgetURL(s.agents.first.map { AgentLink.url(address: $0.id) })
             .keylineTint(s.top.map(Palette.color) ?? Palette.dim)
@@ -75,15 +75,14 @@ struct AgentsLiveActivity: Widget {
 // MARK: - Lock Screen
 
 private struct LockScreenView: View {
-    var host: String
     var state: AgentsActivityAttributes.ContentState
     var stale: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
-                HerdrMark(size: 15)
-                Text(host)
+                AppMark(size: 16)
+                Text("Wierdr")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Palette.foreground)
                     .lineLimit(1)
@@ -96,17 +95,10 @@ private struct LockScreenView: View {
                     Counts(state: state, size: 13)
                 }
             }
-            VStack(spacing: 6) {
-                ForEach(state.agents.prefix(4)) { agent in
+            // Three two-line rows fit the Lock Screen's ~160 pt; the counts above tell the rest.
+            VStack(spacing: 7) {
+                ForEach(state.agents.prefix(3)) { agent in
                     Link(destination: AgentLink.url(address: agent.id)) { AgentLine(agent: agent) }
-                }
-                let more = state.active - min(4, state.agents.count)
-                if more > 0 {
-                    Text("+\(more) more")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.dim)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 22)
                 }
                 if state.agents.isEmpty {
                     Text(state.idle > 0 ? "\(state.idle) idle" : "No agents")
@@ -117,45 +109,54 @@ private struct LockScreenView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
         .opacity(stale ? 0.7 : 1)
     }
 }
 
 // MARK: - Pieces
 
-/// One agent: status, program, title, its space, how long in this status.
+/// One agent, in two lines as in the sidebar: status and title; under the title its
+/// space · model and how long in this status (no program icons: too busy).
 private struct AgentLine: View {
     var agent: AgentsActivityAttributes.Agent
 
     var body: some View {
-        HStack(spacing: 8) {
-            StatusMark(status: agent.status, size: 12)
-                .frame(width: 14)
-            ProgramGlyph(agent: agent, size: 14)
-            Text(agent.title)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Palette.foreground)
-                .lineLimit(1)
-                .layoutPriority(1)
-            Spacer(minLength: 4)
-            // Its whole name (the pusher keeps it short); the title gives way.
-            Text(agent.machine.map { "\($0) · \(agent.space)" } ?? agent.space)
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.muted)
-                .lineLimit(1)
-                .fixedSize()
-            // As in the sidebar (`28m`); wierdr-push refreshes it when it would change.
-            if let age = AgentAge.coarse(since: agent.sinceDate, now: .now) {
-                Text(age)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(Palette.dim)
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 8) {
+                StatusMark(status: agent.status, size: 12)
+                    .frame(width: 14)
+                Text(agent.title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Palette.foreground)
                     .lineLimit(1)
-                    .fixedSize()
-                    .frame(minWidth: 30, alignment: .trailing)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            HStack(spacing: 8) {
+                Text(place)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.muted)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Counts by itself on the device (minutes only while locked); no pushes.
+                // A fixed width: a self-updating text takes all the room it's offered,
+                // and with `.fixedSize()` the card renders empty. Fits `23 min, 36 secs`.
+                if let since = agent.sinceDate {
+                    Text(since, style: .relative)
+                        .font(.system(size: 12).monospacedDigit())
+                        .foregroundStyle(Palette.dim)
+                        .lineLimit(1)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 104, alignment: .trailing)
+                }
+            }
+            .padding(.leading, 22)
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    /// `space · model`, the machine first for an agent on an added one.
+    private var place: String {
+        ([agent.machine, agent.space, agent.model].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: " · ")
     }
 }
 
@@ -216,33 +217,17 @@ private struct StatusMark: View {
     }
 }
 
-/// The program's icon: a glyph in the row's text color, or its full-color picture.
-private struct ProgramGlyph: View {
-    var agent: AgentsActivityAttributes.Agent
+/// Wierdr's icon (the app icon, small), rounded like one.
+private struct AppMark: View {
     var size: CGFloat
 
     var body: some View {
-        Image(agent.icon)
+        Image("WierdrIcon")
             .resizable()
-            .renderingMode(agent.tint ? .template : .original)
             .interpolation(.high)
             .aspectRatio(contentMode: .fit)
             .frame(width: size, height: size)
-            .foregroundStyle(Palette.muted)
-    }
-}
-
-/// Herdr's mark for the header: a small rounded tile with the bot glyph.
-private struct HerdrMark: View {
-    var size: CGFloat
-
-    var body: some View {
-        Image("ui.bot")
-            .resizable()
-            .renderingMode(.template)
-            .aspectRatio(contentMode: .fit)
-            .frame(width: size, height: size)
-            .foregroundStyle(Palette.accent)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
     }
 }
 

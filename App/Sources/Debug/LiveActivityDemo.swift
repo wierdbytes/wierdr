@@ -22,7 +22,7 @@ enum LiveActivityDemo {
                 Agent(id: "t1t", title: "Live Activity for agents", space: "wierdr", spaceColor: "#22a99a",
                       status: .done, since: now - 300, model: "Opus 5.5", icon: "program.pi"),
                 Agent(id: "t2m", title: "Refactor the sidebar rows", space: "herdr-app", spaceColor: "#c678dd",
-                      status: .working, since: now - 1260, model: "GPT-6.1", icon: "program.codex", tint: false),
+                      status: .working, since: now - (3 * 86_400 + 4 * 3600), model: "GPT-6.1", icon: "program.codex", tint: false),
                 Agent(id: "lf/t1", title: "Nightly backup check", space: "infra", spaceColor: "#e5c07b",
                       machine: "lf", status: .working, since: now - 42, model: "Sonnet 5", icon: "program.claude",
                       tint: false),
