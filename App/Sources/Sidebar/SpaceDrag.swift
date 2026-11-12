@@ -6,14 +6,14 @@ import WierdrModel
 /// card lifts and follows the finger, and where it would land the other cards of
 /// its machine part around an empty slot (a dashed outline as tall as the card).
 /// Let go over the list, it glides into the slot and the space moves there
-/// (`space.move`); taken out of the list, it goes back where it was.
+/// (`space.move`); let go off the list, it flies back to where it was.
 ///
 /// The drag is the list's own (its collection view's, `SpaceListDragDrop`): a
 /// finger holds a header and moves (as with the header's menu, which the system
-/// gives way), a pointer presses and moves. The lifted card is drawn by the list
-/// (`LiftedCard`), the card rows' markers (`SpaceRowMarker`) say where the cards
-/// are, and `SpacesList` shows the machine's spaces in `lane`'s order, the dragged
-/// one as its slot.
+/// gives way), a pointer presses and moves. The lifted card is drawn by the app
+/// over the window (`LiftedCard`), the card rows' markers (`SpaceRowMarker`) say
+/// where the cards are, and `SpacesList` shows the machine's spaces in `lane`'s
+/// order, the dragged one as its slot.
 @MainActor
 @Observable
 final class SpaceDrag {
@@ -42,6 +42,9 @@ final class SpaceDrag {
     @ObservationIgnored var grab = CGPoint(x: 0, y: 17)
     @ObservationIgnored private var height: CGFloat = 0
     @ObservationIgnored private var dropped = false
+    /// The lane as it was when the drag came: where the slot goes back while the
+    /// card is off the list.
+    @ObservationIgnored private var origin: Lane?
     @ObservationIgnored private var settling: Task<Void, Never>?
 
     /// The other cards part as quickly as the desktop's (PART_MS).
@@ -73,14 +76,23 @@ final class SpaceDrag {
 
     /// A drag of space `id` came over the list (at the start, or back).
     func enter(_ id: String, at p: CGPoint, in list: UIView) {
+        dropped = false
+        if dragged != id { begin(id, in: list) }
+    }
+
+    /// A drag of space `id` started (wherever the finger is by then): its card is
+    /// lifted, its rows in the list are its slot.
+    func begin(_ id: String, in list: UIView) {
+        dropped = false
         guard let ws = controller?.workspace, let space = ws.space(id) else { return }
         settling?.cancel()
-        dropped = false
         let ids = arranged(ws.spaces(on: space.machine), machine: space.machine).map(\.id)
         if let card = cardFrames(in: list)[id] { height = card.height }
+        let lane = Lane(machine: space.machine, ids: ids)
+        origin = lane
         withAnimation(Self.part) {
             dragged = id
-            lane = Lane(machine: space.machine, ids: ids)
+            self.lane = lane
         }
     }
 
@@ -115,13 +127,19 @@ final class SpaceDrag {
         withAnimation(Self.part) { self.lane = Lane(machine: lane.machine, ids: ids) }
     }
 
-    /// The drag left the list: the card goes back where it was.
+    /// The drag left the list: its slot goes back where the card was (the card,
+    /// still in the air, flies back there if let go off the list).
     func exit() {
+        guard dragged != nil, !dropped, let origin, lane != origin else { return }
+        withAnimation(Self.part) { lane = origin }
+    }
+
+    /// Let go off the list: the card flew back into its slot, and shows there again.
+    func cancelled() {
         guard dragged != nil, !dropped else { return }
-        withAnimation(Self.part) {
-            dragged = nil
-            lane = nil
-        }
+        dragged = nil
+        lane = nil
+        origin = nil
     }
 
     /// Let go over the list: the space moves to its slot (the card glides there, `slotFrame`).
@@ -144,6 +162,7 @@ final class SpaceDrag {
     func landed() {
         guard dropped, dragged != nil else { return }
         dragged = nil
+        origin = nil
         settle()
         guard lane != nil else { return }
         settling?.cancel()
@@ -164,9 +183,10 @@ final class SpaceDrag {
         }
     }
 
-    /// The drag is over, dropped or not.
+    /// The drag is over: dropped, the card lies in its slot by now. (Not dropped,
+    /// the list flies it back first and then calls `cancelled`.)
     func end() {
-        if dropped { landed() } else { exit() }
+        if dropped { landed() }
         dropped = false
     }
 
@@ -359,8 +379,11 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
     private weak var swiftUIDrag: (any UICollectionViewDragDelegate)?
     private weak var swiftUIDrop: (any UICollectionViewDropDelegate)?
 
-    /// The dragged card, drawn over the list (the system's own preview is invisible).
+    /// The dragged card, drawn over the window (the system's own preview is
+    /// invisible), and the drag it follows, frame by frame, anywhere on the screen.
     private var card: LiftedCard?
+    private var session: (any UIDragSession)?
+    private var follower: CADisplayLink?
 
     /// The header the touch now down lifted (nil: it lifted something else).
     private var lifted: (space: String?, touch: Int)?
@@ -470,16 +493,53 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
         return UIDragPreview(view: view, parameters: parameters)
     }
 
-    /// The card lifted where the finger holds it: in the list's column, as far below
-    /// the finger as it was taken (desktop's `dragLayout` card).
-    private func moveCard(_ id: String, to p: CGPoint, in cv: UICollectionView) {
-        if card == nil, let made = makeCard(id, in: cv) {
-            card = made
-            cv.addSubview(made)
+    /// The drag started: the card lifts out of the list (over everything, so it
+    /// follows the finger off the list too).
+    func collectionView(_ cv: UICollectionView, dragSessionWillBegin session: any UIDragSession) {
+        guard let id = Self.space(of: session.items) else {
+            swiftUIDrag?.collectionView?(cv, dragSessionWillBegin: session)
+            return
         }
-        guard let card, card.landing == false else { return }
-        card.isHidden = false
-        card.frame.origin = CGPoint(x: card.frame.minX, y: p.y - drag.grab.y)
+        removeCard()
+        let made = makeCard(id, in: cv)
+        drag.begin(id, in: cv)
+        guard let window = cv.window, let made else { return }
+        made.frame.origin = cv.convert(made.frame.origin, to: window)
+        window.addSubview(made)
+        card = made
+        self.session = session
+        follow()
+        let link = CADisplayLink(target: self, selector: #selector(follow))
+        link.add(to: .main, forMode: .common)
+        follower = link
+    }
+
+    /// Held where the finger took it (desktop's `dragLayout` card), wherever it is.
+    @objc private func follow() {
+        guard let session, let card, !card.landing, let window = card.superview else { return }
+        let p = session.location(in: window)
+        card.frame.origin = CGPoint(x: p.x - drag.grab.x, y: p.y - drag.grab.y)
+    }
+
+    private func stopFollowing() {
+        follower?.invalidate()
+        follower = nil
+        session = nil
+    }
+
+    /// The card glides into `slot` (in the list), turning into its look there; then
+    /// the list shows the card itself, and this one goes.
+    private func land(in slot: CGRect, of cv: UICollectionView, duration: TimeInterval = LiftedCard.landing,
+                      then done: @escaping () -> Void) {
+        guard let card, let window = card.superview else { return done() }
+        let target = cv.convert(slot.origin, to: window)
+        card.land(at: target, duration: duration) { [weak self, weak card] in
+            done()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                card?.removeFromSuperview()
+                if self?.card === card { self?.card = nil }
+            }
+        }
     }
 
     /// The card as it is now, drawn afresh (its rows in the list are the slot by now,
@@ -508,20 +568,49 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
         card = nil
     }
 
-    /// The lifted header: its piece of the card.
+    /// Let go off the list (or the drag was called off): the card flies back into its
+    /// slot, where it was.
+    private func flyBack(in cv: UICollectionView) {
+        guard let card, !card.landing else { return }
+        drag.exit()
+        // The slot is back where the card was once the list has laid that out.
+        DispatchQueue.main.async { [weak self, weak cv] in
+            guard let self, let cv else { return }
+            guard let slot = self.drag.slotFrame(in: cv) else {
+                self.removeCard()
+                self.drag.cancelled()
+                return
+            }
+            self.land(in: slot, of: cv, duration: 0.3) { [drag = self.drag] in drag.cancelled() }
+        }
+    }
+
+    /// The lifted header: its piece of the card. Called off, the system flies the
+    /// header back too: by then it's the empty slot, and the card flies back itself.
     func collectionView(_ cv: UICollectionView, dragPreviewParametersForItemAt indexPath: IndexPath) -> UIDragPreviewParameters? {
         guard let cell = cv.cellForItem(at: indexPath), let marker = drag.marker(in: cell), marker.header else {
             return swiftUIDrag?.collectionView?(cv, dragPreviewParametersForItemAt: indexPath)
         }
         let parameters = UIDragPreviewParameters()
+        parameters.backgroundColor = .clear
+        if marker.space == drag.dragged {
+            parameters.visiblePath = UIBezierPath(rect: CGRect(x: 0, y: 0, width: 1, height: 1))
+            parameters.shadowPath = UIBezierPath()
+            return parameters
+        }
         let rect = marker.convert(marker.bounds, to: cell)
         parameters.visiblePath = UIBezierPath(roundedRect: rect, cornerRadius: 10)
         return parameters
     }
 
     func collectionView(_ cv: UICollectionView, dragSessionDidEnd session: any UIDragSession) {
-        if Self.space(of: session.items) != nil { lifted = nil }
-        swiftUIDrag?.collectionView?(cv, dragSessionDidEnd: session)
+        guard Self.space(of: session.items) != nil else {
+            swiftUIDrag?.collectionView?(cv, dragSessionDidEnd: session)
+            return
+        }
+        lifted = nil
+        stopFollowing()
+        flyBack(in: cv)
     }
 
     func collectionView(_ cv: UICollectionView, dragSessionIsRestrictedToDraggingApplication session: any UIDragSession) -> Bool {
@@ -543,9 +632,7 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
 
     func collectionView(_ cv: UICollectionView, dropSessionDidEnter session: any UIDropSession) {
         guard let id = space(of: session) else { return swiftUIDrop?.collectionView?(cv, dropSessionDidEnter: session) ?? () }
-        let p = session.location(in: cv)
-        drag.enter(id, at: p, in: cv)
-        moveCard(id, to: p, in: cv)
+        drag.enter(id, at: session.location(in: cv), in: cv)
     }
 
     func collectionView(_ cv: UICollectionView, dropSessionDidUpdate session: any UIDropSession,
@@ -554,9 +641,7 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
             return swiftUIDrop?.collectionView?(cv, dropSessionDidUpdate: session, withDestinationIndexPath: indexPath)
                 ?? UICollectionViewDropProposal(operation: .cancel)
         }
-        let p = session.location(in: cv)
-        drag.update(at: p, in: cv)
-        if let id = space(of: session) { moveCard(id, to: p, in: cv) }
+        drag.update(at: session.location(in: cv), in: cv)
         // The list's own insertion gap stays shut: the slot is the card's own rows.
         return UICollectionViewDropProposal(operation: .move, intent: .unspecified)
     }
@@ -564,14 +649,11 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
     func collectionView(_ cv: UICollectionView, dropSessionDidExit session: any UIDropSession) {
         guard space(of: session) != nil else { return swiftUIDrop?.collectionView?(cv, dropSessionDidExit: session) ?? () }
         drag.exit()
-        // Taken off the list, the card is back in its place (as on the desktop).
-        if card?.landing == false { card?.isHidden = true }
     }
 
     func collectionView(_ cv: UICollectionView, dropSessionDidEnd session: any UIDropSession) {
         guard space(of: session) != nil else { return swiftUIDrop?.collectionView?(cv, dropSessionDidEnd: session) ?? () }
         drag.end()
-        if card?.landing == false { removeCard() }
     }
 
     /// Let go: the space moves, and the card glides into its slot.
@@ -589,21 +671,13 @@ final class SpaceListDragDrop: NSObject, UICollectionViewDragDelegate, UICollect
         for item in coordinator.items {
             coordinator.drop(item.dragItem, to: UIDragPreviewTarget(container: cv, center: CGPoint(x: slot.midX, y: slot.midY)))
         }
-        // The card glides into its slot, turning into the card in the list on the way;
-        // there, the list shows the card itself, and then this one goes.
-        guard let card else { return drag.landed() }
-        card.isHidden = false
-        card.land(at: slot.origin) { [weak self, weak card] in
-            self?.drag.landed()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                card?.removeFromSuperview()
-                if self?.card === card { self?.card = nil }
-            }
-        }
+        // The card glides into its slot, turning into the card in the list on the way.
+        stopFollowing()
+        land(in: slot, of: cv) { [drag] in drag.landed() }
     }
 }
 
-/// The card being dragged, drawn by the list over its rows: raised with an accent
+/// The card being dragged, drawn over the window: raised with an accent
 /// edge and a shadow, as on the desktop; landing, it crossfades to its look in the
 /// list as it glides into its slot.
 final class LiftedCard: UIView {
@@ -618,7 +692,6 @@ final class LiftedCard: UIView {
     init(lifted: UIImage, resting: UIImage) {
         super.init(frame: CGRect(origin: .zero, size: resting.size))
         isUserInteractionEnabled = false
-        layer.zPosition = 1000  // over the list's cells, which come and go
         shadow.frame = bounds
         shadow.layer.shadowColor = UIColor.black.cgColor
         shadow.layer.shadowOpacity = 0.35
@@ -636,9 +709,9 @@ final class LiftedCard: UIView {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func land(at origin: CGPoint, completion: @escaping () -> Void) {
+    func land(at origin: CGPoint, duration: TimeInterval = LiftedCard.landing, completion: @escaping () -> Void) {
         landing = true
-        UIView.animate(withDuration: Self.landing, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+        UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
             self.frame.origin = origin
             self.lifted.alpha = 0
             self.shadow.alpha = 0
