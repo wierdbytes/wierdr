@@ -202,9 +202,11 @@ private struct PhoneListGestures: UIViewRepresentable {
         // From the edge it goes first, as the system's back swipe does. Closing goes
         // before a row's own swipe: leftward it closes (the row's trailing actions are
         // in its long-press menu), rightward it fails and the row's leading ones come.
+        // Only before the list's pans: a held finger never fails a pan, so the
+        // long-press menu and a space's lift waiting for it would never come.
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             if g === open { return atEdge }
-            return isInList(other) && !isScrollPan(other)
+            return isRowSwipe(other)
         }
 
         // Scrolling may run along with closing.
@@ -216,6 +218,11 @@ private struct PhoneListGestures: UIViewRepresentable {
 
         private func isScrollPan(_ g: UIGestureRecognizer) -> Bool {
             (g.view as? UIScrollView)?.panGestureRecognizer === g
+        }
+
+        /// A row's swipe (its actions): a pan in the list that isn't its scrolling.
+        private func isRowSwipe(_ g: UIGestureRecognizer) -> Bool {
+            g is UIPanGestureRecognizer && !isScrollPan(g) && isInList(g)
         }
 
         private func isInList(_ g: UIGestureRecognizer) -> Bool {

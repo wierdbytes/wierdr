@@ -175,9 +175,11 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
 
         // The edge swipe goes first, as the system's does. Closing goes before a row's
         // own swipe: leftward it closes, rightward it fails and the row's actions come.
+        // Only before the list's pans: a held finger never fails a pan, so the
+        // long-press menu and a space's lift waiting for it would never come.
         func gestureRecognizer(_ g: UIGestureRecognizer,
                                shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            g === open || (isInList(other) && !isScrollPan(other))
+            g === open || isRowSwipe(other)
         }
 
         // Scrolling may run along with closing.
@@ -189,6 +191,11 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
 
         private func isScrollPan(_ g: UIGestureRecognizer) -> Bool {
             (g.view as? UIScrollView)?.panGestureRecognizer === g
+        }
+
+        /// A row's swipe (its actions): a pan in the list that isn't its scrolling.
+        private func isRowSwipe(_ g: UIGestureRecognizer) -> Bool {
+            g is UIPanGestureRecognizer && !isScrollPan(g) && isInList(g)
         }
 
         private func isInList(_ g: UIGestureRecognizer) -> Bool {
