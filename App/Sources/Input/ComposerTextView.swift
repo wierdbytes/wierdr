@@ -4,13 +4,15 @@ import UIKit
 /// The composer's text (`ComposerBar`): a `UITextView`, as Telegram's, laid
 /// out with its metrics (system 17 pt, text insets 4.5 / 5.5, at least 31 pt:
 /// a 40-pt capsule for one line). SwiftUI's `TextField` can't turn smart
-/// quotes off, collapse to one truncated line or carry the iPad's accessory.
+/// quotes off, scroll a one-line window or carry the iPad's accessory.
 ///
-/// While it doesn't have the keyboard it shows one line: the draft with its
-/// line breaks as spaces, cut with an ellipsis. With the keyboard it grows
-/// with the text up to `maxHeight`, then scrolls. A hardware keyboard's
-/// Return sends (Telegram's rule; ⇧Return is a new line); the on-screen
-/// keyboard's Return is a new line.
+/// While it doesn't have the keyboard it is one line tall: a window into the
+/// draft as it is (its line breaks too), from its first line each time the
+/// keyboard goes; a finger scrolls it through the lines, a tap brings the
+/// keyboard with the caret where it landed. With the keyboard it grows with
+/// the text up to `maxHeight`, then scrolls. A hardware keyboard's Return
+/// sends (Telegram's rule; ⇧Return is a new line); the on-screen keyboard's
+/// Return is a new line.
 struct ComposerTextView: UIViewRepresentable {
     var text: String
     /// Has the keyboard (or should get it).
@@ -38,6 +40,9 @@ struct ComposerTextView: UIViewRepresentable {
         view.backgroundColor = .clear
         view.textContainer.lineFragmentPadding = 0
         view.isScrollEnabled = true
+        // Its insets are its own: the iPhone's bar dips into the home indicator's safe area,
+        // and the automatic adjustment moved the one-line window off its line (iOS 26).
+        view.contentInsetAdjustmentBehavior = .never
         view.showsHorizontalScrollIndicator = false
         view.alwaysBounceVertical = false
         view.returnKeyType = .default
@@ -82,6 +87,7 @@ struct ComposerTextView: UIViewRepresentable {
         if view.verticalScrollIndicatorInsets != indicator { view.verticalScrollIndicatorInsets = indicator }
 
         let collapsed = !focused && !view.isFirstResponder
+        view.oneLine = collapsed
         c.apply(text: text, collapsed: collapsed)
 
         if focused, !view.isFirstResponder {
@@ -123,45 +129,24 @@ struct ComposerTextView: UIViewRepresentable {
         /// What the view was last set up with (`updateUIView` sets only what changed).
         var theme: Theme?
         var prose: Bool?
-        /// Showing the one-line preview (not the draft itself).
-        private var showsPreview = false
+        /// One line tall at the last update (the keyboard gone).
+        private var collapsed = false
         /// The text last reported as typed: SwiftUI handing it back (maybe a
         /// key behind) is no change from outside.
         private var reported: String?
 
-        /// The draft (with the keyboard) or its one-line preview (without).
+        /// The draft, and the one-line window back at its first line when the keyboard has just gone.
         func apply(text: String, collapsed: Bool) {
             guard let view else { return }
-            if collapsed {
-                let preview = text.replacingOccurrences(of: "\r\n", with: " ").replacingOccurrences(of: "\n", with: " ")
-                view.textContainer.maximumNumberOfLines = 1
-                view.textContainer.lineBreakMode = .byTruncatingTail
-                if !showsPreview || view.text != preview { view.text = preview }
-                showsPreview = true
-                view.contentOffset = .zero
-            } else {
-                if showsPreview {
-                    view.textContainer.maximumNumberOfLines = 0
-                    view.textContainer.lineBreakMode = .byWordWrapping
-                    showsPreview = false
-                    view.text = text
-                    reported = text
-                    view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
-                    view.textChanged()
-                } else if text != reported, view.text != text, view.markedTextRange == nil {
-                    // Changed from outside (a path, a paste, sent): the caret goes to the end.
-                    view.text = text
-                    reported = text
-                    view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
-                    view.textChanged()
-                }
+            if collapsed, !self.collapsed { view.setContentOffset(.zero, animated: false) }
+            self.collapsed = collapsed
+            if text != reported, view.text != text, view.markedTextRange == nil {
+                // Changed from outside (a path, a paste, sent): the caret goes to the end.
+                view.text = text
+                reported = text
+                view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
+                view.textChanged()
             }
-        }
-
-        func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
-            // Editing starts on the draft itself, with the caret at its end.
-            apply(text: parent?.text ?? "", collapsed: false)
-            return true
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
@@ -172,8 +157,17 @@ struct ComposerTextView: UIViewRepresentable {
             parent?.onFocus(false)
         }
 
+        /// One line tall, a finger's scroll comes to rest on a whole line.
+        func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
+                                       targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+            guard let view = scrollView as? ComposerUITextView, view.oneLine else { return }
+            let line = ComposerTextView.font.lineHeight
+            let end = max(0, view.contentSize.height + view.contentInset.bottom - view.bounds.height)
+            let y = (targetContentOffset.pointee.y / line).rounded() * line
+            targetContentOffset.pointee.y = min(max(0, y), end)
+        }
+
         func textViewDidChange(_ textView: UITextView) {
-            guard !showsPreview else { return }
             reported = textView.text
             (textView as? ComposerUITextView)?.textChanged()
             parent?.onEdit(textView.text)
@@ -201,6 +195,18 @@ struct ComposerTextView: UIViewRepresentable {
 /// iPad's 1-pt accessory is found through it (`KeyboardCover`).
 final class ComposerUITextView: UITextView {
     var onReturn: (() -> Void)?
+
+    /// One line tall (the keyboard gone): only one line shows (the next one's
+    /// top would peek out of the insets), and the last one can come to rest at the top.
+    var oneLine = false {
+        didSet {
+            guard oneLine != oldValue else { return }
+            showsVerticalScrollIndicator = !oneLine
+            contentInset.bottom = oneLine ? 1 : 0
+            setNeedsLayout()
+        }
+    }
+    private let lineMask = CALayer()
 
     private static weak var focusedView: ComposerUITextView?
 
@@ -239,9 +245,38 @@ final class ComposerUITextView: UITextView {
     // through a long message isn't pulled back to the caret.
     override func layoutSubviews() {
         super.layoutSubviews()
+        updateLineMask()
+        snapToLine()
         guard followsCaret else { return }
         followsCaret = false
         keepCaretInView()
+    }
+
+    /// One line tall: a mask over the first line's place (it moves with the
+    /// bounds, which scrolling shifts, so it is set again on every layout).
+    private func updateLineMask() {
+        guard oneLine else {
+            if layer.mask != nil { layer.mask = nil }
+            return
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        lineMask.backgroundColor = UIColor.black.cgColor
+        // The line's own band: the insets around it would show the lines next to it once scrolled.
+        lineMask.frame = CGRect(x: bounds.minX, y: bounds.minY + textContainerInset.top, width: bounds.width,
+                                height: ComposerTextView.font.lineHeight)
+        if layer.mask !== lineMask { layer.mask = lineMask }
+        CATransaction.commit()
+    }
+
+    /// One line tall and at rest: on a whole line, whatever moved it (a
+    /// finger's scroll settles there by itself, see the coordinator).
+    private func snapToLine() {
+        guard oneLine, !isTracking, !isDragging, !isDecelerating, bounds.height > 0 else { return }
+        let line = ComposerTextView.font.lineHeight
+        let end = max(0, contentSize.height + contentInset.bottom - bounds.height)
+        let y = min(max(0, (contentOffset.y / line).rounded() * line), end)
+        if abs(contentOffset.y - y) > 0.5 { contentOffset.y = y }
     }
 
     /// Scrolls just enough for the caret's line (and the inset under it) to
