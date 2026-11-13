@@ -400,7 +400,7 @@ private struct SendPressStyle: ButtonStyle {
 }
 
 /// Telegram's attach button: its icon drops to 0.4 at once on touch, back over 0.2 s.
-private struct AttachPressStyle: ButtonStyle {
+struct AttachPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.4 : 1)
@@ -449,8 +449,9 @@ struct SendGlyph: Shape {
 // MARK: - Glass
 
 /// Telegram's glass container: on iOS 26 one `GlassEffectContainer` (7-pt
-/// merging) holds the attach button's and the field's glass.
-private struct ComposerGlassGroup<Content: View>: View {
+/// merging) holds the attach button's and the field's glass (and, mirrored,
+/// the iPhone's top bar).
+struct ComposerGlassGroup<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {

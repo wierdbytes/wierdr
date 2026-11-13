@@ -427,17 +427,14 @@ final class WorkspaceController {
         return screen.zoomedPane(of: tab).map { [$0] } ?? tab.panes
     }
 
-    /// Agents other than `paneID`'s that wait for the person, by status.
-    func attention(excluding paneID: String?) -> (blocked: Int, done: Int) {
-        var blocked = 0, done = 0
-        for row in agentPanes where row.pane != paneID {
-            switch row.terminal.status {
-            case .blocked: blocked += 1
-            case .done: done += 1
-            default: break
-            }
+    /// The most urgent status among the agents other than the one at `address` (the one on
+    /// screen; needs you, done, working; never idle) and how many have it; `nil`: all idle.
+    func attention(excluding address: String?) -> (status: AgentStatus, count: Int)? {
+        var counts: [AgentStatus: Int] = [:]
+        for row in agentPanes where row.terminal.address != address {
+            if let s = row.terminal.status, s != .idle { counts[s, default: 0] += 1 }
         }
-        return (blocked, done)
+        return counts.keys.max().map { ($0, counts[$0] ?? 0) }
     }
 
     // MARK: - Pending selection

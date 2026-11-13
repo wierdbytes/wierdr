@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 import WierdrModel
 
-/// One pane on the whole iPhone screen: a bar with the list's button, what runs here and
-/// the next agent waiting for you; the other panes of the space; the
+/// One pane on the whole iPhone screen: a bar with the list's button and what runs here
+/// (a tap on it: the pane's menu, `PhonePaneMenu`, dropping down under it); the
 /// terminal edge to edge, and over it the key panel and the ways the
 /// keyboards come (`KeyPanelLayer`: a swipe to the left on the terminal).
 /// Under the terminal, always, the message field (`ComposerBar`); hidden
@@ -20,10 +20,11 @@ struct PhonePaneScreen: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.services) private var services
     @Environment(\.theme) private var theme
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var keys = KeyPanelState()
     /// The terminal's and the field's height: how tall the field may grow.
     @State private var room: CGFloat = 0
+    /// The pane's menu is out, under the title capsule (grown to the whole title).
+    @State private var menuOpen = false
 
     var body: some View {
         let space = controller.activeSpace
@@ -32,46 +33,60 @@ struct PhonePaneScreen: View {
         let peek = controller.peek
         // What the screen shows: the sub-agent opened from the list, else the pane's terminal.
         let address = peek ?? pane?.terminal
-        VStack(spacing: 0) {
-            PhonePaneTopBar(space: space, tab: tab, pane: pane, peek: peek)
-            if let space, verticalSizeClass != .compact, panes(of: space).count > 1 {
-                PhonePaneStrip(space: space, current: pane?.id, panes: panes(of: space))
-            }
+        ZStack(alignment: .top) {
             VStack(spacing: 0) {
-                Group {
-                    if let peek {
-                        PhonePaneContent(pane: Pane(id: "peek:\(peek)", terminal: peek, mod: nil))
-                            .id("peek:\(peek)")
-                    } else if let pane {
-                        PhonePaneContent(pane: pane)
-                            .id(pane.id)
-                    } else {
-                        PhoneEmptyPane()
+                // The bar's place: it floats over the terminal, which keeps its size when the title grows.
+                Color.clear.frame(height: PhonePaneTopBar.collapsedHeight)
+                VStack(spacing: 0) {
+                    Group {
+                        if let peek {
+                            PhonePaneContent(pane: Pane(id: "peek:\(peek)", terminal: peek, mod: nil))
+                                .id("peek:\(peek)")
+                        } else if let pane {
+                            PhonePaneContent(pane: pane)
+                                .id(pane.id)
+                        } else {
+                            PhoneEmptyPane()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(theme.background)
+                    .keyPanel(address: address, covered: covered, state: $keys)
+                    .overlay(alignment: .bottom) {
+                        // Above the panel, and beside it while it is out.
+                        ToastStack()
+                            .padding(.leading, 12)
+                            .padding(.trailing, keys.trailingInset > 0 ? keys.trailingInset + 6 : 12)
+                            .padding(.bottom, 10)
+                    }
+                    if let address, services.terminalSession(address)?.hasKeyboardFocus != true {
+                        ComposerBar(address: address, placement: .screen, room: room)
+                            .id(address)
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(theme.background)
-                .keyPanel(address: address, covered: covered, state: $keys)
-                .overlay(alignment: .bottom) {
-                    // Above the panel, and beside it while it is out.
-                    ToastStack()
-                        .padding(.leading, 12)
-                        .padding(.trailing, keys.trailingInset > 0 ? keys.trailingInset + 6 : 12)
-                        .padding(.bottom, 10)
-                }
-                if let address, services.terminalSession(address)?.hasKeyboardFocus != true {
-                    ComposerBar(address: address, placement: .screen, room: room)
-                        .id(address)
-                }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
+            if menuOpen {
+                // Any tap but the menu's closes it (and doesn't reach the terminal).
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation(PhonePaneTopBar.motion) { menuOpen = false } }
+                    .accessibilityHidden(true)
+            }
+            PhonePaneTopBar(space: space, tab: tab, pane: pane, peek: peek, menuOpen: $menuOpen)
         }
-        // Another pane, or the list out: the keyboard goes (the draft stays with its terminal).
-        .onChange(of: address) { controller.closeCompose() }
+        // Another pane, or the list out: the keyboard goes (the draft stays with its terminal), the menu too.
+        .onChange(of: address) {
+            controller.closeCompose()
+            menuOpen = false
+        }
+        .onChange(of: covered) { if covered { menuOpen = false } }
         .onDisappear { controller.composing = nil }
-        .background(theme.chrome.ignoresSafeArea())
+        // One ground for the bar, the terminal and the field: the glass floats on the terminal's background.
+        .background(theme.background.ignoresSafeArea())
         // Under the list, its own banner shows.
-        .overlay(alignment: .top) { if !covered { ConnectionBanner(top: 56) } }
+        .overlay(alignment: .top) { if !covered { ConnectionBanner(top: PhonePaneTopBar.collapsedHeight) } }
         // Watching an agent work: the screen stays on (a locked iPhone drops the connection).
         .onChange(of: keepsAwake && !covered, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
@@ -79,12 +94,6 @@ struct PhonePaneScreen: View {
 
     private var keepsAwake: Bool {
         controller.workspace.terminal(controller.peek ?? controller.focusedPane?.terminal)?.status == .working
-    }
-
-    /// The space's panes in tab order, then pane order (stable, unlike the
-    /// sidebar's urgency order, so chips don't move under the finger).
-    private func panes(of space: Space) -> [Pane] {
-        space.tabs.flatMap(\.panes)
     }
 }
 
@@ -135,57 +144,116 @@ private struct PhoneEmptyPane: View {
 
 // MARK: - Top bar
 
-/// The list's button, the space avatar, what runs here (title + model or folder), the
-/// next agent waiting for you, the pane menu. 52 pt. A sub-agent shown here (`peek`)
-/// reads as under its parent in the list (never done), from whom.
+/// Telegram's chat header, on the terminal's background with no line under it: two
+/// 44-pt glass pills on one line, the field's side insets, one glass container. The
+/// list's button (a circle with the sidebar glyph; while other agents aren't idle,
+/// Telegram's back button: "‹" and a badge with how many have the most urgent status)
+/// and what runs here (a capsule colored with the agent's status: its title, 15 pt
+/// semibold, and under it the space, 12 pt gray, centered). A sub-agent shown here
+/// (`peek`) reads as under its parent in the list (never done).
+///
+/// A tap on the capsule: the pane's menu (`PhonePaneMenu`) under it, sliding down.
+/// Meanwhile the capsule grows left over the list's button (which goes) and, for a title
+/// cut on one line, down over the terminal (up to 4 lines of title, then the space); back
+/// when the menu goes. The bar floats over the terminal (`PhonePaneScreen` keeps its
+/// collapsed place), so the terminal keeps its size.
 private struct PhonePaneTopBar: View {
     var space: Space?
     var tab: Tab?
     var pane: Pane?
     var peek: String? = nil
+    @Binding var menuOpen: Bool
+
+    /// Every pill's height (the capsule's while collapsed).
+    static let height: CGFloat = 44
+    /// The bar's height with the capsule collapsed: 4 above the pills, 8 under them.
+    static let collapsedHeight: CGFloat = 4 + height + 8
+    /// The capsule growing and shrinking, the list's button going and coming, the menu.
+    static let motion = Animation.snappy(duration: 0.32)
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
         let terminal = controller.workspace.terminal(peek ?? pane?.terminal)
-        HStack(spacing: 0) {
-            Button { controller.showSidebar() } label: {
-                Icon("sidebar", size: 20, color: theme.foreground)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Show the List")
-            if let space {
-                SpaceAvatar(space: space, size: 26)
-                    .padding(.trailing, 10)
-                    .accessibilityHidden(true)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    if let status = peek != nil ? terminal?.kidStatus : terminal?.status { StatusMark(status: status) }
-                    Text(title(terminal))
-                        .font(.ui(15.5, .semibold))
-                        .foregroundStyle(theme.foreground)
-                        .lineLimit(1)
+        let status = status(terminal)
+        let shape = RoundedRectangle(cornerRadius: Self.height / 2, style: .circular)
+        // The capsules' row and, while it's out, the menu under it: centered under the grown
+        // capsule (the row's width), it only moves down, following the capsule's edge.
+        VStack(spacing: 8) {
+            ComposerGlassGroup {
+                HStack(alignment: .top, spacing: 6) {
+                    if !menuOpen {
+                        PhoneListButton(current: peek ?? pane?.terminal)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+                    Button {
+                        withAnimation(Self.motion) { menuOpen.toggle() }
+                    } label: {
+                        VStack(spacing: 1) {
+                            Text(title(terminal))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(theme.foreground)
+                                .lineLimit(menuOpen ? 4 : 1)
+                                .multilineTextAlignment(.center)
+                            if let subtitle {
+                                Text(subtitle)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(theme.muted)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, menuOpen ? 6 : 0)
+                        .frame(maxWidth: .infinity, minHeight: Self.height)
+                        .contentShape(shape)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityValue(Format.statusWord(status))
+                    }
+                    .buttonStyle(AttachPressStyle())
+                    .accessibilityHint(menuOpen ? "Hides the pane's menu" : "Shows the pane's menu")
+                    // The status as a color over the glass, not through it: the glass stays the
+                    // list button's, so the button's glass merges into it and comes back out of
+                    // it whatever the status (tinted glass doesn't merge, it showed through and
+                    // was cut off). Only the color animates, not the capsule growing or shrinking.
+                    .background {
+                        shape.animation(.easeInOut(duration: 0.25)) { $0.foregroundStyle(tint(status) ?? .clear) }
+                    }
+                    .composerGlass(shape, theme: theme)
                 }
-                subtitle(terminal)
-                    .lineLimit(1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            AttentionButton(current: pane?.id)
-                .padding(.leading, 6)
-            PhonePaneMenu(space: space, tab: tab, pane: pane, terminal: terminal, peek: peek)
+            if menuOpen {
+                PhonePaneMenu(space: space, tab: tab, pane: pane, terminal: terminal, peek: peek) {
+                    withAnimation(Self.motion) { menuOpen = false }
+                }
+                .transition(.offset(y: -24).combined(with: .scale(scale: 0.9, anchor: .top)).combined(with: .opacity))
+            }
         }
-        .padding(.leading, 2)
-        .padding(.trailing, 4)
-        .frame(height: 52)
+        .padding(.horizontal, Self.sideInset)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity)
-        .background(theme.chrome)
-        .overlay(alignment: .bottom) { Hairline().ignoresSafeArea(edges: .horizontal) }
+    }
+
+    /// The field's side inset with the keyboard down: in by 18 pt beside the
+    /// screen's rounded corners (a home indicator), else 8.
+    private static var sideInset: CGFloat {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        return (scene?.keyWindow?.safeAreaInsets.bottom ?? 0) > 0 ? 26 : 8
+    }
+
+    /// An agent's status (a sub-agent's as in the list); a terminal has none.
+    private func status(_ t: TerminalInfo?) -> AgentStatus? {
+        guard let t else { return nil }
+        if peek != nil { return t.kidStatus }
+        return t.isAgent ? t.status : nil
+    }
+
+    /// The status's color over the capsule's glass; idle (or none): the glass alone.
+    private func tint(_ status: AgentStatus?) -> Color? {
+        guard let status, status != .idle else { return nil }
+        return theme.color(for: status).opacity(theme.isDark ? 0.22 : 0.16)
     }
 
     private func title(_ t: TerminalInfo?) -> String {
@@ -195,260 +263,59 @@ private struct PhonePaneTopBar: View {
         return t.isAgent ? Format.agentTitle(t, tab: tab) : Format.processName(t)
     }
 
-    /// "space · Opus 5.5 @high · 59.4k" for agents, "space · ~/folder" for terminals.
-    private func subtitle(_ t: TerminalInfo?) -> Text {
-        var out = Text(space?.displayName ?? "").foregroundColor(theme.muted)
-        func dot() { out = out + Text("  ·  ").foregroundColor(theme.dim) }
-        if peek != nil, let parent = controller.workspace.terminal(t?.parent) {
-            out = Text("from \(Format.kidTitle(parent))").foregroundColor(theme.muted)
-        }
-        if let t, t.isAgent {
-            dot()
-            out = out + Text(t.meta?.model ?? t.program.name).foregroundColor(theme.muted)
-            if let effort = t.meta?.effort, !effort.isEmpty {
-                out = out + Text(" @" + effort).foregroundColor(theme.effortColor(effort))
-            }
-            if let ctx = Format.context(t.meta?.ctx) {
-                dot()
-                out = out + Text(ctx).foregroundColor(theme.contextNumberColor(cacheUntil: t.meta?.cacheUntil, now: Date()))
-            }
-        } else if let t {
-            let folder = Format.folder(t, home: controller.workspace.home)
-            if !folder.isEmpty {
-                dot()
-                out = out + Text(folder).foregroundColor(theme.dim)
-            }
-        }
-        return out.font(.ui(12))
+    /// The space's name under the title (none when the space is the title: nothing runs).
+    private var subtitle: String? {
+        guard pane != nil || peek != nil, let name = space?.displayName, !name.isEmpty else { return nil }
+        return name
     }
 }
 
-/// "! 2 ›" / "● 3 ›": how many other agents wait for you; tap: the next one
-/// (needs you first, then done), across all spaces.
-private struct AttentionButton: View {
+/// The list's button, a 44-pt glass pill: a circle with the sidebar glyph; while other
+/// agents aren't idle, Telegram's back button: "‹" and a round badge with how many have
+/// the most urgent status (needs you, then done, then working), filled with its color.
+/// A tap: the list.
+private struct PhoneListButton: View {
+    /// The terminal on screen: not counted.
     var current: String?
+
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
         let waiting = controller.attention(excluding: current)
-        let status: AgentStatus? = waiting.blocked > 0 ? .blocked : (waiting.done > 0 ? .done : nil)
-        if let status {
-            let n = status == .blocked ? waiting.blocked : waiting.done
-            let color = status == .blocked ? theme.blocked : theme.done
-            Button { controller.focusNext(status: status) } label: {
-                HStack(spacing: 5) {
-                    StatusMark(status: status)
-                    Text("\(n)")
-                        .font(.ui(13.5, .semibold))
-                        .foregroundStyle(color)
-                    Icon("chevron-right", size: 11, color: color)
-                }
-                .padding(.leading, 8)
-                .padding(.trailing, 9)
-                .frame(height: 30)
-                .background(color.opacity(0.14), in: Capsule())
-                .frame(height: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(status == .blocked ? "\(n) need you" : "\(n) done")
-            .accessibilityHint("Opens the next one")
-            .transition(.scale.combined(with: .opacity))
-        }
-    }
-}
-
-// MARK: - Strip of the space's panes
-
-/// The other panes of this space (all its tabs) as chips; tap to switch.
-private struct PhonePaneStrip: View {
-    var space: Space
-    var current: String?
-    var panes: [Pane]
-
-    @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(panes) { pane in
-                        chip(pane, selected: pane.id == current)
-                            .id(pane.id)
+        let height = PhonePaneTopBar.height
+        Button { controller.showSidebar() } label: {
+            Group {
+                if let waiting {
+                    HStack(spacing: 7) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 21, weight: .regular))
+                            .foregroundStyle(theme.foreground)
+                        Text("\(waiting.count)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                            .foregroundStyle(theme.background)
+                            .padding(.horizontal, 6)
+                            .frame(minWidth: 22, minHeight: 22)
+                            .background(theme.color(for: waiting.status), in: Capsule())
                     }
-                }
-                .padding(.horizontal, 10)
-            }
-            .onAppear { if let current { proxy.scrollTo(current, anchor: .center) } }
-            .onChange(of: current) { _, id in
-                guard let id else { return }
-                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
-            }
-        }
-        .frame(height: 42)
-        .background(theme.chrome)
-        .overlay(alignment: .bottom) { Hairline().ignoresSafeArea(edges: .horizontal) }
-    }
-
-    private func chip(_ pane: Pane, selected: Bool) -> some View {
-        let ws = controller.workspace
-        let t = ws.terminal(pane.terminal)
-        let tab = ws.location(ofPane: pane.id)?.tab
-        let label: String = {
-            guard let t else { return pane.mod ?? "panel" }
-            return t.isAgent ? Format.agentTitle(t, tab: tab) : Format.processName(t)
-        }()
-        return Button {
-            controller.focus(pane: pane.id)
-        } label: {
-            HStack(spacing: 6) {
-                if let t {
-                    if t.isAgent {
-                        StatusMark(status: t.status)
-                    } else {
-                        ProgramIcon(program: t.program, size: 13, color: theme.muted)
-                    }
+                    .padding(.leading, 13)
+                    .padding(.trailing, 11)
                 } else {
-                    Icon("file-text", size: 13, color: theme.muted)
-                }
-                Text(label)
-                    .font(.ui(13, selected ? .medium : .regular))
-                    .foregroundStyle(selected ? theme.foreground : theme.muted)
-                    .lineLimit(1)
-                    .frame(maxWidth: 150, alignment: .leading)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(selected ? theme.raised : theme.hover, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? theme.border : .clear, lineWidth: 1))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-    }
-}
-
-// MARK: - Pane menu
-
-/// Everything else about the pane, its tab and space; text size; settings.
-/// A sub-agent shown here (`peek`): Keep as Tab, back to its parent's pane.
-private struct PhonePaneMenu: View {
-    var space: Space?
-    var tab: Tab?
-    var pane: Pane?
-    var terminal: TerminalInfo?
-    var peek: String? = nil
-
-    @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
-    @AppStorage(TerminalFonts.sizeKey) private var fontSize = Double(TerminalFonts.defaultSize)
-
-    var body: some View {
-        Menu {
-            if let peek {
-                Section {
-                    Button { controller.keep(peek) } label: { Label("Keep as Tab", image: "ui.plus") }
-                        .disabled(controller.keepTarget(for: peek) == nil)
-                    if let pane {
-                        Button { controller.focus(pane: pane.id) } label: {
-                            Label("Back to \(parentTitle)", image: "ui.chevron-left")
-                        }
-                    }
-                }
-            } else {
-                paneSections
-            }
-            Section {
-                ControlGroup {
-                    Button { step(-1) } label: { Label("Smaller Text", systemImage: "minus") }
-                        .disabled(fontSize <= Double(TerminalFonts.sizeRange.lowerBound))
-                    Button {} label: { Text("\(Int(fontSize)) pt") }
-                        .disabled(true)
-                    Button { step(1) } label: { Label("Larger Text", systemImage: "plus") }
-                        .disabled(fontSize >= Double(TerminalFonts.sizeRange.upperBound))
-                }
-                .controlGroupStyle(.compactMenu)
-                Button { controller.showSettings = true } label: { Label("Settings…", image: "ui.settings") }
-            }
-            if peek == nil {
-                closeSection
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(theme.foreground)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .menuOrder(.fixed)
-        .accessibilityLabel("More")
-    }
-
-    /// The pane the sub-agent shows in place of (its parent's row).
-    private var parentTitle: String {
-        let ws = controller.workspace
-        guard let t = ws.terminal(pane?.terminal) else { return "the Parent" }
-        return t.isAgent ? Format.agentTitle(t, tab: tab) : Format.processName(t)
-    }
-
-    @ViewBuilder
-    private var paneSections: some View {
-        if let t = terminal, t.isAgent {
-            Section {
-                Button { controller.setPinned(t.address, !t.pinned) } label: {
-                    Label(t.pinned ? "Unpin" : "Pin", image: t.pinned ? "ui.pin-off" : "ui.pin")
-                }
-                switch t.status {
-                case .idle:
-                    Button { controller.markUnread(t.address) } label: { Label("Mark Unread", systemImage: "circle.fill") }
-                case .done:
-                    Button { controller.markRead(t.address) } label: { Label("Mark Idle", systemImage: "circle") }
-                default:
-                    EmptyView()
+                    Icon("sidebar", size: 20, color: theme.foreground)
+                        .frame(width: height)
                 }
             }
+            .frame(minWidth: height, minHeight: height)
+            .contentShape(Capsule())
         }
-        Section {
-            if let space {
-                Menu {
-                    LaunchMenuItems(machine: space.machine) { controller.newTab(launch: $0, in: space) }
-                } label: { Label("New Tab", image: "ui.plus") }
-            }
-            if let pane {
-                Menu {
-                    Button { controller.split(.right, pane: pane.id) } label: { Label("Split Right", image: "ui.split-right") }
-                    Button { controller.split(.down, pane: pane.id) } label: { Label("Split Down", image: "ui.split-down") }
-                } label: { Label("Split", image: "ui.split-right") }
-            }
-        }
-        Section {
-            if let tab {
-                Button { controller.beginRename(tab: tab.id) } label: { Label("Rename Tab…", image: "ui.square-pen") }
-            }
-            if let space {
-                Button { controller.beginRename(space: space.id) } label: { Label("Rename Space…", image: "ui.square-pen") }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var closeSection: some View {
-        Section {
-            if let pane {
-                Button(role: .destructive) { controller.closePane(pane.id) } label: { Label("Close Pane", image: "ui.x") }
-            }
-            if let tab, tab.panes.count > 1 {
-                Button(role: .destructive) { controller.closeTab(tab.id) } label: { Label("Close Tab", image: "ui.x") }
-            }
-        }
-    }
-
-    private func step(_ delta: Double) {
-        let r = TerminalFonts.sizeRange
-        fontSize = min(Double(r.upperBound), max(Double(r.lowerBound), fontSize + delta))
+        .buttonStyle(AttachPressStyle())
+        // A capsule as wide as it is tall is the circle: one shape, it stretches when the count comes.
+        .composerGlass(Capsule(), theme: theme)
+        .animation(.snappy(duration: 0.3), value: waiting?.status)
+        .animation(.snappy(duration: 0.3), value: waiting?.count)
+        .accessibilityLabel("Show the List")
+        .accessibilityValue(waiting.map { Format.summary([$0.status: $0.count]) } ?? "")
     }
 }
