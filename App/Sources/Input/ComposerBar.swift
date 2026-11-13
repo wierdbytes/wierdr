@@ -63,6 +63,8 @@ struct ComposerBar: View {
                 field(draft: draft, focused: focused, hasText: hasText)
             }
         }
+        // Its own height whatever is left: the terminal above gives way.
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 8 + (compact ? 18 : 0))
         .padding(.top, placement == .panel ? 0 : 8)
         // Telegram's 20 + 8 above the screen's bottom, not the safe area's: into the home indicator's.
@@ -120,7 +122,10 @@ struct ComposerBar: View {
                     .transition(.identity)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
+        // No minimum height here (the text is at least 31 + 9): a frame with
+        // only a minimum takes a smaller proposal, and the text ran on below
+        // the capsule, under the keyboard, when the terminal left too little room.
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .contentShape(RoundedRectangle(cornerRadius: 20))
         // A tap on the capsule's margins brings the keyboard too.
         .onTapGesture { if !focused { setFocus(true) } }

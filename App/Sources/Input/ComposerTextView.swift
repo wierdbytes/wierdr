@@ -95,15 +95,26 @@ struct ComposerTextView: UIViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: ComposerUITextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width > 0, width.isFinite else { return nil }
         let collapsed = !focused && !view.isFirstResponder
-        return CGSize(width: width, height: Self.height(of: view, width: width, collapsed: collapsed, max: maxHeight))
+        return CGSize(width: width, height: Self.height(of: view, width: width, collapsed: collapsed, cap: maxHeight))
     }
 
-    /// Telegram's: `ceil(lines · lineHeight + 10)`, at least 31, at most `max` (then it scrolls).
-    static func height(of view: UITextView, width: CGFloat, collapsed: Bool, max: CGFloat) -> CGFloat {
+    /// Telegram's: `ceil(lines · lineHeight + 10)`, at least 31, at most `cap` (then it scrolls).
+    /// Measured here, not with `UITextView.sizeThatFits`: with TextKit 2 that
+    /// missed the empty line a Return at the end starts, where the caret is.
+    static func height(of view: UITextView, width: CGFloat, collapsed: Bool, cap: CGFloat) -> CGFloat {
         let one = ceil(font.lineHeight + 10)
-        guard !collapsed else { return Swift.max(minHeight, one) }
-        let fitted = ceil(view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
-        return Swift.min(Swift.max(minHeight, fitted), Swift.max(max, minHeight))
+        guard !collapsed else { return max(minHeight, one) }
+        let inset = view.textContainerInset
+        let column = width - inset.left - inset.right - 2 * view.textContainer.lineFragmentPadding
+        var text = view.text ?? ""
+        // A line break at the end starts a line of its own: measure it with something on it.
+        if text.isEmpty || text.hasSuffix("\n") || text.hasSuffix("\r") || text.hasSuffix("\u{2028}") { text += "X" }
+        let used = (text as NSString).boundingRect(
+            with: CGSize(width: max(1, column), height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font], context: nil)
+        let fitted = ceil(used.height + inset.top + inset.bottom)
+        return min(max(minHeight, fitted), max(cap, minHeight))
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -136,11 +147,13 @@ struct ComposerTextView: UIViewRepresentable {
                     view.text = text
                     reported = text
                     view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
+                    view.textChanged()
                 } else if text != reported, view.text != text, view.markedTextRange == nil {
                     // Changed from outside (a path, a paste, sent): the caret goes to the end.
                     view.text = text
                     reported = text
                     view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
+                    view.textChanged()
                 }
             }
         }
@@ -162,8 +175,8 @@ struct ComposerTextView: UIViewRepresentable {
         func textViewDidChange(_ textView: UITextView) {
             guard !showsPreview else { return }
             reported = textView.text
+            (textView as? ComposerUITextView)?.textChanged()
             parent?.onEdit(textView.text)
-            (textView as? ComposerUITextView)?.revealCaret()
         }
     }
 
@@ -204,18 +217,50 @@ final class ComposerUITextView: UITextView {
         return ok
     }
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        // Grown to fit: no scrolled-away first line.
-        if contentSize.height <= bounds.height + 0.5, contentOffset.y != 0 { contentOffset.y = 0 }
+    /// The text or the field's size changed: the next layout scrolls the caret into view.
+    private var followsCaret = false
+
+    override var frame: CGRect {
+        didSet { if frame.size != oldValue.size { followsCaret = true } }
     }
 
-    /// Keeps the caret in view once the text outgrows the field.
-    func revealCaret() {
-        guard let range = selectedTextRange else { return }
-        let caret = caretRect(for: range.end)
-        guard caret.maxY > contentOffset.y + bounds.height - textContainerInset.bottom || caret.minY < contentOffset.y else { return }
-        scrollRectToVisible(caret.insetBy(dx: 0, dy: -textContainerInset.bottom), animated: false)
+    override var bounds: CGRect {
+        didSet { if bounds.size != oldValue.size { followsCaret = true } }
+    }
+
+    /// Typed or set: once laid out (SwiftUI resizes the field a moment
+    /// later), the caret is scrolled into view.
+    func textChanged() {
+        followsCaret = true
+        setNeedsLayout()
+    }
+
+    // Only after a change, not on every layout: a finger scrolling back
+    // through a long message isn't pulled back to the caret.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard followsCaret else { return }
+        followsCaret = false
+        keepCaretInView()
+    }
+
+    /// Scrolls just enough for the caret's line (and the inset under it) to
+    /// show; the whole text fits: from its top.
+    private func keepCaretInView() {
+        let height = bounds.height
+        guard height > 0 else { return }
+        var y = min(max(contentOffset.y, 0), max(0, contentSize.height - height))
+        if isFirstResponder, let range = selectedTextRange {
+            let caret = caretRect(for: range.end)
+            if !caret.isNull, !caret.isInfinite, caret.height > 0 {
+                let bottom = caret.maxY + textContainerInset.bottom
+                if bottom > y + height { y = bottom - height }
+                let top = caret.minY - textContainerInset.top
+                if top < y { y = top }
+                y = max(0, y)
+            }
+        }
+        if abs(contentOffset.y - y) > 0.5 { setContentOffset(CGPoint(x: contentOffset.x, y: y), animated: false) }
     }
 
     // A hardware keyboard's Return (no modifiers, not finishing marked text): send.
