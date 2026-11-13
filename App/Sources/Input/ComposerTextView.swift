@@ -1,0 +1,239 @@
+import SwiftUI
+import UIKit
+
+/// The composer's text (`ComposerBar`): a `UITextView`, as Telegram's, laid
+/// out with its metrics (system 17 pt, text insets 4.5 / 5.5, at least 31 pt:
+/// a 40-pt capsule for one line). SwiftUI's `TextField` can't turn smart
+/// quotes off, collapse to one truncated line or carry the iPad's accessory.
+///
+/// While it doesn't have the keyboard it shows one line: the draft with its
+/// line breaks as spaces, cut with an ellipsis. With the keyboard it grows
+/// with the text up to `maxHeight`, then scrolls. A hardware keyboard's
+/// Return sends (Telegram's rule; ⇧Return is a new line); the on-screen
+/// keyboard's Return is a new line.
+struct ComposerTextView: UIViewRepresentable {
+    var text: String
+    /// Has the keyboard (or should get it).
+    var focused: Bool
+    /// An agent (prose: capitals, corrections) or a shell (commands as typed).
+    var prose: Bool
+    var placeholder: String
+    /// The tallest the text may get (Telegram's cap, from the room above).
+    var maxHeight: CGFloat
+    var theme: Theme
+    var onEdit: (String) -> Void
+    var onFocus: (Bool) -> Void
+    var onReturn: () -> Void
+
+    /// Telegram's `chatTextInputFieldMinHeight`: one line of 17 pt and the insets.
+    static let minHeight: CGFloat = 31
+    static let font = UIFont.systemFont(ofSize: 17)
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> ComposerUITextView {
+        let view = ComposerUITextView()
+        view.delegate = context.coordinator
+        view.font = Self.font
+        view.backgroundColor = .clear
+        view.textContainer.lineFragmentPadding = 0
+        view.isScrollEnabled = true
+        view.showsHorizontalScrollIndicator = false
+        view.alwaysBounceVertical = false
+        view.returnKeyType = .default
+        view.adjustsFontForContentSizeCategory = false
+        if !Device.isPhone { view.inputAccessoryView = EmptyAccessory() }
+        context.coordinator.view = view
+        return view
+    }
+
+    func updateUIView(_ view: ComposerUITextView, context: Context) {
+        let c = context.coordinator
+        c.parent = self
+        // Only what changed: setting the text traits again (even to the same
+        // values) makes the keyboard resync its document, and keys typed fast
+        // meanwhile land where the caret was (seen on an iPhone, iOS 26).
+        if c.theme != theme {
+            c.theme = theme
+            view.textColor = UIColor(theme.foreground)
+            view.tintColor = UIColor(theme.accent)
+            view.keyboardAppearance = theme.isDark ? .dark : .light
+        }
+        if c.prose != prose {
+            c.prose = prose
+            view.autocapitalizationType = prose ? .sentences : .none
+            view.autocorrectionType = prose ? .default : .no
+            view.spellCheckingType = prose ? .default : .no
+            // Straight quotes always (they'd be made straight on sending anyway); dashes in prose only.
+            view.smartQuotesType = .no
+            view.smartDashesType = prose ? .default : .no
+            view.smartInsertDeleteType = prose ? .default : .no
+        }
+        if view.accessibilityLabel != placeholder { view.accessibilityLabel = placeholder }
+        view.onReturn = onReturn
+        // Telegram: the text column ends 56 pt from the capsule's edge beside
+        // the send button (the view itself ends 11 pt in). The send button is
+        // there whenever there is text, so the inset stays: switching it with
+        // the first character made keys typed fast meanwhile land where the
+        // caret had been (the keyboard resyncs; seen on an iPhone, iOS 26).
+        let insets = UIEdgeInsets(top: 4.5, left: 0, bottom: 5.5, right: 45)
+        if view.textContainerInset != insets { view.textContainerInset = insets }
+        let indicator = UIEdgeInsets(top: 9, left: 0, bottom: 40, right: 0)
+        if view.verticalScrollIndicatorInsets != indicator { view.verticalScrollIndicatorInsets = indicator }
+
+        let collapsed = !focused && !view.isFirstResponder
+        c.apply(text: text, collapsed: collapsed)
+
+        if focused, !view.isFirstResponder {
+            DispatchQueue.main.async {
+                guard view.window != nil, !view.isFirstResponder, c.parent?.focused == true else { return }
+                _ = view.becomeFirstResponder()
+            }
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView view: ComposerUITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0, width.isFinite else { return nil }
+        let collapsed = !focused && !view.isFirstResponder
+        return CGSize(width: width, height: Self.height(of: view, width: width, collapsed: collapsed, max: maxHeight))
+    }
+
+    /// Telegram's: `ceil(lines · lineHeight + 10)`, at least 31, at most `max` (then it scrolls).
+    static func height(of view: UITextView, width: CGFloat, collapsed: Bool, max: CGFloat) -> CGFloat {
+        let one = ceil(font.lineHeight + 10)
+        guard !collapsed else { return Swift.max(minHeight, one) }
+        let fitted = ceil(view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+        return Swift.min(Swift.max(minHeight, fitted), Swift.max(max, minHeight))
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: ComposerTextView?
+        weak var view: ComposerUITextView?
+        /// What the view was last set up with (`updateUIView` sets only what changed).
+        var theme: Theme?
+        var prose: Bool?
+        /// Showing the one-line preview (not the draft itself).
+        private var showsPreview = false
+        /// The text last reported as typed: SwiftUI handing it back (maybe a
+        /// key behind) is no change from outside.
+        private var reported: String?
+
+        /// The draft (with the keyboard) or its one-line preview (without).
+        func apply(text: String, collapsed: Bool) {
+            guard let view else { return }
+            if collapsed {
+                let preview = text.replacingOccurrences(of: "\r\n", with: " ").replacingOccurrences(of: "\n", with: " ")
+                view.textContainer.maximumNumberOfLines = 1
+                view.textContainer.lineBreakMode = .byTruncatingTail
+                if !showsPreview || view.text != preview { view.text = preview }
+                showsPreview = true
+                view.contentOffset = .zero
+            } else {
+                if showsPreview {
+                    view.textContainer.maximumNumberOfLines = 0
+                    view.textContainer.lineBreakMode = .byWordWrapping
+                    showsPreview = false
+                    view.text = text
+                    reported = text
+                    view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
+                } else if text != reported, view.text != text, view.markedTextRange == nil {
+                    // Changed from outside (a path, a paste, sent): the caret goes to the end.
+                    view.text = text
+                    reported = text
+                    view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
+                }
+            }
+        }
+
+        func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
+            // Editing starts on the draft itself, with the caret at its end.
+            apply(text: parent?.text ?? "", collapsed: false)
+            return true
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            parent?.onFocus(true)
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            parent?.onFocus(false)
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            guard !showsPreview else { return }
+            reported = textView.text
+            parent?.onEdit(textView.text)
+            (textView as? ComposerUITextView)?.revealCaret()
+        }
+    }
+
+    /// iPad: an empty, 1-pt input accessory, so `KeyboardCover` can tell where
+    /// the keyboard begins (as with the terminal's key bar: above a docked
+    /// keyboard, at the bottom under a floating one).
+    final class EmptyAccessory: UIView {
+        override init(frame: CGRect) {
+            super.init(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+            autoresizingMask = .flexibleWidth
+            backgroundColor = .clear
+            isUserInteractionEnabled = false
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: 1) }
+    }
+}
+
+/// The composer's text view: Return from a hardware keyboard sends, and the
+/// iPad's 1-pt accessory is found through it (`KeyboardCover`).
+final class ComposerUITextView: UITextView {
+    var onReturn: (() -> Void)?
+
+    private static weak var focusedView: ComposerUITextView?
+
+    /// The accessory and window of the composer that has the keyboard (iPad).
+    static var activeAccessory: (bar: UIView, window: UIWindow)? {
+        guard let view = focusedView, view.isFirstResponder, let window = view.window,
+              let bar = view.inputAccessoryView, bar.window != nil else { return nil }
+        return (bar, window)
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok { Self.focusedView = self }
+        return ok
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Grown to fit: no scrolled-away first line.
+        if contentSize.height <= bounds.height + 0.5, contentOffset.y != 0 { contentOffset.y = 0 }
+    }
+
+    /// Keeps the caret in view once the text outgrows the field.
+    func revealCaret() {
+        guard let range = selectedTextRange else { return }
+        let caret = caretRect(for: range.end)
+        guard caret.maxY > contentOffset.y + bounds.height - textContainerInset.bottom || caret.minY < contentOffset.y else { return }
+        scrollRectToVisible(caret.insetBy(dx: 0, dy: -textContainerInset.bottom), animated: false)
+    }
+
+    // A hardware keyboard's Return (no modifiers, not finishing marked text): send.
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if presses.count == 1, let key = presses.first?.key, isPlainReturn(key), markedTextRange == nil, let onReturn {
+            onReturn()
+            return
+        }
+        super.pressesBegan(presses, with: event)
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if presses.count == 1, let key = presses.first?.key, isPlainReturn(key), markedTextRange == nil, onReturn != nil { return }
+        super.pressesEnded(presses, with: event)
+    }
+
+    private func isPlainReturn(_ key: UIKey) -> Bool {
+        (key.keyCode == .keyboardReturnOrEnter || key.keyCode == .keypadEnter)
+            && key.modifierFlags.intersection([.shift, .alternate, .command, .control]).isEmpty
+    }
+}

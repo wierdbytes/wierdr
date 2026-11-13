@@ -5,8 +5,8 @@ import WierdrModel
 /// `wierd-agents`' peek bar for a sub-agent). A card of 82% of the window: a
 /// 38-pt bar (its status, its provider or program, what it's on, `from <its
 /// parent>`, Keep ↵ and ✕ esc) over its live terminal, which takes typing like
-/// any pane's (a pointer's click, a double tap; a swipe on it brings its keys
-/// and the message field, `KeyLayerHost`, while it's up).
+/// any pane's (a pointer's click, a double tap; a swipe on it brings its keys,
+/// `KeyLayerHost`, while it's up), and under it its message field (`ComposerBar`).
 /// Keep makes it a tab right after its parent's; Close, a tap beside the card
 /// or esc leave it running. esc and Return are the bar's only while the
 /// terminal doesn't have the keyboard (then they're the program's).
@@ -21,6 +21,8 @@ struct SubAgentPeek: View {
     /// The terminal takes the keyboard only when asked (a click, a double
     /// tap): opening the peek doesn't steal esc from the bar.
     @State private var focused = false
+    /// The terminal's and the field's height: how tall the field may grow.
+    @State private var room: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -45,19 +47,23 @@ struct SubAgentPeek: View {
         let terminal = controller.workspace.terminal(address)
         return VStack(spacing: 0) {
             PeekBar(address: address, terminal: terminal, terminalHasKeyboard: terminalHasKeyboard)
-            Color.clear
-                .overlay {
-                    provider.makeView(TerminalViewContext(
-                        address: address, terminal: terminal, focused: focused, palette: theme.terminal,
-                        fontSize: fontSize, padding: EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14),
-                        requestFocus: { focused = true }))
-                    .id(address)
+            VStack(spacing: 0) {
+                Color.clear
+                    .overlay {
+                        provider.makeView(TerminalViewContext(
+                            address: address, terminal: terminal, focused: focused, palette: theme.terminal,
+                            fontSize: fontSize, padding: EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14),
+                            requestFocus: { focused = true }))
+                        .id(address)
+                    }
+                    .clipped()
+                if services.terminalSession(address)?.hasKeyboardFocus != true {
+                    ComposerBar(address: address, placeholder: "Message to \(Format.kidTitle(terminal ?? TerminalInfo(address: address)))",
+                                placement: .card, room: room)
+                        .id(address)
                 }
-                .clipped()
-            if controller.composing == address {
-                PhoneComposeBar(address: address, placeholder: "Message to \(Format.kidTitle(terminal ?? TerminalInfo(address: address)))")
-                    .id(address)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
         }
         .background(theme.background)
         .clipShape(RoundedRectangle(cornerRadius: 12))

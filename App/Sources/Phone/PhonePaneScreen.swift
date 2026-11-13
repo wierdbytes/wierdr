@@ -6,9 +6,9 @@ import WierdrModel
 /// the next agent waiting for you; the other panes of the space; the
 /// terminal edge to edge, and over it the key panel and the ways the
 /// keyboards come (`KeyPanelLayer`: a swipe to the left on the terminal).
-/// Under the terminal only the
-/// message field while it is open, above the keyboard. Taps on the terminal
-/// are clicks for the program, with a keyboard up too; a double tap brings the
+/// Under the terminal, always, the message field (`ComposerBar`); hidden
+/// while the terminal has the keyboard itself. Taps on the terminal are
+/// clicks for the program, with a keyboard up too; a double tap brings the
 /// terminal's keyboard or hides the one that is up.
 /// The list (`PhoneHome`) slides over it; while it is out (`covered`), the
 /// panel and the keyboards go and the swipes rest. A sub-agent opened from the
@@ -18,9 +18,12 @@ struct PhonePaneScreen: View {
     var covered = false
 
     @Environment(WorkspaceController.self) private var controller
+    @Environment(\.services) private var services
     @Environment(\.theme) private var theme
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var keys = KeyPanelState()
+    /// The terminal's and the field's height: how tall the field may grow.
+    @State private var room: CGFloat = 0
 
     var body: some View {
         let space = controller.activeSpace
@@ -34,35 +37,37 @@ struct PhonePaneScreen: View {
             if let space, verticalSizeClass != .compact, panes(of: space).count > 1 {
                 PhonePaneStrip(space: space, current: pane?.id, panes: panes(of: space))
             }
-            Group {
-                if let peek {
-                    PhonePaneContent(pane: Pane(id: "peek:\(peek)", terminal: peek, mod: nil))
-                        .id("peek:\(peek)")
-                } else if let pane {
-                    PhonePaneContent(pane: pane)
-                        .id(pane.id)
-                } else {
-                    PhoneEmptyPane()
+            VStack(spacing: 0) {
+                Group {
+                    if let peek {
+                        PhonePaneContent(pane: Pane(id: "peek:\(peek)", terminal: peek, mod: nil))
+                            .id("peek:\(peek)")
+                    } else if let pane {
+                        PhonePaneContent(pane: pane)
+                            .id(pane.id)
+                    } else {
+                        PhoneEmptyPane()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.background)
+                .keyPanel(address: address, covered: covered, state: $keys)
+                .overlay(alignment: .bottom) {
+                    // Above the panel, and beside it while it is out.
+                    ToastStack()
+                        .padding(.leading, 12)
+                        .padding(.trailing, keys.trailingInset > 0 ? keys.trailingInset + 6 : 12)
+                        .padding(.bottom, 10)
+                }
+                if let address, services.terminalSession(address)?.hasKeyboardFocus != true {
+                    ComposerBar(address: address, placement: .screen, room: room)
+                        .id(address)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(theme.background)
-            .keyPanel(address: address, covered: covered, state: $keys)
-            .overlay(alignment: .bottom) {
-                // Above the panel, and beside it while it is out.
-                ToastStack()
-                    .padding(.leading, 12)
-                    .padding(.trailing, keys.trailingInset > 0 ? keys.trailingInset + 6 : 12)
-                    .padding(.bottom, 10)
-            }
-            if let address, controller.composing == address {
-                // No transition: it comes and goes with its keyboard, at once.
-                PhoneComposeBar(address: address)
-                    .id(address)
-            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
         }
-        // Another pane, or the list out: the message field closes (its draft stays).
-        .onChange(of: address) { controller.composing = nil }
+        // Another pane, or the list out: the keyboard goes (the draft stays with its terminal).
+        .onChange(of: address) { controller.closeCompose() }
         .onDisappear { controller.composing = nil }
         .background(theme.chrome.ignoresSafeArea())
         // Under the list, its own banner shows.

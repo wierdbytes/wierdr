@@ -41,12 +41,12 @@ struct ProgramIcon: View {
 
 // MARK: - Status marks (§4.5)
 
-/// The compact status mark used in rows, the tab bar and the status bar.
+/// The compact status mark used in rows, the tab bar and the counts.
 struct StatusMark: View {
     enum Style { case compact, full }
     var status: AgentStatus?
     var style: Style = .compact
-    /// Overrides the status color (status bar uses `dim` for a zero count).
+    /// Overrides the status color (`dim` for a zero count).
     var tint: Color? = nil
     @Environment(\.theme) private var theme
 

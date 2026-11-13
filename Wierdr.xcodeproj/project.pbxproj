@@ -12,6 +12,7 @@
 		1B05101B71E742280AB023DD /* WierdrTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90B1F34C74D7CADD79F2C52 /* WierdrTerminalView.swift */; };
 		1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */; };
 		1D99092A103C9305E6D01ACD /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF1A4D9E311EDC3924AE60C /* ConnectView.swift */; };
+		2059138432A8BF088947DCE3 /* ComposerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664D901DE59E04EE9721DA2A /* ComposerTextView.swift */; };
 		24484EFD85EC8F1800F97C9F /* SubAgentPeek.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384B24F496E887AC8E036AF3 /* SubAgentPeek.swift */; };
 		2603EB8A5D761C502BED791F /* HerdrSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 8129A5BF2F3516F166B530D1 /* HerdrSSH */; };
 		281ACDB6C96A9C6546DFB23D /* TerminalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B698C0B918748FB60826385 /* TerminalSurface.swift */; };
@@ -51,6 +52,7 @@
 		86685C0C58DC7EEB23EE07B3 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05E8C38F15A5E472A6E9D8BB /* AppModel.swift */; };
 		87A14C8CC3053545CC2E8FCF /* ImageForAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54E74013AE71827D89D4EE3 /* ImageForAgent.swift */; };
 		89C240BF74E4B861F2FEE59A /* Geist-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 96816409D750DAB4ECFE03B8 /* Geist-Variable.ttf */; };
+		8EB50B847ABF07923FE8EF67 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D52861BA8BB122CA7C65ADB2 /* ComposerBar.swift */; };
 		95E3B7F160B52277B3942777 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8291C8C0633695801471D97 /* Theme.swift */; };
 		997F8D2F476056E4F6653FC8 /* TerminalPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6654E2F2DE8CC92909567AD /* TerminalPanel.swift */; };
 		9CF692D9846CA0F210A5C27A /* SidebarResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */; };
@@ -79,7 +81,6 @@
 		ED3AFBEDB413912EC56AB45B /* SpaceDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = C803598F24AD47DB7A42D7D0 /* SpaceDrag.swift */; };
 		F247CF5AF89B8F79CB38DA41 /* HerdrCore in Frameworks */ = {isa = PBXBuildFile; productRef = D4DFE261604A49E49A1A80AC /* HerdrCore */; };
 		FA794EAE57AB99AD1B479A7B /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BA0F685C194597C14F60C3 /* TerminalTheme.swift */; };
-		FA851B87A69FC31C5019FC6B /* PhoneComposeBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95BC46D90E3D3C496622C4CA /* PhoneComposeBar.swift */; };
 		FE68228E3BC4FFF12901741C /* TerminalSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3970FD27B3DF671D83DC038E /* TerminalSession.swift */; };
 		FFF085F26F93DD76B88BEA24 /* LiveActivityDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3EB0A0AFF104DECDC52251 /* LiveActivityDemo.swift */; };
 /* End PBXBuildFile section */
@@ -141,6 +142,7 @@
 		6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarResizeHandle.swift; sourceTree = "<group>"; };
 		647C64E311441E658D84CAD7 /* LiveServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveServices.swift; sourceTree = "<group>"; };
 		65E66B1D03C119D0686AC190 /* PhoneWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWorkspaceView.swift; sourceTree = "<group>"; };
+		664D901DE59E04EE9721DA2A /* ComposerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextView.swift; sourceTree = "<group>"; };
 		6B698C0B918748FB60826385 /* TerminalSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurface.swift; sourceTree = "<group>"; };
 		6BBD742BB5614E0A3EFA587E /* SidebarOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarOverlay.swift; sourceTree = "<group>"; };
 		7056E4DE60E7F76AD6B1A7D3 /* Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chrome.swift; sourceTree = "<group>"; };
@@ -148,7 +150,6 @@
 		8089262433D04F1C14D569AE /* OFL-Geist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-Geist.txt"; sourceTree = "<group>"; };
 		8A94262DB139809864F08002 /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		8B3EB0A0AFF104DECDC52251 /* LiveActivityDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityDemo.swift; sourceTree = "<group>"; };
-		95BC46D90E3D3C496622C4CA /* PhoneComposeBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneComposeBar.swift; sourceTree = "<group>"; };
 		95EECB6B23A9B256ADC3200B /* WorkspaceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceController.swift; sourceTree = "<group>"; };
 		95F98EDA00D58F322E07186C /* WierdrKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = WierdrKit; path = Packages/WierdrKit; sourceTree = SOURCE_ROOT; };
 		96816409D750DAB4ECFE03B8 /* Geist-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Variable.ttf"; sourceTree = "<group>"; };
@@ -170,6 +171,7 @@
 		C803598F24AD47DB7A42D7D0 /* SpaceDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceDrag.swift; sourceTree = "<group>"; };
 		CF024919F7CC3D81C9D998B7 /* Host.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Host.swift; sourceTree = "<group>"; };
 		CFF1A4D9E311EDC3924AE60C /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
+		D52861BA8BB122CA7C65ADB2 /* ComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerBar.swift; sourceTree = "<group>"; };
 		D8291C8C0633695801471D97 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		D8759F1896EBC5B50A01F9AE /* PhoneHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHome.swift; sourceTree = "<group>"; };
 		D9C1DF8AA9B4279A363143AD /* Icons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Icons.swift; sourceTree = "<group>"; };
@@ -363,7 +365,6 @@
 		95566650718B10E2EDF825A1 /* Phone */ = {
 			isa = PBXGroup;
 			children = (
-				95BC46D90E3D3C496622C4CA /* PhoneComposeBar.swift */,
 				D8759F1896EBC5B50A01F9AE /* PhoneHome.swift */,
 				A56720A2FB2275CAC4539183 /* PhoneKeyPanel.swift */,
 				AE0B2B00097718F38D346BA9 /* PhonePaneScreen.swift */,
@@ -375,6 +376,8 @@
 		B629BAA51B2D539F66E57DE3 /* Input */ = {
 			isa = PBXGroup;
 			children = (
+				D52861BA8BB122CA7C65ADB2 /* ComposerBar.swift */,
+				664D901DE59E04EE9721DA2A /* ComposerTextView.swift */,
 				24CFA2C9F9D15FF3073EDD5A /* KeyPanelLayer.swift */,
 			);
 			path = Input;
@@ -589,6 +592,8 @@
 				86685C0C58DC7EEB23EE07B3 /* AppModel.swift in Sources */,
 				9F4371D40DBE38454BC60FC8 /* AppServices.swift in Sources */,
 				2E06A6541CC6433528080868 /* Chrome.swift in Sources */,
+				8EB50B847ABF07923FE8EF67 /* ComposerBar.swift in Sources */,
+				2059138432A8BF088947DCE3 /* ComposerTextView.swift in Sources */,
 				1D99092A103C9305E6D01ACD /* ConnectView.swift in Sources */,
 				818FF89F7C15CD20E61479AF /* DebugAutoConnect.swift in Sources */,
 				EC192EE4130459A9871E6286 /* DemoTerminalView.swift in Sources */,
@@ -609,7 +614,6 @@
 				60DFCEE352A3DD2104A9AE02 /* LiveServices.swift in Sources */,
 				E641C6D379526278652AAD39 /* ModelAliases.swift in Sources */,
 				5FDBC03A3DEB37359A821DEB /* PaneTreeView.swift in Sources */,
-				FA851B87A69FC31C5019FC6B /* PhoneComposeBar.swift in Sources */,
 				CF542979C43FBE032AEA0771 /* PhoneHome.swift in Sources */,
 				6679ED6C6B8022148808B45C /* PhoneKeyPanel.swift in Sources */,
 				D7AFED70E6931C8C8A62CF86 /* PhonePaneScreen.swift in Sources */,
@@ -719,7 +723,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -805,7 +809,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

@@ -1,45 +1,49 @@
 import SwiftUI
 import WierdrModel
 
-/// The work column: tab bar, the active tab's panes on `canvas`, the status bar.
+/// The work column: tab bar, the active tab's panes on `canvas`, and under
+/// all of them the message field (`ComposerBar`) for the focused pane, named
+/// in its placeholder (hidden while that terminal has the keyboard itself).
 /// Over the panes, the key panel and the ways it and the keyboards come
 /// (`KeyPanelLayer`), for the focused pane: drawn once over the whole window
 /// (`KeyLayerHost`, so over a sub-agent's window too), placed over the panes,
-/// whose frame this column reports (`controller.keyArea`). While the focused
-/// pane's message field is open (`PhoneComposeBar`, above the keyboard), the
-/// field takes the status bar's place.
+/// whose frame this column reports (`controller.keyArea`).
 struct TerminalPanel: View {
     @Environment(WorkspaceController.self) private var controller
+    @Environment(\.services) private var services
     @Environment(\.theme) private var theme
+    /// The panes' and the field's height: how tall the field may grow.
+    @State private var room: CGFloat = 0
 
     var body: some View {
         let address = controller.focusedPane?.terminal
         VStack(spacing: 0) {
             TabBar()
-            Group {
-                if let tab = controller.activeTab {
-                    PaneTreeView(tab: tab)
-                } else {
-                    EmptyPanel()
+            VStack(spacing: 0) {
+                Group {
+                    if let tab = controller.activeTab {
+                        PaneTreeView(tab: tab)
+                    } else {
+                        EmptyPanel()
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { controller.keyArea = $0 }
+                .overlay(alignment: .bottomTrailing) { ToastStack().padding(16).padding(.trailing, controller.keys.trailingInset) }
+                if let address, services.terminalSession(address)?.hasKeyboardFocus != true {
+                    ComposerBar(address: address, placeholder: "Message to \(Format.paneName(controller.workspace.terminal(address)))",
+                                placement: .panel, room: room)
+                        .id(address)
                 }
             }
-            .padding(8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(theme.canvas)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { controller.keyArea = $0 }
-            .overlay(alignment: .bottomTrailing) { ToastStack().padding(16).padding(.trailing, controller.keys.trailingInset) }
-            if let address, controller.composing == address {
-                // No transition: it comes and goes with its keyboard, at once.
-                PhoneComposeBar(address: address, placeholder: "Message to \(Format.paneName(controller.workspace.terminal(address)))")
-                    .id(address)
-            } else {
-                StatusBar()
-            }
+            .background(theme.canvas.ignoresSafeArea(edges: .bottom))
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
         }
         .background(theme.chrome.ignoresSafeArea())
         .overlay(alignment: .top) { ConnectionBanner() }
-        // Another pane: the message field closes (its draft stays).
-        .onChange(of: address) { controller.composing = nil }
+        // Another pane: its keyboard goes (the draft stays with its terminal).
+        .onChange(of: address) { controller.closeCompose() }
         .onDisappear { controller.composing = nil }
     }
 }
@@ -59,58 +63,6 @@ private struct EmptyPanel: View {
                 .tint(theme.accent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-/// The status bar (§9): agent counts; tap → next agent with that status.
-struct StatusBar: View {
-    @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        let counts = controller.workspace.statusCounts
-        HStack(spacing: 14) {
-            ForEach([AgentStatus.blocked, .done, .working, .idle], id: \.self) { status in
-                let n = counts[status] ?? 0
-                if n > 0 || status == .working || status == .idle {
-                    StatusCount(status: status, count: n)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 28)
-        .frame(maxWidth: .infinity)
-        .background(theme.chrome)
-        .overlay(alignment: .top) { Hairline() }
-    }
-}
-
-private struct StatusCount: View {
-    var status: AgentStatus
-    var count: Int
-    @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
-    @State private var hovering = false
-
-    var body: some View {
-        Button { controller.focusNext(status: status) } label: {
-            HStack(spacing: 6) {
-                StatusMark(status: status, tint: status == .working && count == 0 ? theme.dim : nil)
-                Text("\(count)")
-                    .font(.ui(11.5))
-                    .foregroundStyle(count == 0 ? theme.dim : (status == .blocked ? theme.blocked : (hovering ? theme.foreground : theme.muted)))
-            }
-            .padding(.horizontal, 4)
-            .frame(height: 22)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(count == 0)
-        .onHover { hovering = $0 }
-        .hoverEffect(.highlight)
-        .padding(.horizontal, -4)
-        .accessibilityLabel("\(count) \(Format.statusWord(status))")
     }
 }
 

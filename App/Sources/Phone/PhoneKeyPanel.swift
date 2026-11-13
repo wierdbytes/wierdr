@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import PhotosUI
 import WierdrModel
 
 /// The key panel, at the right of the terminal: a swipe to the left on the
@@ -12,10 +11,10 @@ import WierdrModel
 /// swipe began (with the keyboard up, the first one to the middle of the
 /// column above it, and ⏎ no higher than its bottom); each time it opens with
 /// ⏎ there (with the keyboard up, at its bottom), where the keys an agent asks
-/// for are (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys, the keyboard and
-/// inserting (text, a photo, a copied image) above. Keys don't close it, so
-/// ↓ ↓ ⏎ is three taps; a swipe to the right does. Type opens the message
-/// field above the keyboard (`PhoneComposeBar`); a double tap on the terminal
+/// for are (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys and Paste above
+/// (and Hide while a keyboard is up). Keys don't close it, so ↓ ↓ ⏎ is three
+/// taps; a swipe to the right does. The message field is under the terminal
+/// (`ComposerBar`, attachments there too); a double tap on the terminal
 /// brings its own keyboard, with its key bar.
 struct PhoneKeyPanel: View {
     var address: String
@@ -32,11 +31,6 @@ struct PhoneKeyPanel: View {
     @Environment(\.services) private var services
     @Environment(\.theme) private var theme
     @State private var pressed = 0
-    @State private var picking = false
-    @State private var picked: PhotosPickerItem?
-    /// The photo being picked goes into the message (it was open when Photo was tapped).
-    @State private var pickIntoMessage = false
-    @State private var uploading = false
     /// The column's top and height in the window: how far past its ends it scrolls.
     @State private var frame: CGRect = .zero
 
@@ -58,30 +52,10 @@ struct PhoneKeyPanel: View {
             VStack(spacing: 14) {
                 group {
                     PanelButton(icon: "doc.on.clipboard", caption: "Paste", a11y: "Paste Text") { pasteText(session) }
-                    PanelButton(icon: "photo.on.rectangle", caption: "Photo", a11y: "Attach a Photo", busy: uploading) {
-                        guard session != nil else { return controller.toast(unavailable) }
-                        // The picker takes the keyboard away: remember where the path goes.
-                        pickIntoMessage = composing
-                        picking = true
-                    }
-                    PanelButton(icon: "photo.badge.plus", caption: "Image", a11y: "Paste an Image", busy: uploading) {
-                        // Asking first doesn't trigger the paste prompt.
-                        guard UIPasteboard.general.hasImages else { return controller.toast("No image on the clipboard") }
-                        let intoMessage = composing
-                        Task {
-                            await attach(UIPasteboard.general.image.flatMap { $0.pngData() }, session,
-                                         intoMessage: intoMessage, missing: "Couldn't read that image")
-                        }
-                    }
                     if typing {
                         PanelButton(icon: "keyboard.chevron.compact.down", caption: "Hide", a11y: "Hide the Keyboard") {
                             if composing { return controller.closeCompose() }
                             UIView.performWithoutAnimation { session?.releaseKeyboard() }
-                        }
-                    } else {
-                        PanelButton(icon: "keyboard", caption: "Type", a11y: "Write a Message") {
-                            close()
-                            controller.composing = address
                         }
                     }
                 }
@@ -144,15 +118,6 @@ struct PhoneKeyPanel: View {
         .frame(width: Self.width)
         // No backing: only the keys cover the terminal, and they let it show through.
         .sensoryFeedback(.impact(weight: .light), trigger: pressed)
-        .photosPicker(isPresented: $picking, selection: $picked, matching: .images, preferredItemEncoding: .compatible)
-        .onChange(of: picked) { _, item in
-            guard let item else { return }
-            picked = nil
-            Task {
-                let data = try? await item.loadTransferable(type: Data.self)
-                await attach(data, session, intoMessage: pickIntoMessage, missing: "Couldn't read that image")
-            }
-        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Key Panel")
     }
@@ -189,11 +154,11 @@ struct PhoneKeyPanel: View {
         controller.isDemo ? "Not available in the demo" : "The terminal is not connected yet"
     }
 
-    /// The message field is open (`PhoneComposeBar`): text and image paths go into it.
+    /// The message field has the keyboard (`ComposerBar`): pasted text goes into it.
     private var composing: Bool { controller.composing == address }
 
-    /// Adds to the message (a space before, unless at a line's start) and opens it again
-    /// if something (the paste prompt, the photo picker) took the keyboard away.
+    /// Adds to the message (a space before, unless at a line's start) and gives it the
+    /// keyboard again if the paste prompt took it away.
     private func addToMessage(_ s: String) {
         var text = controller.drafts[address] ?? ""
         if let last = text.last, !last.isWhitespace { text += " " }
@@ -225,28 +190,6 @@ struct PhoneKeyPanel: View {
         if intoMessage { return addToMessage(text) }
         session?.send(text: text, submit: false)
         pressed += 1
-    }
-
-    /// Puts the image beside the terminal on its machine (`terminal.put`, like
-    /// pasting an image on the desktop) and adds its path to the message, or
-    /// types it into the program.
-    private func attach(_ data: Data?, _ session: TerminalSession?, intoMessage: Bool, missing: String) async {
-        guard let session = live(session) else { return }
-        guard let data else { return controller.toast(missing) }
-        uploading = true
-        defer { uploading = false }
-        // Decoding a 48 MP photo takes a moment and memory: off the main thread.
-        guard let image = await Task.detached(priority: .userInitiated, operation: { ImageForAgent(data) }).value else {
-            return controller.toast("Couldn't read that image")
-        }
-        do {
-            let path = try await session.put(image.data, name: image.name)
-            if intoMessage { return addToMessage(path + " ") }
-            session.send(text: path + " ", submit: false)
-            pressed += 1
-        } catch {
-            controller.toast("Image: \(error.localizedDescription)")
-        }
     }
 }
 

@@ -21,18 +21,16 @@ extension View {
 /// A swipe to the left anywhere on a terminal pulls the panel out at the right
 /// with the finger (on the iPad its pane gets the focus). Its keys come to
 /// rest at the height the swipe began, under the thumb (⏎ there as it opens).
-/// VoiceOver: the terminal's actions Keys and Write a Message.
+/// VoiceOver: the terminal's action Keys.
 ///
-/// While a swipe that began with the panel hidden is under way, the message
-/// field's icon beside the panel, below the finger; let go on it and the field
-/// comes (the panel goes). The terminal's own keyboard comes with a double tap
-/// on the terminal (`WierdrTerminalView`).
-/// Taps on the terminal are clicks for the program and its pans scroll it, with
-/// a keyboard up too, and beside the panel while it is out; a double tap brings
-/// the terminal's keyboard or hides the one that is up (the message field with
-/// it). Only a swipe right puts the panel back. While the area is `covered`
-/// (the list, the sidebar overlay), the panel and the keyboards go and the
-/// gestures rest.
+/// The terminal's own keyboard comes with a double tap on the terminal
+/// (`WierdrTerminalView`); the message field's, with a tap on the field under
+/// it (`ComposerBar`). Taps on the terminal are clicks for the program and its
+/// pans scroll it, with a keyboard up too, and beside the panel while it is
+/// out; a double tap brings the terminal's keyboard or hides the one that is
+/// up (the message field's: the field goes down to one line). Only a swipe
+/// right puts the panel back. While the area is `covered` (the list, the
+/// sidebar overlay), the panel and the keyboards go and the gestures rest.
 struct KeyPanelLayer: ViewModifier {
     /// The focused terminal (nil: no terminal here, no keys).
     var address: String?
@@ -45,10 +43,6 @@ struct KeyPanelLayer: ViewModifier {
     @State private var drag: CGFloat?
     /// The terminal area in global coordinates.
     @State private var area: CGRect = .zero
-    /// A swipe that pulls the panel out is under way: where it began (the message icon sits below).
-    @State private var pickerStart: CGPoint?
-    /// The finger is on the message icon.
-    @State private var overMessage = false
     /// The window y the last swipe that pulled the panel out began at (its keys rest there).
     @State private var swipeY: CGFloat?
 
@@ -62,7 +56,7 @@ struct KeyPanelLayer: ViewModifier {
                     isOpen: state.open,
                     keyboardUp: keyboardUp,
                     onDrag: { x, p in moved(x, at: p) },
-                    onEnd: { projected, p in released(projected: projected, at: p) },
+                    onEnd: { projected, _ in finishDrag(projected: projected) },
                     // The keyboard (and the message field), at once; the panel stays.
                     onDoubleTap: { hideKeyboards() }
                 )
@@ -71,12 +65,6 @@ struct KeyPanelLayer: ViewModifier {
             .overlay(alignment: .trailing) {
                 if let address { panel(address) }
             }
-            .overlay {
-                if let start = pickerStart {
-                    MessagePickerIcon(center: messageIconCenter(start), lit: overMessage)
-                }
-            }
-            .sensoryFeedback(.selection, trigger: overMessage)
             .onChange(of: covered) { _, covered in
                 guard covered else { return }
                 setPanel(open: false)
@@ -86,12 +74,11 @@ struct KeyPanelLayer: ViewModifier {
                 if old != new { setActions(on: old, []) }
                 setActions(on: new, [
                     UIAccessibilityCustomAction(name: "Keys") { _ in setPanel(open: true); return true },
-                    UIAccessibilityCustomAction(name: "Write a Message") { _ in writeMessage(); return true },
                 ])
             }
     }
 
-    /// VoiceOver's way to the panel and the message field: actions of the terminal.
+    /// VoiceOver's way to the panel: an action of the terminal.
     private func setActions(on address: String?, _ actions: [UIAccessibilityCustomAction]) {
         guard let address else { return }
         services.terminalSession(address)?.terminalView.appActions = actions
@@ -151,85 +138,9 @@ struct KeyPanelLayer: ViewModifier {
 
     // MARK: Swipe
 
-    /// The finger moved the panel. A move that began with it hidden shows the message icon.
+    /// The finger moved the panel; a swipe that pulls it out puts its keys at the swipe's height.
     private func moved(_ x: CGFloat, at p: CGPoint) {
-        if drag == nil, !state.open {
-            pickerStart = p
-            swipeY = area.minY + p.y
-        }
+        if drag == nil, !state.open { swipeY = area.minY + p.y }
         drag = x
-        if let start = pickerStart { overMessage = onMessageIcon(p, start: start) }
-    }
-
-    /// Let go on the icon: the message field (the panel goes); elsewhere: the panel as usual.
-    private func released(projected: CGFloat, at p: CGPoint) {
-        let message = pickerStart.map { onMessageIcon(p, start: $0) } ?? false
-        pickerStart = nil
-        overMessage = false
-        guard message else { return finishDrag(projected: projected) }
-        writeMessage()
-    }
-
-    /// The message field comes (the panel goes).
-    private func writeMessage() {
-        guard let address else { return }
-        setPanel(open: false)
-        controller.composing = address
-    }
-
-    /// Beside the panel, below the swipe's line (in the area), as far from where
-    /// the swipe began as the panel is wide and a bit: a short move on to reach it.
-    private func messageIconCenter(_ start: CGPoint) -> CGPoint {
-        let w = area.width, h = area.height
-        let size = MessagePickerIcon.size
-        let travel = PhoneKeyPanel.width + size / 2 + 14
-        let r = size / 2 + 6
-        let x = max(r, min(start.x - travel, w - PhoneKeyPanel.width - r))
-        let gap = size / 2 + 26
-        return CGPoint(x: x, y: min(max(start.y + gap, r), max(r, h - r)))
-    }
-
-    private func onMessageIcon(_ p: CGPoint, start: CGPoint) -> Bool {
-        let c = messageIconCenter(start)
-        return hypot(c.x - p.x, c.y - p.y) <= MessagePickerIcon.size / 2 + 10
-    }
-}
-
-// MARK: - Message icon
-
-/// The message field's icon, shown beside the key panel (below the finger)
-/// while a swipe that pulls the panel out is under way; it lights up under
-/// the finger. Only a picture: the swipe does the picking.
-struct MessagePickerIcon: View {
-    var center: CGPoint
-    var lit: Bool
-
-    static let size: CGFloat = 58
-
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        icon
-            .position(center)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-
-    private var icon: some View {
-        let on = lit
-        return VStack(spacing: 2) {
-            Image(systemName: "text.bubble")
-                .font(.system(size: 20, weight: .semibold))
-            Text("Message")
-                .font(.ui(9.5, .medium))
-        }
-        .foregroundStyle(on ? theme.accentForeground : theme.foreground)
-        .frame(width: Self.size, height: Self.size)
-        .background(on ? theme.accent : theme.raised.opacity(0.92), in: Circle())
-        .overlay(Circle().strokeBorder(on ? .clear : theme.border, lineWidth: 1))
-        .shadow(color: .black.opacity(0.3), radius: 8)
-        .scaleEffect(on ? 1.15 : 1)
-        .animation(.snappy(duration: 0.15), value: on)
     }
 }

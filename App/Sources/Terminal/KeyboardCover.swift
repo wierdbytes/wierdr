@@ -13,7 +13,7 @@ import UIKit
 /// that never goes away). The key bar is always where the cover starts: just
 /// above a docked keyboard, at the bottom under a floating one or with a
 /// hardware keyboard. The message field carries an empty accessory for the
-/// same reason (`ComposeAccessory`). With neither having the keyboard
+/// same reason (`ComposerTextView.EmptyAccessory`). With neither having the keyboard
 /// nothing is covered (the split view has no other text fields; sheets and
 /// alerts that do sit above it).
 @MainActor
@@ -61,7 +61,7 @@ final class KeyboardCover {
            let bar = owner.inputAccessoryView {
             accessory = (bar, window)
         } else {
-            accessory = ComposeAccessory.active
+            accessory = ComposerUITextView.activeAccessory
         }
         if let (bar, window) = accessory, bar.window != nil, !bar.isHidden, bar.alpha > 0 {
             // The bar is in the keyboard's own window: go through the screen.
