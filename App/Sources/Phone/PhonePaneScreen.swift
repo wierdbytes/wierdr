@@ -21,8 +21,6 @@ struct PhonePaneScreen: View {
     @Environment(\.theme) private var theme
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var keys = KeyPanelState()
-    /// The window's height (the key panel's keys come to rest a third of it up from the bottom).
-    @State private var screenHeight: CGFloat = 0
 
     var body: some View {
         let space = controller.activeSpace
@@ -49,7 +47,7 @@ struct PhonePaneScreen: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(theme.background)
-            .keyPanel(address: address, covered: covered, thumbY: screenHeight * 2 / 3, state: $keys)
+            .keyPanel(address: address, covered: covered, state: $keys)
             .overlay(alignment: .bottom) {
                 // Above the panel, and beside it while it is out.
                 ToastStack()
@@ -67,10 +65,6 @@ struct PhonePaneScreen: View {
         .onChange(of: address) { controller.composing = nil }
         .onDisappear { controller.composing = nil }
         .background(theme.chrome.ignoresSafeArea())
-        // Safe area included: the keyboard's inset moves with it, so the sum is the window's height.
-        .onGeometryChange(for: CGFloat.self) { $0.size.height + $0.safeAreaInsets.top + $0.safeAreaInsets.bottom } action: {
-            screenHeight = $0
-        }
         // Under the list, its own banner shows.
         .overlay(alignment: .top) { if !covered { ConnectionBanner(top: 56) } }
         // Watching an agent work: the screen stays on (a locked iPhone drops the connection).

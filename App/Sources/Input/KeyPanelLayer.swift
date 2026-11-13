@@ -11,8 +11,8 @@ struct KeyPanelState: Equatable {
 
 extension View {
     /// The key panel over this terminal area and the ways it and the keyboards come (`KeyPanelLayer`).
-    func keyPanel(address: String?, covered: Bool, thumbY: CGFloat = 0, state: Binding<KeyPanelState>) -> some View {
-        modifier(KeyPanelLayer(address: address, covered: covered, thumbY: thumbY, state: state))
+    func keyPanel(address: String?, covered: Bool, state: Binding<KeyPanelState>) -> some View {
+        modifier(KeyPanelLayer(address: address, covered: covered, state: state))
     }
 }
 
@@ -20,8 +20,7 @@ extension View {
 ///
 /// A swipe to the left anywhere on a terminal pulls the panel out at the right
 /// with the finger (on the iPad its pane gets the focus). Its keys come to
-/// rest: on the iPhone a third of the screen up from its bottom; on the iPad
-/// at the height the swipe began, under the thumb (⏎ there as it opens).
+/// rest at the height the swipe began, under the thumb (⏎ there as it opens).
 /// VoiceOver: the terminal's actions Keys and Write a Message.
 ///
 /// While a swipe that began with the panel hidden is under way, the message
@@ -29,17 +28,15 @@ extension View {
 /// comes (the panel goes). The terminal's own keyboard comes with a double tap
 /// on the terminal (`WierdrTerminalView`).
 /// Taps on the terminal are clicks for the program and its pans scroll it, with
-/// a keyboard up too; a double tap hides the keyboard (the message field with
-/// it); with the panel out, a tap beside it puts the panel back (a double tap
-/// there brings the terminal's keyboard; the panel stays), and so does a swipe
-/// right. While the area is `covered` (the list, the sidebar overlay), the
-/// panel and the keyboards go and the gestures rest.
+/// a keyboard up too, and beside the panel while it is out; a double tap brings
+/// the terminal's keyboard or hides the one that is up (the message field with
+/// it). Only a swipe right puts the panel back. While the area is `covered`
+/// (the list, the sidebar overlay), the panel and the keyboards go and the
+/// gestures rest.
 struct KeyPanelLayer: ViewModifier {
     /// The focused terminal (nil: no terminal here, no keys).
     var address: String?
     var covered: Bool
-    /// iPhone: the window y the keys come to rest at (a third of the screen up from its bottom).
-    var thumbY: CGFloat
     @Binding var state: KeyPanelState
 
     @Environment(WorkspaceController.self) private var controller
@@ -52,11 +49,8 @@ struct KeyPanelLayer: ViewModifier {
     @State private var pickerStart: CGPoint?
     /// The finger is on the message icon.
     @State private var overMessage = false
-    /// iPad: the window y the last swipe that pulled the panel out began at (its keys rest there).
+    /// The window y the last swipe that pulled the panel out began at (its keys rest there).
     @State private var swipeY: CGFloat?
-
-    /// iPad (a narrow window too): the keys come to rest where the swipe began, ⏎ there as the panel opens.
-    private var restsAtSwipe: Bool { !Device.isPhone }
 
     func body(content: Content) -> some View {
         let enabled = address != nil && !covered
@@ -69,7 +63,6 @@ struct KeyPanelLayer: ViewModifier {
                     keyboardUp: keyboardUp,
                     onDrag: { x, p in moved(x, at: p) },
                     onEnd: { projected, p in released(projected: projected, at: p) },
-                    onTap: { setPanel(open: false) },
                     // The keyboard (and the message field), at once; the panel stays.
                     onDoubleTap: { hideKeyboards() }
                 )
@@ -134,7 +127,7 @@ struct KeyPanelLayer: ViewModifier {
     /// upload goes on), just past the area's right side while hidden.
     private func panel(_ address: String) -> some View {
         let progress = progress
-        return PhoneKeyPanel(address: address, shown: progress > 0, restY: restY, opensAtRest: restsAtSwipe,
+        return PhoneKeyPanel(address: address, shown: progress > 0, restY: swipeY ?? area.midY,
                              close: { setPanel(open: false) })
             .id(address)
             .offset(x: (1 - progress) * PhoneKeyPanel.width)
@@ -142,12 +135,6 @@ struct KeyPanelLayer: ViewModifier {
             .accessibilityHidden(progress == 0)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
             .clipped()
-    }
-
-    /// Where the keys come to rest (window y): on the iPad where the swipe
-    /// began (else the area's middle), on the iPhone `thumbY`.
-    private var restY: CGFloat {
-        restsAtSwipe ? swipeY ?? area.midY : thumbY
     }
 
     private func setPanel(open: Bool) {
