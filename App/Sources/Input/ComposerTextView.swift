@@ -4,12 +4,12 @@ import UIKit
 /// The composer's text (`ComposerBar`): a `UITextView`, as Telegram's, laid
 /// out with its metrics (system 17 pt, text insets 4.5 / 5.5, at least 31 pt:
 /// a 40-pt capsule for one line). SwiftUI's `TextField` can't turn smart
-/// quotes off, scroll a one-line window or carry the iPad's accessory.
+/// quotes off, scroll a short window or carry the iPad's accessory.
 ///
-/// While it doesn't have the keyboard it is one line tall: a window into the
-/// draft as it is (its line breaks too), from its first line each time the
-/// keyboard goes; a finger scrolls it through the lines, a tap brings the
-/// keyboard with the caret where it landed. With the keyboard it grows with
+/// While it doesn't have the keyboard it is at most two lines tall
+/// (`collapsedLines`): a window into the draft as it is (its line breaks too),
+/// from its first line each time the keyboard goes; a finger scrolls it
+/// through the lines, a tap brings the keyboard with the caret where it landed. With the keyboard it grows with
 /// the text up to `maxHeight`, then scrolls. A hardware keyboard's Return
 /// sends (Telegram's rule; ⇧Return is a new line); the on-screen keyboard's
 /// Return is a new line.
@@ -29,6 +29,8 @@ struct ComposerTextView: UIViewRepresentable {
 
     /// Telegram's `chatTextInputFieldMinHeight`: one line of 17 pt and the insets.
     static let minHeight: CGFloat = 31
+    /// The most lines the field shows while the keyboard is down.
+    static let collapsedLines: CGFloat = 2
     static let font = UIFont.systemFont(ofSize: 17)
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -41,7 +43,7 @@ struct ComposerTextView: UIViewRepresentable {
         view.textContainer.lineFragmentPadding = 0
         view.isScrollEnabled = true
         // Its insets are its own: the iPhone's bar dips into the home indicator's safe area,
-        // and the automatic adjustment moved the one-line window off its line (iOS 26).
+        // and the automatic adjustment moved the collapsed window off its line (iOS 26).
         view.contentInsetAdjustmentBehavior = .never
         view.showsHorizontalScrollIndicator = false
         view.alwaysBounceVertical = false
@@ -87,7 +89,7 @@ struct ComposerTextView: UIViewRepresentable {
         if view.verticalScrollIndicatorInsets != indicator { view.verticalScrollIndicatorInsets = indicator }
 
         let collapsed = !focused && !view.isFirstResponder
-        view.oneLine = collapsed
+        view.isCollapsed = collapsed
         c.apply(text: text, collapsed: collapsed)
 
         if focused, !view.isFirstResponder {
@@ -108,8 +110,6 @@ struct ComposerTextView: UIViewRepresentable {
     /// Measured here, not with `UITextView.sizeThatFits`: with TextKit 2 that
     /// missed the empty line a Return at the end starts, where the caret is.
     static func height(of view: UITextView, width: CGFloat, collapsed: Bool, cap: CGFloat) -> CGFloat {
-        let one = ceil(font.lineHeight + 10)
-        guard !collapsed else { return max(minHeight, one) }
         let inset = view.textContainerInset
         let column = width - inset.left - inset.right - 2 * view.textContainer.lineFragmentPadding
         var text = view.text ?? ""
@@ -120,7 +120,9 @@ struct ComposerTextView: UIViewRepresentable {
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: [.font: font], context: nil)
         let fitted = ceil(used.height + inset.top + inset.bottom)
-        return min(max(minHeight, fitted), max(cap, minHeight))
+        // Keyboard down: as many lines as there are, up to `collapsedLines` (then it scrolls).
+        let limit = collapsed ? ceil(collapsedLines * font.lineHeight + inset.top + inset.bottom) : cap
+        return min(max(minHeight, fitted), max(limit, minHeight))
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -129,13 +131,13 @@ struct ComposerTextView: UIViewRepresentable {
         /// What the view was last set up with (`updateUIView` sets only what changed).
         var theme: Theme?
         var prose: Bool?
-        /// One line tall at the last update (the keyboard gone).
+        /// Collapsed at the last update (the keyboard gone).
         private var collapsed = false
         /// The text last reported as typed: SwiftUI handing it back (maybe a
         /// key behind) is no change from outside.
         private var reported: String?
 
-        /// The draft, and the one-line window back at its first line when the keyboard has just gone.
+        /// The draft, and the collapsed window back at its first line when the keyboard has just gone.
         func apply(text: String, collapsed: Bool) {
             guard let view else { return }
             if collapsed, !self.collapsed { view.setContentOffset(.zero, animated: false) }
@@ -157,13 +159,26 @@ struct ComposerTextView: UIViewRepresentable {
             parent?.onFocus(false)
         }
 
-        /// One line tall, a finger's scroll comes to rest on a whole line.
+        /// Where the finger's drag began (collapsed): its way decides the line it comes to rest on.
+        private var dragStart: CGFloat = 0
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            dragStart = scrollView.contentOffset.y
+        }
+
+        /// Collapsed, a finger's scroll comes to rest on a whole line: the
+        /// next one its way when it moved on (some speed, or a quarter of a
+        /// line from where it began), else the nearest.
         func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
                                        targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-            guard let view = scrollView as? ComposerUITextView, view.oneLine else { return }
+            guard let view = scrollView as? ComposerUITextView, view.isCollapsed else { return }
             let line = ComposerTextView.font.lineHeight
             let end = max(0, view.contentSize.height + view.contentInset.bottom - view.bounds.height)
-            let y = (targetContentOffset.pointee.y / line).rounded() * line
+            let target = targetContentOffset.pointee.y
+            let moved = target - dragStart
+            let way: CGFloat = abs(velocity.y) > 0.02 ? velocity.y : (abs(moved) > line / 4 ? moved : 0)
+            let lines = target / line
+            let y = (way > 0 ? lines.rounded(.up) : way < 0 ? lines.rounded(.down) : lines.rounded()) * line
             targetContentOffset.pointee.y = min(max(0, y), end)
         }
 
@@ -196,13 +211,14 @@ struct ComposerTextView: UIViewRepresentable {
 final class ComposerUITextView: UITextView {
     var onReturn: (() -> Void)?
 
-    /// One line tall (the keyboard gone): only one line shows (the next one's
-    /// top would peek out of the insets), and the last one can come to rest at the top.
-    var oneLine = false {
+    /// Collapsed (the keyboard gone, at most `collapsedLines` tall): only
+    /// whole lines show (the next one's top would peek out of the insets), and
+    /// the last ones can come to rest in the window.
+    var isCollapsed = false {
         didSet {
-            guard oneLine != oldValue else { return }
-            showsVerticalScrollIndicator = !oneLine
-            contentInset.bottom = oneLine ? 1 : 0
+            guard isCollapsed != oldValue else { return }
+            showsVerticalScrollIndicator = !isCollapsed
+            contentInset.bottom = isCollapsed ? 1 : 0
             setNeedsLayout()
         }
     }
@@ -252,27 +268,30 @@ final class ComposerUITextView: UITextView {
         keepCaretInView()
     }
 
-    /// One line tall: a mask over the first line's place (it moves with the
+    /// Collapsed: a mask over the whole lines' place (it moves with the
     /// bounds, which scrolling shifts, so it is set again on every layout).
     private func updateLineMask() {
-        guard oneLine else {
+        guard isCollapsed else {
             if layer.mask != nil { layer.mask = nil }
             return
         }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         lineMask.backgroundColor = UIColor.black.cgColor
-        // The line's own band: the insets around it would show the lines next to it once scrolled.
+        // The lines' own band: the insets around it would show the lines next to it once scrolled.
+        let line = ComposerTextView.font.lineHeight
+        let room = bounds.height - textContainerInset.top - textContainerInset.bottom
+        let lines = max(1, (room / line).rounded())
         lineMask.frame = CGRect(x: bounds.minX, y: bounds.minY + textContainerInset.top, width: bounds.width,
-                                height: ComposerTextView.font.lineHeight)
+                                height: lines * line)
         if layer.mask !== lineMask { layer.mask = lineMask }
         CATransaction.commit()
     }
 
-    /// One line tall and at rest: on a whole line, whatever moved it (a
+    /// Collapsed and at rest: on a whole line, whatever moved it (a
     /// finger's scroll settles there by itself, see the coordinator).
     private func snapToLine() {
-        guard oneLine, !isTracking, !isDragging, !isDecelerating, bounds.height > 0 else { return }
+        guard isCollapsed, !isTracking, !isDragging, !isDecelerating, bounds.height > 0 else { return }
         let line = ComposerTextView.font.lineHeight
         let end = max(0, contentSize.height + contentInset.bottom - bounds.height)
         let y = min(max(0, (contentOffset.y / line).rounded() * line), end)

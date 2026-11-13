@@ -15,7 +15,7 @@ import WierdrModel
 /// A tap on it brings the keyboard (dictation, autocorrect, any language) and
 /// the field grows with the text, upward (at most Telegram's cap, then it
 /// scrolls). A double tap on the terminal puts the keyboard away at once and
-/// the field down to one line. Send: the text goes to the program as one
+/// the field down to two lines. Send: the text goes to the program as one
 /// paste (bracketed when it asked, so line breaks stay in the message), then
 /// Return, and the keyboard goes (to watch the answer); long-press: Insert
 /// Without Return, Clear. The attach button's menu puts a photo, a file or a
@@ -161,7 +161,7 @@ struct ComposerBar: View {
             // Grows to the draft and steps out to the edges with the keyboard (its spring).
             withAnimation(ComposerMotion.keyboard) { controller.composing = address }
         } else if controller.composing == address {
-            // Gone (a double tap, Hide, a picker over it): down to one line at once, with the keyboard.
+            // Gone (a double tap, Hide, a picker over it): down to two lines at most, at once, with the keyboard.
             var t = Transaction()
             t.disablesAnimations = true
             withTransaction(t) { controller.composing = nil }
@@ -485,7 +485,7 @@ extension View {
 
 extension WorkspaceController {
     /// Puts the message field's keyboard away at once: it goes without
-    /// sliding, the field down to one line without a transition (its text stays as the draft).
+    /// sliding, the field down to two lines without a transition (its text stays as the draft).
     func closeCompose() {
         guard composing != nil else { return }
         UIView.performWithoutAnimation {

@@ -28,7 +28,7 @@ extension View {
 /// it (`ComposerBar`). Taps on the terminal are clicks for the program and its
 /// pans scroll it, with a keyboard up too, and beside the panel while it is
 /// out; a double tap brings the terminal's keyboard or hides the one that is
-/// up (the message field's: the field goes down to one line). Only a swipe
+/// up (the message field's: the field goes down to two lines). Only a swipe
 /// right puts the panel back. While the area is `covered` (the list, the
 /// sidebar overlay), the panel and the keyboards go and the gestures rest.
 struct KeyPanelLayer: ViewModifier {
