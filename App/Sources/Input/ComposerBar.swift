@@ -135,7 +135,10 @@ struct ComposerBar: View {
                                insert: { submit(pressReturn: false) },
                                clear: { edited("") })
         }
-        .composerGlass(RoundedRectangle(cornerRadius: 20), theme: theme)
+        // Not interactive: in the glass container the attach button's menu morphs
+        // out of, the field's interactive glass took the first tap on the menu's
+        // items over it (they worked only beside it, or with a double tap; iOS 26).
+        .composerGlass(RoundedRectangle(cornerRadius: 20), theme: theme, interactive: false)
     }
 
     /// Telegram's cap on the text's height: what is left above it but 120 pt,
@@ -465,12 +468,13 @@ struct ComposerGlassGroup<Content: View>: View {
 
 extension View {
     /// Telegram's panel glass: regular, a white tint of 2.5 % (dark) or 10 %
-    /// (light), interactive. Before iOS 26, its drawn stand-in in the theme's
-    /// colors: a translucent fill, a 0.8-pt inner line and a soft shadow.
+    /// (light), interactive unless asked not to be (it swells and glows under the
+    /// finger). Before iOS 26, its drawn stand-in in the theme's colors: a
+    /// translucent fill, a 0.8-pt inner line and a soft shadow.
     @ViewBuilder
-    func composerGlass<S: InsettableShape>(_ shape: S, theme: Theme) -> some View {
+    func composerGlass<S: InsettableShape>(_ shape: S, theme: Theme, interactive: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.regular.tint(.white.opacity(theme.isDark ? 0.025 : 0.1)).interactive(), in: shape)
+            glassEffect(.regular.tint(.white.opacity(theme.isDark ? 0.025 : 0.1)).interactive(interactive), in: shape)
         } else {
             background {
                 shape.fill(theme.isDark ? theme.raised.opacity(0.85) : theme.background.opacity(0.7))
