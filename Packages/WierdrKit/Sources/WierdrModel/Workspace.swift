@@ -214,8 +214,9 @@ public final class Workspace {
     }
 
     /// Move a space among its machine's spaces: just before `before`, or after
-    /// the last of them when `before` is nil (`space.move`).
+    /// the last of them when `before` is nil (`space.move`). In the demo, here only.
     public func moveSpace(_ spaceID: String, before: String?) async throws {
+        if isLocal { return try moveHere(spaceID, before: before) }
         guard let backend else { throw WorkspaceError.notConnected }
         try await backend.moveSpace(spaceID, before: before)
     }
@@ -263,8 +264,28 @@ public final class Workspace {
         backend?.setPinned(address, pinned)
     }
 
-    /// No herdr-core behind it (the demo): pin, unread and idle change it here only.
+    /// No herdr-core behind it (the demo): pin, unread, idle and moving a space change it here only.
     var isLocal = false
+
+    /// The demo's `space.move`: reorders `spaces`, the space among its machine's.
+    private func moveHere(_ spaceID: String, before: String?) throws {
+        guard let from = spaces.firstIndex(where: { $0.id == spaceID }) else { throw WorkspaceError.notFound("Space") }
+        let space = spaces[from]
+        if let before {
+            guard let other = self.space(before) else { throw WorkspaceError.notFound("Space") }
+            guard other.machine == space.machine else {
+                throw WorkspaceError.core("A space moves only among its machine's spaces")
+            }
+        }
+        guard before != spaceID else { return }
+        var list = spaces
+        list.remove(at: from)
+        let to = before.flatMap { b in list.firstIndex { $0.id == b } }
+            ?? list.lastIndex { $0.machine == space.machine }.map { $0 + 1 }
+            ?? from
+        list.insert(space, at: to)
+        if list != spaces { spaces = list }
+    }
 
     private func changeHere(_ address: String, _ change: (inout TerminalInfo) -> Void) {
         guard var t = terminals[address] else { return }

@@ -11,6 +11,10 @@ import WierdrModel
 /// The tab shown is remembered (`phone.tab`: "all" or the space's id); when its
 /// space goes, its neighbour takes over. Without spaces the strip fades out and
 /// swipes don't page.
+///
+/// Reordering the tabs (`PhoneTabReorder`, Telegram's): the header's row is a Done
+/// button over the title, the list under the strip dims to half and takes no touches,
+/// and swipes don't page. Done, or a pane pushed, ends it and saves the order.
 struct PhoneHome: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -19,6 +23,7 @@ struct PhoneHome: View {
     /// Landscape on an iPhone: the limits give their room to the list.
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var paging = PhoneSpacePaging()
+    @State private var reorder = PhoneTabReorder()
     @State private var safeTop: CGFloat = 0
 
     var body: some View {
@@ -29,12 +34,13 @@ struct PhoneHome: View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 PhoneSpacePager(paging: paging, topInset: headerHeight,
-                                isEnabled: showsTabs && controller.compactColumn == .sidebar) { scope in
+                                isEnabled: showsTabs && controller.compactColumn == .sidebar && !reorder.isActive) { scope in
                     PhoneAgentList(scope: scope, topInset: headerHeight, edgeSwipesOnly: showsTabs,
                                    scrollToTop: paging.scrollToTop[scope] ?? 0)
                 }
+                .modifier(PhoneReorderDim(isOn: reorder.isActive))
                 PhoneHeaderEdge(height: headerHeight)
-                PhoneHomeHeader(tabs: tabs, paging: paging, showsTabs: showsTabs)
+                PhoneHomeHeader(tabs: tabs, paging: paging, reorder: reorder, showsTabs: showsTabs)
                     .padding(.top, safeTop)
                 if case .failed = controller.workspace.phase {
                     // The reason and Retry, under the header (its title says "Not Connected").
@@ -46,21 +52,38 @@ struct PhoneHome: View {
             .overlay(alignment: .bottom) {
                 ToastStack().padding(.horizontal, 12).padding(.bottom, 10)
             }
-            if verticalSizeClass != .compact { LimitsPanel(large: true) }
-            PhoneHomeFooter()
+            Group {
+                if verticalSizeClass != .compact { LimitsPanel(large: true) }
+                PhoneHomeFooter()
+            }
+            .modifier(PhoneReorderDim(isOn: reorder.isActive))
         }
         .background(theme.chrome.ignoresSafeArea())
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { safeTop = $0 }
         .onChange(of: tabs.map(\.scope), initial: true) { _, scopes in
-            paging.update(scopes: scopes, keeping: Self.scope(savedTab))
+            // The pages are only put in their places (a tab dragged over moves them by a page).
+            withTransaction(Transaction(animation: nil)) {
+                paging.update(scopes: scopes, keeping: Self.scope(savedTab))
+            }
         }
         .onChange(of: paging.selectedScope) { _, scope in savedTab = Self.id(scope) }
+        .onAppear { reorder.controller = controller }
+        // A pane pushed over the list ends reordering, as Done; so do fewer than two spaces.
+        .onChange(of: controller.compactColumn) { _, column in
+            if column == .detail { reorder.done() }
+        }
+        .onChange(of: controller.workspace.spaces.map(\.id)) { _, ids in
+            if ids.count < 2 { reorder.done() }
+            reorder.settle()
+        }
+        .onDisappear { reorder.done() }
     }
 
-    /// "All", then a tab per space in Herdr's order, with its waiting agents (done or needing you).
+    /// "All", then a tab per space in Herdr's order (or as reordered, `PhoneTabReorder`),
+    /// with its waiting agents (done or needing you).
     private var tabs: [PhoneSpaceTab] {
         let ws = controller.workspace
-        return [PhoneSpaceTab(scope: .all, title: "All")] + ws.spaces.map { space in
+        return [PhoneSpaceTab(scope: .all, title: "All")] + reorder.arranged(ws.spaces).map { space in
             let counts = ws.agentCounts(in: space.id)
             let urgent = counts[.blocked] ?? 0
             return PhoneSpaceTab(scope: .space(space.id), title: space.displayName,
@@ -83,10 +106,12 @@ struct PhoneHome: View {
 /// Telegram's chat-list header over the pages: a 44-pt row 10 pt under the status
 /// bar (settings in a glass circle where Telegram has Edit, the title in the middle,
 /// search and + in one glass pill, 16 pt from the sides), then the strip 10 pt
-/// under it, 3 pt above the header's bottom.
+/// under it, 3 pt above the header's bottom. While the tabs are reordered, the row
+/// has only Done (where settings is) and the title.
 private struct PhoneHomeHeader: View {
     var tabs: [PhoneSpaceTab]
     var paging: PhoneSpacePaging
+    var reorder: PhoneTabReorder
     var showsTabs: Bool
 
     static let rowHeight: CGFloat = 44
@@ -106,7 +131,7 @@ private struct PhoneHomeHeader: View {
                 .frame(height: Self.rowHeight)
                 .padding(.top, 10)
             if showsTabs {
-                PhoneSpaceTabs(tabs: tabs, paging: paging)
+                PhoneSpaceTabs(tabs: tabs, paging: paging, reorder: reorder)
                     .padding(.horizontal, Self.sideInset)
                     .padding(.top, 10)
                     .transition(.opacity)
@@ -124,31 +149,64 @@ private struct PhoneHomeHeader: View {
                 .padding(.horizontal, Self.sideInset + trailingWidth + 8)
             ComposerGlassGroup {
                 HStack(spacing: 0) {
-                    Button { controller.showSettings = true } label: {
-                        Icon("settings", size: 21, color: theme.foreground)
-                            .frame(width: Self.rowHeight, height: Self.rowHeight)
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(AttachPressStyle())
-                    .composerGlass(Circle(), theme: theme)
-                    .accessibilityLabel("Settings")
-                    Spacer(minLength: 0)
-                    HStack(spacing: 0) {
-                        Button { controller.showSwitcher = true } label: {
-                            Icon("search", size: 21, color: theme.foreground)
+                    if reorder.isActive {
+                        done
+                    } else {
+                        Button { controller.showSettings = true } label: {
+                            Icon("settings", size: 21, color: theme.foreground)
                                 .frame(width: Self.rowHeight, height: Self.rowHeight)
-                                .contentShape(Rectangle())
+                                .contentShape(Circle())
                         }
                         .buttonStyle(AttachPressStyle())
-                        .accessibilityLabel("Go to")
-                        PhoneNewSpaceMenu()
+                        .composerGlass(Circle(), theme: theme)
+                        .accessibilityLabel("Settings")
                     }
-                    .padding(.horizontal, 4)
-                    .composerGlass(Capsule(), theme: theme)
+                    Spacer(minLength: 0)
+                    if !reorder.isActive {
+                        HStack(spacing: 0) {
+                            Button { controller.showSwitcher = true } label: {
+                                Icon("search", size: 21, color: theme.foreground)
+                                    .frame(width: Self.rowHeight, height: Self.rowHeight)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(AttachPressStyle())
+                            .accessibilityLabel("Go to")
+                            PhoneNewSpaceMenu()
+                        }
+                        .padding(.horizontal, 4)
+                        .composerGlass(Capsule(), theme: theme)
+                    }
                 }
             }
             .padding(.horizontal, Self.sideInset)
         }
+    }
+
+    /// Reordering the tabs: Telegram's bold Done in its own glass pill (12 pt either
+    /// side, at least as wide as tall), where settings is; it saves the order.
+    private var done: some View {
+        Button { reorder.done() } label: {
+            Text("Done")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(theme.foreground)
+                .padding(.horizontal, 12)
+                .frame(minWidth: Self.rowHeight, minHeight: Self.rowHeight)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(AttachPressStyle())
+        .composerGlass(Capsule(), theme: theme)
+    }
+}
+
+/// What's under the strip while the tabs are reordered: half dimmed, taking no touches.
+private struct PhoneReorderDim: ViewModifier {
+    var isOn: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isOn ? 0.5 : 1)
+            .allowsHitTesting(!isOn)
+            .accessibilityHidden(isOn)
     }
 }
 

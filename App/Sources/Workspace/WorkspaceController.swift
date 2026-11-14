@@ -386,6 +386,18 @@ final class WorkspaceController {
         }
     }
 
+    /// Spaces reordered on the iPhone's strip: the moves one after another, each
+    /// after the last one's write. False when one failed (a toast says why; the rest aren't made).
+    func moveSpaces(_ moves: [SpaceMove]) async -> Bool {
+        do {
+            for m in moves { try await workspace.moveSpace(m.space, before: m.before) }
+            return true
+        } catch {
+            report("Move space", error)
+            return false
+        }
+    }
+
     func moveTab(_ tabID: String, to index: Int) {
         run("Move tab") { [workspace] in try await workspace.moveTab(tabID, to: index) }
     }
@@ -466,12 +478,17 @@ final class WorkspaceController {
             do {
                 try await op()
             } catch {
-                if isDemo, case WorkspaceError.notConnected = error {
-                    toast("\(what): not available in the demo")
-                } else {
-                    toast("\(what) failed: \(error.localizedDescription)")
-                }
+                report(what, error)
             }
+        }
+    }
+
+    /// A command that failed: a toast.
+    private func report(_ what: String, _ error: Error) {
+        if isDemo, case WorkspaceError.notConnected = error {
+            toast("\(what): not available in the demo")
+        } else {
+            toast("\(what) failed: \(error.localizedDescription)")
         }
     }
 
