@@ -844,9 +844,11 @@ public final class WorkspaceEngine: WorkspaceBackend {
         scheduleRebuild()
     }
 
+    /// Pinned: `<prefix>.pinned` = the Unix time in seconds (the iPhone's list puts the
+    /// newest pin on top; the desktop reads any non-empty value as pinned); unpinned: "".
     func setPinned(_ address: String, _ pinned: Bool) {
         guard options.allowWrites, let c = connection, records[address] != nil else { return }
-        let key = label("pinned"), value = pinned ? "1" : ""
+        let key = label("pinned"), value = pinned ? String(Int(Date().timeIntervalSince1970)) : ""
         if pinned { records[address]?.labels[key] = value } else { records[address]?.labels[key] = nil }
         scheduleRebuild()
         Task { [weak self] in

@@ -245,17 +245,31 @@ public final class Workspace {
 
     /// "Mark unread": `herdr.seen = turn - 1`.
     public func markUnread(_ address: String) {
+        if isLocal { return changeHere(address) { if $0.status == .idle { $0.status = .done } } }
         backend?.markUnread(address)
     }
 
     /// "Mark idle" (done → idle without looking): `herdr.seen = turn`.
     public func markRead(_ address: String) {
+        if isLocal { return changeHere(address) { if $0.status == .done { $0.status = .idle } } }
         backend?.markRead(address)
     }
 
-    /// Pin/unpin an agent to the top of the lists (`herdr.pinned`).
+    /// Pin/unpin an agent to the top of the lists (`herdr.pinned`, the time it was pinned).
     public func setPinned(_ address: String, _ pinned: Bool) {
+        if isLocal {
+            return changeHere(address) { $0.pinned = pinned; $0.pinnedAt = pinned ? Date() : nil }
+        }
         backend?.setPinned(address, pinned)
+    }
+
+    /// No herdr-core behind it (the demo): pin, unread and idle change it here only.
+    var isLocal = false
+
+    private func changeHere(_ address: String, _ change: (inout TerminalInfo) -> Void) {
+        guard var t = terminals[address] else { return }
+        change(&t)
+        terminals[address] = t
     }
 
     /// Refresh the installed-agent list of a machine for the "+" menu.

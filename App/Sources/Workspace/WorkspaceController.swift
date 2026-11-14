@@ -390,18 +390,16 @@ final class WorkspaceController {
         run("Move tab") { [workspace] in try await workspace.moveTab(tabID, to: index) }
     }
 
+    /// Pin, unread and idle work in the demo too (its workspace changes them locally).
     func setPinned(_ address: String, _ pinned: Bool) {
-        guard !isDemo else { return toast("Not available in the demo") }
         workspace.setPinned(address, pinned)
     }
 
     func markUnread(_ address: String) {
-        guard !isDemo else { return toast("Not available in the demo") }
         workspace.markUnread(address)
     }
 
     func markRead(_ address: String) {
-        guard !isDemo else { return toast("Not available in the demo") }
         workspace.markRead(address)
     }
 

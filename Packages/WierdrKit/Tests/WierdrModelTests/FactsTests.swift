@@ -134,7 +134,12 @@ import Testing
         #expect(info.machine == "lf" && info.spaceID == "lf/spA" && info.tabID == "lf/tbA")
         #expect(info.status == .done && info.state == "idle" && info.message == "Session" && info.turn == 3)
         #expect(info.program.key == "pi" && info.processName == "pi" && info.cwd == "/home/x/dev")
-        #expect(info.pinned && info.meta != nil && info.parent == "lf/t1")
+        #expect(info.pinned && info.pinnedAt == nil && info.meta != nil && info.parent == "lf/t1")
+        // Wierdr's pins carry their time (the desktop's "1" doesn't).
+        var timed = pi
+        timed.labels["herdr.pinned"] = "1763130000"
+        let pinned = deriver.info(timed, seenTurn: nil, locallySeen: true)
+        #expect(pinned.pinned && pinned.pinnedAt == Date(timeIntervalSince1970: 1_763_130_000))
         let shell = Fixture.terminal("t9", fg: ["-zsh"], fgName: "zsh")
         let s = deriver.info(shell, seenTurn: nil, locallySeen: true)
         #expect(s.status == nil && s.processName == "zsh" && s.program.isShell && !s.pinned && s.spaceID == nil)

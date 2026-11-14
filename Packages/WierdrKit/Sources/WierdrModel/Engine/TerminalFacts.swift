@@ -167,6 +167,14 @@ struct TerminalDeriver {
 
     func seenLabel(_ t: Terminal) -> UInt64? { t.labels[label("seen")].flatMap { UInt64($0) } }
 
+    /// When `<prefix>.pinned` says it was pinned: a Unix time in seconds (what Wierdr
+    /// writes); `"1"` (the desktop's) or anything else is a pin without a time.
+    static func pinTime(_ value: String?) -> Date? {
+        guard let value, let seconds = Double(value.trimmingCharacters(in: .whitespaces)),
+              seconds.isFinite, seconds > 1 else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
+
     func info(_ t: Terminal, seenTurn: UInt64?, locallySeen: Bool) -> TerminalInfo {
         let machine = LayoutID.machine(of: t.address)
         let word = StatusRule.word(t)
@@ -197,6 +205,7 @@ struct TerminalDeriver {
             parent: t.parent.flatMap { $0.isEmpty ? nil : parent($0) },
             labels: t.labels,
             pinned: !(t.labels[label("pinned")] ?? "").isEmpty,
+            pinnedAt: Self.pinTime(t.labels[label("pinned")]),
             meta: AgentLabels.meta(labels: t.labels, foregroundPID: t.foreground?.pid),
             spaceID: qualifiedLabel("space"),
             tabID: qualifiedLabel("tab"))
