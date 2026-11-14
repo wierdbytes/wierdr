@@ -1,25 +1,46 @@
 import SwiftUI
 import WierdrModel
 
-/// The iPhone's list, slid over the pane (`PhoneWorkspaceView`): every agent by what it needs from you
-/// (`AgentsInbox`), or the spaces as on the desktop's sidebar (`SpacesList`).
+/// The iPhone's list, Telegram's chat list: a tab per space after "All"
+/// (`PhoneSpaceTabs`), their pages side by side (`PhoneSpacePager`: a swipe in the
+/// middle of the screen pages between them), and a header floating over the pages
+/// (they scroll under it): settings, the title (or the connection's state), search
+/// and +, the strip under them. At the bottom the subscription limits and the status
+/// counts. No agent is "current" here: the list shows no focus and never scrolls to one.
+///
+/// The tab shown is remembered (`phone.tab`: "all" or the space's id); when its
+/// space goes, its neighbour takes over. Without spaces the strip fades out and
+/// swipes don't page.
 struct PhoneHome: View {
-    enum Mode: String { case agents, spaces }
-
-    @AppStorage("phone.homeMode") private var mode: Mode = .agents
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
+    /// The tab last shown: "all" or a space's id.
+    @AppStorage("phone.tab") private var savedTab = "all"
+    @State private var paging = PhoneSpacePaging()
+    @State private var safeTop: CGFloat = 0
 
     var body: some View {
+        let tabs = self.tabs
+        let showsTabs = tabs.count > 1
+        // The header's bottom from the screen's top: the pages' room for it.
+        let headerHeight = safeTop + PhoneHomeHeader.height(showsTabs: showsTabs)
         VStack(spacing: 0) {
-            PhoneHomeHeader(mode: $mode)
-            Group {
-                switch mode {
-                case .agents: AgentsInbox()
-                case .spaces: SpacesList()
+            ZStack(alignment: .top) {
+                PhoneSpacePager(paging: paging, topInset: headerHeight,
+                                isEnabled: showsTabs && controller.compactColumn == .sidebar) { scope in
+                    PhoneAgentList(scope: scope, topInset: headerHeight, edgeSwipesOnly: showsTabs,
+                                   scrollToTop: paging.scrollToTop[scope] ?? 0)
+                }
+                PhoneHeaderEdge(height: headerHeight)
+                PhoneHomeHeader(tabs: tabs, paging: paging, showsTabs: showsTabs)
+                    .padding(.top, safeTop)
+                if case .failed = controller.workspace.phase {
+                    // The reason and Retry, under the header (its title says "Not Connected").
+                    ConnectionBanner(top: headerHeight + 8)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea(.container, edges: .top)
+            .animation(PhonePagingMotion.relayout, value: showsTabs)
             .overlay(alignment: .bottom) {
                 ToastStack().padding(.horizontal, 12).padding(.bottom, 10)
             }
@@ -27,53 +48,174 @@ struct PhoneHome: View {
             PhoneHomeFooter()
         }
         .background(theme.chrome.ignoresSafeArea())
-        .overlay(alignment: .top) { ConnectionBanner(top: 50) }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { safeTop = $0 }
+        .onChange(of: tabs.map(\.scope), initial: true) { _, scopes in
+            paging.update(scopes: scopes, keeping: Self.scope(savedTab))
+        }
+        .onChange(of: paging.selectedScope) { _, scope in savedTab = Self.id(scope) }
+    }
+
+    /// "All", then a tab per space in Herdr's order, with its waiting agents (done or needing you).
+    private var tabs: [PhoneSpaceTab] {
+        let ws = controller.workspace
+        return [PhoneSpaceTab(scope: .all, title: "All")] + ws.spaces.map { space in
+            let counts = ws.agentCounts(in: space.id)
+            let urgent = counts[.blocked] ?? 0
+            return PhoneSpaceTab(scope: .space(space.id), title: space.displayName,
+                                 unread: urgent + (counts[.done] ?? 0), urgent: urgent > 0, space: space)
+        }
+    }
+
+    private static func id(_ scope: PhoneListScope) -> String {
+        switch scope {
+        case .all: return "all"
+        case .space(let id): return id
+        }
+    }
+
+    private static func scope(_ id: String) -> PhoneListScope {
+        id == "all" || id.isEmpty ? .all : .space(id)
     }
 }
 
-/// "Agents  Spaces" (the list's two modes), search, settings. 50 pt.
+/// Telegram's chat-list header over the pages: a 44-pt row 10 pt under the status
+/// bar (settings in a glass circle where Telegram has Edit, the title in the middle,
+/// search and + in one glass pill, 16 pt from the sides), then the strip 10 pt
+/// under it, 3 pt above the header's bottom.
 private struct PhoneHomeHeader: View {
-    @Binding var mode: PhoneHome.Mode
+    var tabs: [PhoneSpaceTab]
+    var paging: PhoneSpacePaging
+    var showsTabs: Bool
+
+    static let rowHeight: CGFloat = 44
+    static let sideInset: CGFloat = 16
+
+    /// The header's height under the status bar.
+    static func height(showsTabs: Bool) -> CGFloat {
+        10 + rowHeight + (showsTabs ? 10 + PhoneSpaceTabs.height : 0) + 3
+    }
+
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
-        HStack(spacing: 2) {
-            HStack(spacing: 18) {
-                modeButton(.agents, "Agents")
-                modeButton(.spaces, "Spaces")
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            ChromeIconButton(icon: "search", iconSize: 19, frame: 40, radius: 10, label: "Go to") {
-                controller.showSwitcher = true
-            }
-            ChromeIconButton(icon: "settings", iconSize: 19, frame: 40, radius: 10, label: "Settings") {
-                controller.showSettings = true
+        VStack(spacing: 0) {
+            row
+                .frame(height: Self.rowHeight)
+                .padding(.top, 10)
+            if showsTabs {
+                PhoneSpaceTabs(tabs: tabs, paging: paging)
+                    .padding(.horizontal, Self.sideInset)
+                    .padding(.top, 10)
+                    .transition(.opacity)
             }
         }
-        .padding(.leading, 18)
-        .padding(.trailing, 8)
-        .frame(height: 50)
-        .overlay(alignment: .bottom) { Hairline().ignoresSafeArea(edges: .horizontal) }
+        .padding(.bottom, 3)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    private func modeButton(_ m: PhoneHome.Mode, _ title: String) -> some View {
-        let selected = mode == m
-        return Button {
-            withAnimation(.easeInOut(duration: 0.15)) { mode = m }
-        } label: {
-            Text(title)
-                .font(.ui(21, .semibold))
-                .foregroundStyle(selected ? theme.foreground : theme.dim)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
+    private var row: some View {
+        let trailingWidth: CGFloat = 2 * Self.rowHeight + 8
+        return ZStack {
+            PhoneHomeTitle()
+                // Centered on the screen, clear of the widest side.
+                .padding(.horizontal, Self.sideInset + trailingWidth + 8)
+            ComposerGlassGroup {
+                HStack(spacing: 0) {
+                    Button { controller.showSettings = true } label: {
+                        Icon("settings", size: 21, color: theme.foreground)
+                            .frame(width: Self.rowHeight, height: Self.rowHeight)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(AttachPressStyle())
+                    .composerGlass(Circle(), theme: theme)
+                    .accessibilityLabel("Settings")
+                    Spacer(minLength: 0)
+                    HStack(spacing: 0) {
+                        Button { controller.showSwitcher = true } label: {
+                            Icon("search", size: 21, color: theme.foreground)
+                                .frame(width: Self.rowHeight, height: Self.rowHeight)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(AttachPressStyle())
+                        .accessibilityLabel("Go to")
+                        PhoneNewSpaceMenu()
+                    }
+                    .padding(.horizontal, 4)
+                    .composerGlass(Capsule(), theme: theme)
+                }
+            }
+            .padding(.horizontal, Self.sideInset)
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
-/// Status counts (tap: the next agent with that status) and the new menu.
+/// The header's title: "Agents"; while not live, Telegram's "Connecting…" in its place
+/// (a spinner before it), "Not Connected" when it failed (`ConnectionBanner` says why).
+private struct PhoneHomeTitle: View {
+    @Environment(WorkspaceController.self) private var controller
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        let (text, spinner, why) = state
+        // The text centered, the spinner before it (and its twin, hidden, after it).
+        HStack(spacing: 7) {
+            if spinner { ProgressView().controlSize(.small) }
+            Text(text)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(theme.foreground)
+                .lineLimit(1)
+            if spinner { ProgressView().controlSize(.small).hidden() }
+        }
+        .animation(.easeInOut(duration: 0.2), value: text)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityValue(why ?? "")
+    }
+
+    private var state: (String, Bool, String?) {
+        switch controller.workspace.phase {
+        case .live: return ("Agents", false, nil)
+        case .connecting: return ("Connecting…", true, nil)
+        case .reconnecting(let why): return ("Reconnecting…", true, why)
+        case .failed(let why): return ("Not Connected", false, why)
+        }
+    }
+}
+
+/// Telegram's edge effect behind the header: the list's background at 85 %, solid
+/// to 54 pt above its end, then fading out (Telegram's curve); it runs 14 pt past
+/// the header's bottom. The rows scroll under it.
+private struct PhoneHeaderEdge: View {
+    /// The header's bottom from the screen's top.
+    var height: CGFloat
+    @Environment(\.theme) private var theme
+
+    /// Telegram's fade over its last 54 pt: (where, how much shows).
+    private static let fade: [(CGFloat, CGFloat)] = [
+        (0, 1), (0.132, 0.972), (0.233, 0.917), (0.314, 0.829), (0.394, 0.704), (0.47, 0.546),
+        (0.547, 0.389), (0.606, 0.273), (0.659, 0.19), (0.728, 0.106), (0.791, 0.056), (1, 0),
+    ]
+
+    var body: some View {
+        let total = height + 14
+        let edge = min(54, total)
+        let solid = (total - edge) / total
+        Rectangle()
+            .fill(theme.chrome.opacity(0.85))
+            .mask {
+                LinearGradient(stops: Self.fade.map { at, alpha in
+                    Gradient.Stop(color: .black.opacity(alpha), location: solid + at * edge / total)
+                }, startPoint: .top, endPoint: .bottom)
+            }
+            .frame(height: total)
+            .frame(maxWidth: .infinity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Status counts (tap: the next agent with that status).
 private struct PhoneHomeFooter: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -101,7 +243,6 @@ private struct PhoneHomeFooter: View {
                 }
             }
             Spacer(minLength: 0)
-            PhoneNewSpaceMenu()
         }
         .padding(.leading, 18)
         .padding(.trailing, 12)
@@ -112,30 +253,39 @@ private struct PhoneHomeFooter: View {
     }
 }
 
-/// The `+` of the list: a new space (shell or agent), in the folder of the
-/// last pane you looked at (as the desktop's New Space), on its computer.
+/// The header's +, Telegram's compose: a new space (shell or agent), in the folder of
+/// the last pane you looked at (as the desktop's New Space), on its computer.
 private struct PhoneNewSpaceMenu: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
-        let machine = controller.activeSpace?.machine
-        let folder = controller.workspace.terminal(controller.focusedPane?.terminal)?.cwd
         Menu {
-            Section(folder.map { "New space in \(Format.tilde($0, home: controller.workspace.home))" } ?? "New space") {
-                LaunchMenuItems(machine: machine) { launch in controller.newSpace(launch: launch) }
-            }
+            PhoneNewSpaceItems()
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(theme.accentForeground)
-                .frame(width: 40, height: 40)
-                .background(theme.accent, in: Circle())
-                .contentShape(Circle())
+                .font(.system(size: 21, weight: .medium))
+                .foregroundStyle(theme.accent)
+                .frame(width: PhoneHomeHeader.rowHeight, height: PhoneHomeHeader.rowHeight)
+                .contentShape(Rectangle())
         }
         .menuOrder(.fixed)
         .accessibilityLabel("New Space")
-        .onAppear { controller.workspace.refreshLaunchers(machine: machine) }
+        .onAppear { controller.workspace.refreshLaunchers(machine: controller.activeSpace?.machine) }
+    }
+}
+
+/// The new-space menu's items: a terminal or an installed agent, in the folder of the
+/// last pane you looked at, on its computer (the header's + and the "All" tab's menu).
+struct PhoneNewSpaceItems: View {
+    @Environment(WorkspaceController.self) private var controller
+
+    var body: some View {
+        let machine = controller.activeSpace?.machine
+        let folder = controller.workspace.terminal(controller.focusedPane?.terminal)?.cwd
+        Section(folder.map { "New space in \(Format.tilde($0, home: controller.workspace.home))" } ?? "New space") {
+            LaunchMenuItems(machine: machine) { launch in controller.newSpace(launch: launch) }
+        }
     }
 }
 
@@ -158,130 +308,5 @@ struct LaunchMenuItems: View {
                 Label { Text(launcher.program.name) } icon: { MenuIcon.image(launcher.program.iconAsset) }
             }
         }
-    }
-}
-
-// MARK: - Agents inbox
-
-/// Every agent (all spaces and computers), grouped by what it needs (with its
-/// sub-agents, which show under it): needs you, done, working, idle. Inside a
-/// group: pinned first, then the most recent status change.
-struct AgentsInbox: View {
-    @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        let groups = controller.workspace.inbox
-        ScrollViewReader { proxy in
-            List {
-                ForEach(groups, id: \.status) { group in
-                    sectionHeader(group.status, count: group.items.count)
-                        .sidebarRow(id: "status:\(group.status.rawValue)", background: Color.clear)
-                    ForEach(group.items) { item in
-                        // Its sub-agents are rows of their own in its card (the badge folds them).
-                        let kids = controller.showsKids(of: item.row) ? item.row.subtree : []
-                        SidebarRowView(row: item.row, space: item.space, bracket: .none, showsSpace: true)
-                            .padding(.top, 3)
-                            .padding(.bottom, kids.isEmpty ? 3 : 0)
-                            .sidebarRow(id: item.row.paneID, background: InboxSlice(top: true, bottom: kids.isEmpty))
-                        ForEach(Array(kids.enumerated()), id: \.element.id) { i, kid in
-                            let last = i == kids.count - 1
-                            SubAgentRowView(kid: kid, parent: item.row)
-                                .padding(.horizontal, 1)
-                                .padding(.top, 4)
-                                .padding(.bottom, last ? 4 + 3 : 0)
-                                .sidebarRow(id: "kid:\(kid.terminal.address)", background: InboxSlice(top: false, bottom: last))
-                        }
-                    }
-                }
-                if groups.isEmpty {
-                    empty
-                        .sidebarRow(id: "empty", background: Color.clear)
-                }
-                Color.clear.frame(height: 8)
-                    .sidebarRow(id: "end", background: Color.clear)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .environment(\.defaultMinListRowHeight, 0)
-            .onChange(of: controller.focusedPane?.id) { _, id in
-                guard let id else { return }
-                withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(controller.listID(ofPane: id)) }
-            }
-        }
-    }
-
-    private func sectionHeader(_ status: AgentStatus, count: Int) -> some View {
-        HStack(spacing: 8) {
-            StatusMark(status: status)
-            Text(title(status))
-                .font(.ui(12, .semibold))
-                .foregroundStyle(status == .blocked ? theme.blocked : theme.muted)
-            Text("\(count)")
-                .font(.ui(12))
-                .foregroundStyle(theme.dim)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.top, 14)
-        .padding(.bottom, 4)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    private func title(_ status: AgentStatus) -> String {
-        switch status {
-        case .blocked: return "NEEDS YOU"
-        case .done: return "DONE"
-        case .working: return "WORKING"
-        case .idle: return "IDLE"
-        }
-    }
-
-    private var empty: some View {
-        VStack(spacing: 10) {
-            Text("No agents running")
-                .font(.ui(15, .semibold))
-                .foregroundStyle(theme.foreground)
-            Text("Start one with + below, or open a space in Spaces.")
-                .font(.ui(13))
-                .foregroundStyle(theme.dim)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
-    }
-}
-
-/// A piece of an agent's card in the agents list, drawn as its list rows'
-/// background: `surface` with a 1-pt border, radius 8, 3 pt from the rows
-/// around it; an agent with its sub-agents under it is one card in several rows.
-private struct InboxSlice: View {
-    var top: Bool
-    var bottom: Bool
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        GeometryReader { geo in
-            let y0: CGFloat = top ? 3 : 0
-            let h = max(0, geo.size.height - y0 - (bottom ? 3 : 0))
-            let r: CGFloat = 8
-            let shape = UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
-                                               bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0)
-            ZStack(alignment: .top) {
-                shape.fill(theme.surface).frame(height: h)
-                // Stroke a taller rounded rect and clip it, so open ends have no line.
-                RoundedRectangle(cornerRadius: r)
-                    .strokeBorder(theme.border, lineWidth: 1)
-                    .frame(height: h + (top ? 0 : 2 * r) + (bottom ? 0 : 2 * r))
-                    .offset(y: top ? 0 : -2 * r)
-                    .frame(height: h, alignment: .top)
-                    .clipped()
-            }
-            .offset(y: y0)
-            .frame(height: geo.size.height, alignment: .top)
-        }
-        .padding(.horizontal, 8)
     }
 }
