@@ -49,7 +49,10 @@ struct PhoneWorkspaceView: View {
                 .accessibilityAddTraits(.isModal)
                 .accessibilityAction(.escape) { controller.showPanel() }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        // The size offered, whatever the content's: it is measured below for the list's width,
+        // so taking a wider list's size (maxWidth alone does) kept the landscape width back in
+        // portrait, everything laid out 832 pt wide and centered in the 428-pt screen.
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .leading)
         .animation(.snappy(duration: 0.3), value: open)
         .overlay(alignment: .top) { AttentionBanner(showing: !open) }
         .background {
