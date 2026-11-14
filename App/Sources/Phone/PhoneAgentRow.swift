@@ -22,18 +22,17 @@ enum PhoneRowMetrics {
 /// An agent's row, Telegram's chat row without the avatar (76 pt, full width):
 /// 1. its title, and where Telegram has the date: its machine (dim) and how long
 ///    it has been in its state;
-/// 2. as a group chat's sender line: its space (on "All", the space's avatar and
-///    name) or its provider's mark (in a space's tab), then model and @effort;
-/// 3. its context (the number in its cache color, a small bar with the cache's
-///    countdown mark) and its sub-agents and terminals (tap: fold or unfold them);
-///    on the right, Telegram's unread badge: needs you (red), done (green), working
-///    (the spinner), nothing while idle; the pin glyph there when it's pinned and
-///    has no badge.
+/// 2. its context (the number in its cache color, a bar with the cache's countdown
+///    mark), its model (cut first when room runs out) and @effort;
+/// 3. its space's name in a quiet gray frame (on "All"; cut when room runs out), its
+///    sub-agents and terminals (tap: fold or unfold them); on the right, Telegram's
+///    unread badge: needs you (red), done (green), working (the spinner), nothing
+///    while idle; the pin glyph there when it's pinned and has no badge.
 struct PhoneAgentRowContent: View {
     var terminal: TerminalInfo
     var tab: Tab?
     var space: Space
-    /// "All": the space's avatar and name lead line 2.
+    /// "All": the space's name leads line 3 (a space's tab is the space).
     var showsSpace: Bool
     var subtree: [SubAgent]
     /// Its sub-agents show under it.
@@ -59,8 +58,8 @@ struct PhoneAgentRowContent: View {
     private func content(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             titleLine(now: now).frame(height: 22)
-            senderLine.frame(height: 20)
-            detailLine(now: now).frame(height: 22)
+            contextLine(now: now).frame(height: 20)
+            spaceLine.frame(height: 22)
         }
         .padding(.top, 7)
         .padding(.horizontal, PhoneRowMetrics.inset)
@@ -98,62 +97,31 @@ struct PhoneAgentRowContent: View {
         }
     }
 
-    /// The space's name gives way first, so model and @effort show whole.
-    private var senderLine: some View {
-        let meta = terminal.meta
-        let quiet = terminal.status == .idle
-        var model = Text(meta?.model ?? terminal.program.name).foregroundColor(quiet ? theme.dim : theme.muted)
-        if let effort = meta?.effort, !effort.isEmpty {
-            model = model + Text(" ") + PhoneRowText.effort(effort, theme: theme)
-        }
-        return HStack(spacing: 7) {
-            Group {
-                if showsSpace {
-                    SpaceAvatar(space: space, size: 16)
-                } else if let asset = meta?.providerAsset {
-                    Icon(asset, size: 14, color: theme.muted)
-                } else {
-                    ProgramIcon(program: terminal.program, size: 15, color: theme.muted)
-                }
-            }
-            .frame(width: 16)
-            HStack(spacing: 6) {
-                if showsSpace {
-                    Text(space.displayName)
-                        .foregroundStyle(theme.foreground)
-                    Text("·").foregroundStyle(theme.dim)
-                }
-                model.layoutPriority(1)
-            }
-            .font(.system(size: 15))
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+    /// Context, then model and @effort: the model gives way first, @effort stays whole.
+    private func contextLine(now: Date) -> some View {
+        PhoneModelLine(terminal: terminal, now: now, contextFirst: true, size: 15)
     }
 
-    private func detailLine(now: Date) -> some View {
-        let meta = terminal.meta
+    private var spaceLine: some View {
         let kidAgents = subtree.filter(\.isAgent)
         let kidTerms = subtree.count - kidAgents.count
         // pi's own in-process sub-agents (pi-herdr's count) have no terminal: they only add to the count.
-        let inner = meta?.subagents ?? 0
+        let inner = terminal.meta?.subagents ?? 0
         return HStack(spacing: 8) {
-            if let ctx = Format.context(meta?.ctx) {
-                Text(ctx)
-                    .font(.system(size: 15).monospacedDigit())
-                    .foregroundStyle(theme.contextNumberColor(cacheUntil: meta?.cacheUntil, now: now))
-                    .fixedSize()
-                PhoneContextBar(meta: meta, now: now)
+            if showsSpace {
+                PhoneSpaceTag(name: space.displayName)
             }
             if kidAgents.count + inner > 0 {
                 PhoneKidBadge(icon: "bot", count: kidAgents.count + inner, open: open,
                               alert: kidAgents.contains { $0.terminal.status == .blocked },
                               label: kidLabel(kidAgents.count, inner),
                               action: kidAgents.isEmpty ? nil : toggleKids)
+                    .fixedSize()
             }
             if kidTerms > 0 {
                 PhoneKidBadge(icon: "terminal", count: kidTerms, open: open, alert: false,
                               label: kidTerms == 1 ? "1 terminal" : "\(kidTerms) terminals", action: toggleKids)
+                    .fixedSize()
             }
             Spacer(minLength: 0)
             PhoneStatusBadge(status: terminal.status, pinned: terminal.pinned)
@@ -196,6 +164,72 @@ struct PhoneAgentRowContent: View {
 }
 
 // MARK: - Pieces
+
+/// An agent's model line: its context (the number in its cache color and the bar)
+/// and its model and @effort. The model is cut first when room runs out; the
+/// context and @effort stay whole. An agent's row has the context first, a
+/// sub-agent's after @effort.
+struct PhoneModelLine: View {
+    var terminal: TerminalInfo
+    var now: Date
+    var contextFirst: Bool
+    var size: CGFloat
+    /// A sub-agent's status (its own `kidStatus`): idle dims the model.
+    var status: AgentStatus?? = nil
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        let meta = terminal.meta
+        let quiet = (status ?? terminal.status) == .idle
+        HStack(spacing: 8) {
+            if contextFirst { context(meta) }
+            HStack(spacing: 5) {
+                Text(meta?.model ?? terminal.program.name)
+                    .foregroundStyle(quiet ? theme.dim : theme.muted)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if let effort = meta?.effort, !effort.isEmpty {
+                    PhoneRowText.effort(effort, theme: theme)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+            }
+            if !contextFirst { context(meta) }
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: size))
+    }
+
+    @ViewBuilder
+    private func context(_ meta: AgentMeta?) -> some View {
+        if let ctx = Format.context(meta?.ctx) {
+            HStack(spacing: 8) {
+                Text(ctx)
+                    .font(.system(size: size).monospacedDigit())
+                    .foregroundStyle(theme.contextNumberColor(cacheUntil: meta?.cacheUntil, now: now))
+                PhoneContextBar(meta: meta, now: now)
+            }
+            .fixedSize()
+        }
+    }
+}
+
+/// A space's name in a quiet gray frame (no avatar); it is cut when room runs out.
+struct PhoneSpaceTag: View {
+    var name: String
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        Text(name)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(theme.muted)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, 6)
+            .frame(height: 20)
+            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(theme.dim.opacity(0.6), lineWidth: 1))
+    }
+}
 
 /// Text of the rows.
 enum PhoneRowText {
@@ -243,14 +277,14 @@ struct PhoneStatusBadge: View {
     }
 }
 
-/// The context window's use inline: a short bar (its fraction in the context
-/// color) and the prompt cache's countdown mark on it.
+/// The context window's use inline: a bar (its fraction in the context color) and
+/// the prompt cache's countdown mark on it.
 struct PhoneContextBar: View {
     var meta: AgentMeta?
     var now: Date
     @Environment(\.theme) private var theme
 
-    static let width: CGFloat = 40
+    static let width: CGFloat = 80
 
     var body: some View {
         if let meta, let ctx = meta.ctx, let max = meta.ctxMax, max > 0 {
@@ -312,7 +346,8 @@ struct PhoneKidBadge: View {
 
 /// A sub-agent under its agent, in the agent's block (no separator between
 /// them), indented with the tree's lines: its status mark and title, its age;
-/// under that its model, @effort and context. 50 pt. A plain terminal an agent
+/// under that its model, @effort and, as an agent's row has it, its context (the
+/// number and the bar). 50 pt. A plain terminal an agent
 /// started: its program's icon and name, 36 pt.
 struct PhoneKidRowContent: View {
     var kid: SubAgent
@@ -346,15 +381,17 @@ struct PhoneKidRowContent: View {
         }
     }
 
+    /// Second ticks while its age or its cache's countdown mark visibly moves each second.
     private var tickInterval: TimeInterval {
-        let young = t.statusChangedAt.map { Date().timeIntervalSince($0) < 3600 } ?? false
-        return young ? 1 : 30
+        let now = Date()
+        let young = t.statusChangedAt.map { now.timeIntervalSince($0) < 3600 } ?? false
+        let cacheLive = t.meta?.cacheUntil.map { $0 > now } ?? false
+        return young || cacheLive ? 1 : 30
     }
 
     private func agent(now: Date) -> some View {
         let h = PhoneRowMetrics.kidHeight
         let status = t.kidStatus
-        let meta = t.meta
         return HStack(alignment: .top, spacing: 0) {
             tree(height: h, mid: 6 + 11)
             VStack(alignment: .leading, spacing: 0) {
@@ -371,21 +408,9 @@ struct PhoneKidRowContent: View {
                         .fixedSize()
                 }
                 .frame(height: 22)
-                HStack(spacing: 8) {
-                    (Text(meta?.model ?? t.program.name).foregroundColor(status == .idle ? theme.dim : theme.muted)
-                        + (meta?.effort.flatMap { $0.isEmpty ? nil : Text(" ") + PhoneRowText.effort($0, theme: theme) } ?? Text("")))
-                        .font(.system(size: 14))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if let ctx = Format.context(meta?.ctx) {
-                        Text(ctx)
-                            .font(.system(size: 14).monospacedDigit())
-                            .foregroundStyle(theme.contextNumberColor(cacheUntil: meta?.cacheUntil, now: now))
-                            .fixedSize()
-                    }
-                }
-                .padding(.leading, 22)
-                .frame(height: 18)
+                PhoneModelLine(terminal: t, now: now, contextFirst: false, size: 14, status: .some(status))
+                    .padding(.leading, 22)
+                    .frame(height: 18)
             }
             .padding(.top, 6)
         }
