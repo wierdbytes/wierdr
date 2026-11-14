@@ -139,6 +139,9 @@ public struct TerminalInfo: Identifiable, Hashable, Sendable {
     public var parent: String?
     public var labels: [String: String]
     public var pinned: Bool
+    /// When it was pinned (`herdr.pinned` holds the Unix time in seconds); nil for a
+    /// pin without a time (`"1"`, the desktop's) or when it isn't pinned.
+    public var pinnedAt: Date?
     public var meta: AgentMeta?
     /// Qualified space/tab ids from `herdr.space` / `herdr.tab` labels.
     public var spaceID: String?
@@ -150,13 +153,14 @@ public struct TerminalInfo: Identifiable, Hashable, Sendable {
                 isLive: Bool = true, status: AgentStatus? = nil, state: String? = nil,
                 message: String? = nil, app: String? = nil, turn: Int = 0,
                 statusChangedAt: Date? = nil, parent: String? = nil, labels: [String: String] = [:],
-                pinned: Bool = false, meta: AgentMeta? = nil, spaceID: String? = nil, tabID: String? = nil) {
+                pinned: Bool = false, pinnedAt: Date? = nil, meta: AgentMeta? = nil, spaceID: String? = nil,
+                tabID: String? = nil) {
         self.address = address; self.machine = machine; self.name = name; self.title = title
         self.template = template; self.createdAt = createdAt
         self.cwd = cwd; self.processName = processName; self.program = program; self.isLive = isLive
         self.status = status; self.state = state; self.message = message; self.app = app
         self.turn = turn; self.statusChangedAt = statusChangedAt; self.parent = parent
-        self.labels = labels; self.pinned = pinned; self.meta = meta
+        self.labels = labels; self.pinned = pinned; self.pinnedAt = pinnedAt; self.meta = meta
         self.spaceID = spaceID; self.tabID = tabID
     }
 

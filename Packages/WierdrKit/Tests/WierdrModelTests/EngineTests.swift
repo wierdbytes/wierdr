@@ -318,7 +318,10 @@ struct EngineTests {
         #expect(core.calls("terminal.label").count == 3)
         ws.setPinned("t5", true)
         try await eventually { ws.terminal("t5")?.pinned == true && core.calls("terminal.label").count == 4 }
-        #expect(core.calls("terminal.label").last?["labels"] == ["herdr.pinned": "1"])
+        // The pin's value is when it was made (Unix seconds): the iPhone's list puts the newest on top.
+        let pin = try #require(core.calls("terminal.label").last?["labels"]?["herdr.pinned"]?.string)
+        #expect(abs((Double(pin) ?? 0) - Date().timeIntervalSince1970) < 60)
+        #expect(ws.terminal("t5")?.pinnedAt != nil)
     }
 
     @Test func unreadClearsWhenLookedAtAgain() async throws {

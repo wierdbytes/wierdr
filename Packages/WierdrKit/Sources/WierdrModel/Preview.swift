@@ -5,6 +5,7 @@ import Foundation
 extension Workspace {
     public static func preview() -> Workspace {
         let ws = Workspace()
+        ws.isLocal = true
         ws.phase = .live
         ws.home = "/Users/mentor"
         ws.machines = [Machine(name: nil, state: .ready, isConnected: true),
