@@ -11,6 +11,7 @@
 		1642D3D62190FEAC7BF951F2 /* WierdrWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A5885A899767CC54AA835E1D /* WierdrWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1B05101B71E742280AB023DD /* WierdrTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90B1F34C74D7CADD79F2C52 /* WierdrTerminalView.swift */; };
 		1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */; };
+		1C0F5D4C65CB210AC50D5708 /* PhoneSpaceTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D2A8AF84393C152A8757A15 /* PhoneSpaceTabs.swift */; };
 		1D99092A103C9305E6D01ACD /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFF1A4D9E311EDC3924AE60C /* ConnectView.swift */; };
 		2059138432A8BF088947DCE3 /* ComposerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664D901DE59E04EE9721DA2A /* ComposerTextView.swift */; };
 		24484EFD85EC8F1800F97C9F /* SubAgentPeek.swift in Sources */ = {isa = PBXBuildFile; fileRef = 384B24F496E887AC8E036AF3 /* SubAgentPeek.swift */; };
@@ -71,6 +72,7 @@
 		CC6CA5DD5FA692EB2E3DF779 /* QuickSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBDB08858052E955C8F9E69B /* QuickSwitcher.swift */; };
 		CF542979C43FBE032AEA0771 /* PhoneHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8759F1896EBC5B50A01F9AE /* PhoneHome.swift */; };
 		D025F02BB8E45BEADA711A3A /* LiveActivities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 351E2DA61EC61DF8DAEDBC58 /* LiveActivities.swift */; };
+		D6D310A8DA22A28E0FC7ECAB /* PhoneSpacePager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE5061166F5310B39AAAAE8 /* PhoneSpacePager.swift */; };
 		D7AFED70E6931C8C8A62CF86 /* PhonePaneScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE0B2B00097718F38D346BA9 /* PhonePaneScreen.swift */; };
 		DAF4CA99A9D2B3EDDCCBBFA6 /* TerminalViewProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97C6BD950A0C47F6B5C9FFDC /* TerminalViewProvider.swift */; };
 		E2F038B36F830D478AD82211 /* WierdrWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057B9322AE6CCBE3260E5568 /* WierdrWidgets.swift */; };
@@ -133,6 +135,7 @@
 		351E2DA61EC61DF8DAEDBC58 /* LiveActivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
 		384B24F496E887AC8E036AF3 /* SubAgentPeek.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubAgentPeek.swift; sourceTree = "<group>"; };
 		3970FD27B3DF671D83DC038E /* TerminalSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSession.swift; sourceTree = "<group>"; };
+		3D2A8AF84393C152A8757A15 /* PhoneSpaceTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSpaceTabs.swift; sourceTree = "<group>"; };
 		3E32A6DFB0783950D3599945 /* DebugAutoConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugAutoConnect.swift; sourceTree = "<group>"; };
 		3F148D55F4969B78423C1E75 /* Wierdr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Wierdr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3FDE13B0AE2E033B2732E515 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -157,6 +160,7 @@
 		96816409D750DAB4ECFE03B8 /* Geist-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Variable.ttf"; sourceTree = "<group>"; };
 		97C6BD950A0C47F6B5C9FFDC /* TerminalViewProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalViewProvider.swift; sourceTree = "<group>"; };
 		9B772A5D1E7F406A5629C045 /* SidebarRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRows.swift; sourceTree = "<group>"; };
+		9BE5061166F5310B39AAAAE8 /* PhoneSpacePager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSpacePager.swift; sourceTree = "<group>"; };
 		9C08C4C79EED0725EFF2BDA7 /* SymbolsNerdFont-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SymbolsNerdFont-Regular.ttf"; sourceTree = "<group>"; };
 		A3B9899D1F0993F0A4EEFB4B /* HostSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostSession.swift; sourceTree = "<group>"; };
 		A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Italic-Variable.ttf"; sourceTree = "<group>"; };
@@ -371,6 +375,8 @@
 				A56720A2FB2275CAC4539183 /* PhoneKeyPanel.swift */,
 				8635A004239A05A30EA934E3 /* PhonePaneMenu.swift */,
 				AE0B2B00097718F38D346BA9 /* PhonePaneScreen.swift */,
+				9BE5061166F5310B39AAAAE8 /* PhoneSpacePager.swift */,
+				3D2A8AF84393C152A8757A15 /* PhoneSpaceTabs.swift */,
 				65E66B1D03C119D0686AC190 /* PhoneWorkspaceView.swift */,
 			);
 			path = Phone;
@@ -621,6 +627,8 @@
 				6679ED6C6B8022148808B45C /* PhoneKeyPanel.swift in Sources */,
 				B82746B64EACD7B8B4006AA7 /* PhonePaneMenu.swift in Sources */,
 				D7AFED70E6931C8C8A62CF86 /* PhonePaneScreen.swift in Sources */,
+				D6D310A8DA22A28E0FC7ECAB /* PhoneSpacePager.swift in Sources */,
+				1C0F5D4C65CB210AC50D5708 /* PhoneSpaceTabs.swift in Sources */,
 				5BD604DAF4EF2A94EE0366F5 /* PhoneWorkspaceView.swift in Sources */,
 				9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */,
 				CC6CA5DD5FA692EB2E3DF779 /* QuickSwitcher.swift in Sources */,
