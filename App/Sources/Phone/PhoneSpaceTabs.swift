@@ -6,10 +6,11 @@ import WierdrModel
 struct PhoneSpaceTab: Identifiable, Equatable {
     var scope: PhoneListScope
     var title: String
-    /// Its agents waiting for you (done or needing you): the badge; 0, none.
+    /// How many of its agents have the most urgent status (needs you, then done, then
+    /// working; never idle): the badge; 0, none.
     var unread = 0
-    /// One of them needs you: the badge is red, else green.
-    var urgent = false
+    /// That status: the badge's color.
+    var status: AgentStatus = .done
     /// The space (its long-press menu); nil for "All".
     var space: Space?
 
@@ -219,7 +220,7 @@ struct PhoneSpaceTabs: View {
         }
         .menuOrder(.fixed)
         .accessibilityLabel(tab.title)
-        .accessibilityValue(tab.unread > 0 ? "\(tab.unread) waiting" : "")
+        .accessibilityValue(tab.unread > 0 ? "\(tab.unread) \(Format.statusWord(tab.status))" : "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityHint(selected ? "Scrolls to the top" : "")
     }
@@ -262,7 +263,7 @@ struct PhoneSpaceTabs: View {
             }
     }
 
-    /// Telegram's text badge: 12 pt medium on a capsule about 18 pt tall, red while one needs you.
+    /// Telegram's text badge: 12 pt medium on a capsule about 18 pt tall, in its status's color.
     private func badge(_ tab: PhoneSpaceTab) -> some View {
         let size = Self.badgeSize(tab.unread)
         return Text("\(tab.unread)")
@@ -270,7 +271,7 @@ struct PhoneSpaceTabs: View {
             .monospacedDigit()
             .foregroundStyle(theme.background)
             .frame(width: size.width, height: size.height)
-            .background(tab.urgent ? theme.blocked : theme.done, in: Capsule())
+            .background(theme.color(for: tab.status), in: Capsule())
     }
 
     /// The resting pill: Telegram's lens darkens what's under it, about 7 % on a light

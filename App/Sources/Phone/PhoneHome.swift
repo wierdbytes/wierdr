@@ -4,9 +4,9 @@ import WierdrModel
 /// The iPhone's list, Telegram's chat list: a tab per space after "All"
 /// (`PhoneSpaceTabs`), their pages side by side (`PhoneSpacePager`: a swipe in the
 /// middle of the screen pages between them), and a header floating over the pages
-/// (they scroll under it): settings, the title (or the connection's state), search
-/// and +, the strip under them. At the bottom the subscription limits (not in
-/// landscape, where the header leaves the list little room) and the status counts. No agent is "current" here: the list shows no focus and never scrolls to one.
+/// (they scroll under it): settings, the status counts (or the connection's state),
+/// search and +, the strip under them. At the bottom the subscription limits (not in
+/// landscape, where the header leaves the list little room). No agent is "current" here: the list shows no focus and never scrolls to one.
 ///
 /// The tab shown is remembered (`phone.tab`: "all" or the space's id); when its
 /// space goes, its neighbour takes over. Without spaces the strip fades out and
@@ -52,11 +52,10 @@ struct PhoneHome: View {
             .overlay(alignment: .bottom) {
                 ToastStack().padding(.horizontal, 12).padding(.bottom, 10)
             }
-            Group {
-                if verticalSizeClass != .compact { LimitsPanel(large: true) }
-                PhoneHomeFooter()
+            if verticalSizeClass != .compact {
+                LimitsPanel(large: true)
+                    .modifier(PhoneReorderDim(isOn: reorder.isActive))
             }
-            .modifier(PhoneReorderDim(isOn: reorder.isActive))
         }
         .background(theme.chrome.ignoresSafeArea())
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { safeTop = $0 }
@@ -80,14 +79,14 @@ struct PhoneHome: View {
     }
 
     /// "All", then a tab per space in Herdr's order (or as reordered, `PhoneTabReorder`),
-    /// with its waiting agents (done or needing you).
+    /// with how many of its agents have the most urgent status (needs you, done, working).
     private var tabs: [PhoneSpaceTab] {
         let ws = controller.workspace
         return [PhoneSpaceTab(scope: .all, title: "All")] + reorder.arranged(ws.spaces).map { space in
             let counts = ws.agentCounts(in: space.id)
-            let urgent = counts[.blocked] ?? 0
+            let status = [AgentStatus.blocked, .done, .working].first { (counts[$0] ?? 0) > 0 }
             return PhoneSpaceTab(scope: .space(space.id), title: space.displayName,
-                                 unread: urgent + (counts[.done] ?? 0), urgent: urgent > 0, space: space)
+                                 unread: status.flatMap { counts[$0] } ?? 0, status: status ?? .done, space: space)
         }
     }
 
@@ -216,13 +215,24 @@ private struct PhoneReorderDim: ViewModifier {
     }
 }
 
-/// The header's title: "Agents"; while not live, Telegram's "Connecting…" in its place
-/// (a spinner before it), "Not Connected" when it failed (`ConnectionBanner` says why).
+/// The header's title: the agents' counts by status (`PhoneStatusCounts`; "Agents" while
+/// there are none); while not live, Telegram's "Connecting…" in its place (a spinner
+/// before it), "Not Connected" when it failed (`ConnectionBanner` says why).
 private struct PhoneHomeTitle: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
+        let counts = PhoneStatusCounts.Entry.all(in: controller.workspace)
+        if case .live = controller.workspace.phase, !counts.isEmpty {
+            PhoneStatusCounts(entries: counts)
+        } else {
+            text
+        }
+    }
+
+    @ViewBuilder
+    private var text: some View {
         let (text, spinner, why) = state
         // The text centered, the spinner before it (and its twin, hidden, after it).
         HStack(spacing: 7) {
@@ -246,6 +256,72 @@ private struct PhoneHomeTitle: View {
         case .reconnecting(let why): return ("Reconnecting…", true, why)
         case .failed(let why): return ("Not Connected", false, why)
         }
+    }
+}
+
+/// The agents' counts by status in the header's middle (needs you, done, working, idle;
+/// only those with any): each a round badge filled with its status's color, as the pane's
+/// back button has. A tap opens the first agent with that status in the list's order
+/// (the "All" tab's: an agent, then its kept sub-agents).
+private struct PhoneStatusCounts: View {
+    struct Entry: Equatable {
+        var status: AgentStatus
+        var count: Int
+        /// The first agent's pane with this status.
+        var pane: String
+
+        /// Every status with agents, most urgent first.
+        @MainActor static func all(in workspace: Workspace) -> [Entry] {
+            var counts: [AgentStatus: Int] = [:]
+            var first: [AgentStatus: String] = [:]
+            for item in workspace.phoneList(space: nil).agents {
+                var panes: [(String, TerminalInfo)] = item.row.terminal.map { [(item.row.paneID, $0)] } ?? []
+                panes += item.row.subtree.compactMap { kid in
+                    kid.paneID.flatMap { p in kid.isAgent ? (p, kid.terminal) : nil }
+                }
+                for (pane, t) in panes {
+                    guard let s = t.status else { continue }
+                    counts[s, default: 0] += 1
+                    if first[s] == nil { first[s] = pane }
+                }
+            }
+            return [AgentStatus.blocked, .done, .working, .idle].compactMap { s in
+                guard let n = counts[s], n > 0, let pane = first[s] else { return nil }
+                return Entry(status: s, count: n, pane: pane)
+            }
+        }
+    }
+
+    var entries: [Entry]
+
+    @Environment(WorkspaceController.self) private var controller
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(entries, id: \.status) { entry in
+                Button { controller.focus(pane: entry.pane) } label: {
+                    Text("\(entry.count)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .foregroundStyle(theme.background)
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: 22, minHeight: 22)
+                        .background(theme.color(for: entry.status), in: Capsule())
+                        .frame(minWidth: 34, minHeight: PhoneHomeHeader.rowHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(AttachPressStyle())
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                .accessibilityLabel("\(entry.count) \(Format.statusWord(entry.status))")
+                .accessibilityHint("Opens the first one")
+            }
+        }
+        .animation(.snappy(duration: 0.3), value: entries.map(\.status))
+        .animation(.snappy(duration: 0.3), value: entries.map(\.count))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Agents")
     }
 }
 
@@ -278,44 +354,6 @@ private struct PhoneHeaderEdge: View {
             .frame(maxWidth: .infinity)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-    }
-}
-
-/// Status counts (tap: the next agent with that status).
-private struct PhoneHomeFooter: View {
-    @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        let counts = controller.workspace.statusCounts
-        HStack(spacing: 16) {
-            ForEach([AgentStatus.blocked, .done, .working, .idle], id: \.self) { status in
-                let n = counts[status] ?? 0
-                if n > 0 || status == .working || status == .idle {
-                    Button { controller.focusNext(status: status) } label: {
-                        HStack(spacing: 6) {
-                            StatusMark(status: status, tint: status == .working && n == 0 ? theme.dim : nil)
-                            Text("\(n)")
-                                .font(.ui(14, .medium))
-                                .foregroundStyle(n == 0 ? theme.dim : (status == .blocked ? theme.blocked : theme.muted))
-                        }
-                        .frame(minWidth: 36, minHeight: 44)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(n == 0)
-                    .accessibilityLabel("\(n) \(Format.statusWord(status))")
-                    .accessibilityHint("Opens the next one")
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, 18)
-        .padding(.trailing, 12)
-        .frame(height: 54)
-        .frame(maxWidth: .infinity)
-        .background(theme.chrome.ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) { Hairline().ignoresSafeArea(edges: .horizontal) }
     }
 }
 
