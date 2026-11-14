@@ -64,11 +64,9 @@ struct StatusMark: View {
                     .frame(height: 18)
                     .background(theme.blocked.opacity(0.15), in: RoundedRectangle(cornerRadius: 5))
             } else {
-                Text("!")
-                    .font(.ui(10.5, .bold))
-                    .foregroundStyle(tint ?? theme.blocked)
-                    .frame(width: 14, height: 14)
-                    .background((tint ?? theme.blocked).opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+                Circle().fill(tint ?? theme.blocked)
+                    .frame(width: 7, height: 7)
+                    .padding(.horizontal, 3)
             }
         case .done:
             Circle().fill(tint ?? theme.done)

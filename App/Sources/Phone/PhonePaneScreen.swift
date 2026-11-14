@@ -148,7 +148,7 @@ private struct PhoneEmptyPane: View {
 /// 44-pt glass pills on one line, the field's side insets, one glass container. The
 /// list's button (a circle with the sidebar glyph; while other agents aren't idle,
 /// Telegram's back button: "‹" and a badge with how many have the most urgent status)
-/// and what runs here (a capsule colored with the agent's status: its title, 15 pt
+/// and what runs here (a capsule ringed with the agent's status: its title, 15 pt
 /// semibold, and under it the space, 12 pt gray, centered). A sub-agent shown here
 /// (`peek`) reads as under its parent in the list (never done).
 ///
@@ -213,12 +213,15 @@ private struct PhonePaneTopBar: View {
                     }
                     .buttonStyle(AttachPressStyle())
                     .accessibilityHint(menuOpen ? "Hides the pane's menu" : "Shows the pane's menu")
-                    // The status as a color over the glass, not through it: the glass stays the
-                    // list button's, so the button's glass merges into it and comes back out of
-                    // it whatever the status (tinted glass doesn't merge, it showed through and
-                    // was cut off). Only the color animates, not the capsule growing or shrinking.
-                    .background {
-                        shape.animation(.easeInOut(duration: 0.25)) { $0.foregroundStyle(tint(status) ?? .clear) }
+                    // The status as a keyline in its color (the Dynamic Island's), on the glass,
+                    // not through it: the glass stays the list button's, so the button's glass
+                    // merges into it and comes back out of it whatever the status (tinted glass
+                    // doesn't merge, it showed through and was cut off). Only the color
+                    // animates, not the capsule growing or shrinking.
+                    .overlay {
+                        shape.strokeBorder(lineWidth: Self.keylineWidth)
+                            .animation(.easeInOut(duration: 0.25)) { $0.foregroundStyle(keyline(status) ?? .clear) }
+                            .allowsHitTesting(false)
                     }
                     .composerGlass(shape, theme: theme)
                 }
@@ -250,10 +253,13 @@ private struct PhonePaneTopBar: View {
         return t.isAgent ? t.status : nil
     }
 
-    /// The status's color over the capsule's glass; idle (or none): the glass alone.
-    private func tint(_ status: AgentStatus?) -> Color? {
+    /// The status's keyline's width.
+    static let keylineWidth: CGFloat = 1.5
+
+    /// The status's color around the capsule's glass; idle (or none): the glass alone.
+    private func keyline(_ status: AgentStatus?) -> Color? {
         guard let status, status != .idle else { return nil }
-        return theme.color(for: status).opacity(theme.isDark ? 0.22 : 0.16)
+        return theme.color(for: status)
     }
 
     private func title(_ t: TerminalInfo?) -> String {

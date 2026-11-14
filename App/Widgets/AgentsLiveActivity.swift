@@ -182,7 +182,7 @@ private struct Counts: View {
     }
 }
 
-/// The app's status marks: a red `!` tile, a filled dot, Herdr's spinner (a ring with
+/// The app's status marks: a filled dot (needs you, done), Herdr's spinner (a ring with
 /// a quarter arc), an empty ring.
 private struct StatusMark: View {
     var status: AgentStatusWord
@@ -191,13 +191,7 @@ private struct StatusMark: View {
     var body: some View {
         let color = Palette.color(status)
         switch status {
-        case .blocked:
-            Text("!")
-                .font(.system(size: size * 0.85, weight: .heavy))
-                .foregroundStyle(color)
-                .frame(width: size + 2, height: size + 2)
-                .background(color.opacity(0.2), in: RoundedRectangle(cornerRadius: size * 0.3))
-        case .done:
+        case .blocked, .done:
             Circle().fill(color).frame(width: size * 0.6, height: size * 0.6)
                 .frame(width: size, height: size)
         case .working:
@@ -236,7 +230,7 @@ enum Palette {
     static let background = Color(red: 0x21 / 255, green: 0x25 / 255, blue: 0x2b / 255)
     static let working = Color(red: 0xe5 / 255, green: 0xc0 / 255, blue: 0x7b / 255)
     static let blocked = Color(red: 0xe0 / 255, green: 0x6c / 255, blue: 0x75 / 255)
-    static let done = Color(red: 0x61 / 255, green: 0xaf / 255, blue: 0xef / 255)
+    static let done = Color(red: 0x98 / 255, green: 0xc3 / 255, blue: 0x79 / 255)
     static let idle = Color(red: 0x6f / 255, green: 0x71 / 255, blue: 0x75 / 255)
     static let foreground = Color(red: 0xee / 255, green: 0xee / 255, blue: 0xef / 255)
     static let muted = Color(red: 0x9c / 255, green: 0x9e / 255, blue: 0xa1 / 255)

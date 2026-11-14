@@ -52,7 +52,7 @@ struct Theme: Equatable {
         foreground: Color(hex: "#eeeeef"), muted: Color(hex: "#9c9ea1"), dim: Color(hex: "#6f7175"),
         accent: Color(hex: "#61afef"), accentForeground: Color(hex: "#21252b"),
         working: Color(hex: "#e5c07b"), blocked: Color(hex: "#e06c75"),
-        done: Color(hex: "#61afef"), idle: Color(hex: "#6f7175"),
+        done: Color(hex: "#98c379"), idle: Color(hex: "#6f7175"),
         terminal: TerminalPalette(
             foreground: "#abb2bf", background: "#21252b", cursor: "#abb2bf", selection: "#323844",
             ansi: ["#454c59", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#abb2bf",
@@ -68,7 +68,7 @@ struct Theme: Equatable {
         foreground: Color(hex: "#1b1b1e"), muted: Color(hex: "#69696b"), dim: Color(hex: "#969698"),
         accent: Color(hex: "#1f62d0"), accentForeground: Color(hex: "#ffffff"),
         working: Color(hex: "#9a6700"), blocked: Color(hex: "#c93c2c"),
-        done: Color(hex: "#2f6fe4"), idle: Color(hex: "#a8a8aa"),
+        done: Color(hex: "#1a7f37"), idle: Color(hex: "#a8a8aa"),
         terminal: TerminalPalette(
             foreground: "#25272c", background: "#ffffff", cursor: "#25272c", selection: "#cfdcf5",
             ansi: ["#25272c", "#c62a2a", "#1a7f37", "#8f5d00", "#1f62d0", "#7a45c8", "#0f6f74", "#5f6068",
