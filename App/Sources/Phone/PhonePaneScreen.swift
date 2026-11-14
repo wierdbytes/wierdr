@@ -10,8 +10,8 @@ import WierdrModel
 /// while the terminal has the keyboard itself. Taps on the terminal are
 /// clicks for the program, with a keyboard up too; a double tap brings the
 /// terminal's keyboard or hides the one that is up.
-/// The list (`PhoneHome`) slides over it; while it is out (`covered`), the
-/// panel and the keyboards go and the swipes rest. A sub-agent opened from the
+/// It is pushed over the list (`PhoneHome`, `PhoneWorkspaceView`); popped (`covered`),
+/// the panel and the keyboards go and the swipes rest. A sub-agent opened from the
 /// list (`controller.peek`) shows here in its parent's place, as any agent
 /// would; its menu keeps it as a tab or goes back to the parent.
 struct PhonePaneScreen: View {
@@ -135,7 +135,7 @@ private struct PhoneEmptyPane: View {
     var body: some View {
         VStack(spacing: 12) {
             Text("Nothing here").font(.ui(16, .semibold)).foregroundStyle(theme.foreground)
-            Button("Show the List") { controller.showSidebar() }
+            Button("Back to the List") { controller.showSidebar() }
                 .buttonStyle(.borderedProminent)
                 .tint(theme.accent)
         }
@@ -146,8 +146,8 @@ private struct PhoneEmptyPane: View {
 
 /// Telegram's chat header, on the terminal's background with no line under it: two
 /// 44-pt glass pills on one line, the field's side insets, one glass container. The
-/// list's button (a circle with the sidebar glyph; while other agents aren't idle,
-/// Telegram's back button: "‹" and a badge with how many have the most urgent status)
+/// back button (a circle with "‹"; while other agents aren't idle, "‹" and a badge
+/// with how many have the most urgent status)
 /// and what runs here (a capsule ringed with the agent's status: its title, 15 pt
 /// semibold, and under it the space, 12 pt gray, centered). A sub-agent shown here
 /// (`peek`) reads as under its parent in the list (never done).
@@ -276,10 +276,9 @@ private struct PhonePaneTopBar: View {
     }
 }
 
-/// The list's button, a 44-pt glass pill: a circle with the sidebar glyph; while other
-/// agents aren't idle, Telegram's back button: "‹" and a round badge with how many have
-/// the most urgent status (needs you, then done, then working), filled with its color.
-/// A tap: the list.
+/// Telegram's back button, a 44-pt glass pill: a circle with "‹"; while other agents
+/// aren't idle, "‹" and a round badge with how many have the most urgent status (needs
+/// you, then done, then working), filled with its color. A tap pops back to the list.
 private struct PhoneListButton: View {
     /// The terminal on screen: not counted.
     var current: String?
@@ -294,9 +293,7 @@ private struct PhoneListButton: View {
             Group {
                 if let waiting {
                     HStack(spacing: 7) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 21, weight: .regular))
-                            .foregroundStyle(theme.foreground)
+                        chevron
                         Text("\(waiting.count)")
                             .font(.system(size: 14, weight: .semibold))
                             .monospacedDigit()
@@ -309,7 +306,7 @@ private struct PhoneListButton: View {
                     .padding(.leading, 13)
                     .padding(.trailing, 11)
                 } else {
-                    Icon("sidebar", size: 20, color: theme.foreground)
+                    chevron
                         .frame(width: height)
                 }
             }
@@ -321,7 +318,13 @@ private struct PhoneListButton: View {
         .composerGlass(Capsule(), theme: theme)
         .animation(.snappy(duration: 0.3), value: waiting?.status)
         .animation(.snappy(duration: 0.3), value: waiting?.count)
-        .accessibilityLabel("Show the List")
+        .accessibilityLabel("Back")
         .accessibilityValue(waiting.map { Format.summary([$0.status: $0.count]) } ?? "")
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.left")
+            .font(.system(size: 21, weight: .regular))
+            .foregroundStyle(theme.foreground)
     }
 }

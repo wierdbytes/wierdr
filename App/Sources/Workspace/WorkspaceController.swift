@@ -144,7 +144,7 @@ final class WorkspaceController {
     func toggleSidebar() {
         // The overlay's own Hide Sidebar button (and ⌘B over it) closes it.
         if sidebarOverlay { return closeSidebarOverlay() }
-        // iPhone: the list slides over the pane (`PhoneWorkspaceView`).
+        // iPhone: the pane screen is pushed over the list, or popped (`PhoneWorkspaceView`).
         if singlePane { compactColumn = compactColumn == .sidebar ? .detail : .sidebar; return }
         withAnimation(.easeInOut(duration: 0.25)) {
             columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
