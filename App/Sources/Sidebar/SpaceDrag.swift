@@ -59,9 +59,9 @@ final class SpaceDrag {
         guard let lane, lane.machine == machine else { return spaces }
         var rank: [String: Int] = [:]
         for (i, id) in lane.ids.enumerated() { rank[id] = i }
-        // Spaces that came meanwhile stay after the others, in their own order.
+        // Spaces that came meanwhile (new ones go first) stay before the others, in their own order.
         return spaces.enumerated()
-            .sorted { (rank[$0.element.id] ?? Int.max, $0.offset) < (rank[$1.element.id] ?? Int.max, $1.offset) }
+            .sorted { (rank[$0.element.id] ?? -1, $0.offset) < (rank[$1.element.id] ?? -1, $1.offset) }
             .map(\.element)
     }
 

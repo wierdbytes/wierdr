@@ -102,6 +102,10 @@ import Testing
         // After a given space.
         let after = try #require(LayoutEdits.newSpace(doc, id: "spN", name: "", folder: "", tabID: "tbN", paneID: "pN", address: "t9", after: "spA"))
         #expect(after.layoutSpaces.map(\.nodeID) == ["spA", "spN", "spB"])
+        // First.
+        let first = try #require(LayoutEdits.newSpace(doc, id: "spN", name: "", folder: "", tabID: "tbN", paneID: "pN", address: "t9", first: true))
+        #expect(first.layoutSpaces.map(\.nodeID) == ["spN", "spA", "spB"])
+        try LayoutValidator.checkWrite(first, base: doc)
     }
 
     @Test func newSpaceAlreadyAdoptedOnlySetsTheName() throws {
@@ -110,6 +114,11 @@ import Testing
         #expect(out.layoutSpaces[1]["name"] == "Mine")
         #expect(out.layoutSpaces.count == 2)
         #expect(LayoutEdits.newSpace(doc, id: "spB", name: "", folder: "", tabID: "tbC", paneID: "pQ", address: "t4") == nil)
+        // Wanted first: moved there too; a terminal shown in another space than ours: left alone.
+        let first = try #require(LayoutEdits.newSpace(doc, id: "spB", name: "", folder: "", tabID: "tbC", paneID: "pQ", address: "t4", first: true))
+        #expect(first.layoutSpaces.map(\.nodeID) == ["spB", "spA"])
+        try LayoutValidator.checkWrite(first, base: doc)
+        #expect(LayoutEdits.newSpace(doc, id: "spA", name: "", folder: "", tabID: "tbC", paneID: "pQ", address: "t4", first: true) == nil)
     }
 
     @Test func newTabAfterAndAtEnd() throws {

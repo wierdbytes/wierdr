@@ -162,12 +162,13 @@ public final class Workspace {
     /// Backend that performs commands against herdr-core. `nil` in previews.
     weak var backend: WorkspaceBackend?
 
-    /// New space on a machine (`nil` = connected computer) with one tab running `launch`.
+    /// New space on a machine (`nil` = connected computer) with one tab running `launch`,
+    /// before its machine's other spaces (so first in every client's list, desktop's too).
     /// Returns the new space id.
     @discardableResult
     public func newSpace(machine: String?, name: String = "", folder: String? = nil, launch: Launch = .shell) async throws -> String {
         guard let backend else { throw WorkspaceError.notConnected }
-        return try await backend.newSpace(machine: machine, name: name, folder: folder, launch: launch, after: nil)
+        return try await backend.newSpace(machine: machine, name: name, folder: folder, launch: launch, first: true)
     }
 
     /// New tab in a space, inserted after `afterTab` (else at the end). Returns the new tab id.
@@ -303,7 +304,7 @@ public final class Workspace {
 /// herdr-core; previews have none.
 @MainActor
 protocol WorkspaceBackend: AnyObject {
-    func newSpace(machine: String?, name: String, folder: String?, launch: Launch, after: String?) async throws -> String
+    func newSpace(machine: String?, name: String, folder: String?, launch: Launch, first: Bool) async throws -> String
     func newTab(in spaceID: String, after: String?, name: String, launch: Launch) async throws -> String
     func split(pane: String, direction: SplitDirection, launch: Launch) async throws -> String
     func closePane(_ paneID: String) async throws

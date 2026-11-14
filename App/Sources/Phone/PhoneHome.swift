@@ -171,7 +171,7 @@ private struct PhoneHomeHeader: View {
                             }
                             .buttonStyle(AttachPressStyle())
                             .accessibilityLabel("Go to")
-                            PhoneNewSpaceMenu()
+                            PhoneNewMenu(space: selectedSpace)
                         }
                         .padding(.horizontal, 4)
                         .composerGlass(Capsule(), theme: theme)
@@ -180,6 +180,12 @@ private struct PhoneHomeHeader: View {
             }
             .padding(.horizontal, Self.sideInset)
         }
+    }
+
+    /// The space whose tab is shown (nil on "All", or without the strip).
+    private var selectedSpace: Space? {
+        guard showsTabs, case .space(let id) = paging.selectedScope else { return nil }
+        return tabs.first { $0.scope == .space(id) }?.space
     }
 
     /// Reordering the tabs: Telegram's bold Done in its own glass pill (12 pt either
@@ -313,15 +319,24 @@ private struct PhoneHomeFooter: View {
     }
 }
 
-/// The header's +, Telegram's compose: a new space (shell or agent), in the folder of
-/// the last pane you looked at (as the desktop's New Space), on its computer.
-private struct PhoneNewSpaceMenu: View {
+/// The header's +, Telegram's compose. On a space's tab: a new tab (shell or agent)
+/// in that space, on its computer. On "All": a new space, in the folder of the last
+/// pane you looked at (as the desktop's New Space), on its computer.
+private struct PhoneNewMenu: View {
+    var space: Space?
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
+        let machine = space != nil ? space?.machine : controller.activeSpace?.machine
         Menu {
-            PhoneNewSpaceItems()
+            if let space {
+                Section("New tab in \(space.displayName)") {
+                    LaunchMenuItems(machine: space.machine) { launch in controller.newTab(launch: launch, in: space) }
+                }
+            } else {
+                PhoneNewSpaceItems()
+            }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 21, weight: .medium))
@@ -330,8 +345,9 @@ private struct PhoneNewSpaceMenu: View {
                 .contentShape(Rectangle())
         }
         .menuOrder(.fixed)
-        .accessibilityLabel("New Space")
-        .onAppear { controller.workspace.refreshLaunchers(machine: controller.activeSpace?.machine) }
+        .accessibilityLabel(space == nil ? "New Space" : "New Tab")
+        .onAppear { controller.workspace.refreshLaunchers(machine: machine) }
+        .onChange(of: machine) { _, machine in controller.workspace.refreshLaunchers(machine: machine) }
     }
 }
 

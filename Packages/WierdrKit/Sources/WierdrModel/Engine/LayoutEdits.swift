@@ -58,24 +58,34 @@ enum LayoutEdits {
 
     // MARK: Spaces
 
-    /// `space.new`: appends a space (after `after`, when given and present).
-    /// Already placed (the desktop adopted the terminal): only the name is left to set.
+    /// `space.new`: appends a space (after `after`, when given and present), or puts it
+    /// before all the others when `first`. Already placed (the desktop adopted the
+    /// terminal): only the name is left to set, and with `first`, its place.
     static func newSpace(_ doc: JSONValue, id: String, name: String, folder: String, tabID: String,
-                         paneID: String, address: String, after: String? = nil) -> JSONValue? {
+                         paneID: String, address: String, after: String? = nil, first: Bool = false) -> JSONValue? {
         if let placed = doc.paneShowing(address) {
-            guard !name.isEmpty else { return nil }
             return withSpaces(doc) { list in
-                guard list[placed.location.space].nodeID == id,
-                      (list[placed.location.space]["name"]?.string ?? "").isEmpty else { return false }
-                list[placed.location.space]["name"] = .string(name)
-                return true
+                let si = placed.location.space
+                guard list[si].nodeID == id else { return false }
+                var changed = false
+                if !name.isEmpty, (list[si]["name"]?.string ?? "").isEmpty {
+                    list[si]["name"] = .string(name)
+                    changed = true
+                }
+                if first, si != 0 {
+                    list.insert(list.remove(at: si), at: 0)
+                    changed = true
+                }
+                return changed
             }
         }
         if doc.locateSpace(id) != nil { return nil }
         let new = space(id: id, name: name, folder: folder,
                         tab: tab(id: tabID, name: "", pane: terminalPane(id: paneID, address: address)))
         return withSpaces(doc) { list in
-            if let after, let i = list.firstIndex(where: { $0.nodeID == after }) {
+            if first {
+                list.insert(new, at: 0)
+            } else if let after, let i = list.firstIndex(where: { $0.nodeID == after }) {
                 list.insert(new, at: i + 1)
             } else {
                 list.append(new)

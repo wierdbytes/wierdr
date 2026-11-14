@@ -35,7 +35,7 @@ final class PhoneTabReorder {
     static let settleAfter: Duration = .seconds(2)
 
     /// `spaces` (the workspace's) in the strip's order: each machine's as `order` has
-    /// them (ones it doesn't know after the others), the machines as they are.
+    /// them (ones it doesn't know, new spaces, before the others), the machines as they are.
     func arranged(_ spaces: [Space]) -> [Space] {
         guard let order else { return spaces }
         var rank: [String: Int] = [:]
@@ -43,7 +43,7 @@ final class PhoneTabReorder {
         return Self.machines(spaces).flatMap { machine in
             spaces.enumerated()
                 .filter { $0.element.machine == machine }
-                .sorted { (rank[$0.element.id] ?? Int.max, $0.offset) < (rank[$1.element.id] ?? Int.max, $1.offset) }
+                .sorted { (rank[$0.element.id] ?? -1, $0.offset) < (rank[$1.element.id] ?? -1, $1.offset) }
                 .map(\.element)
         }
     }

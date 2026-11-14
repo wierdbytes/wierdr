@@ -575,7 +575,7 @@ public final class WorkspaceEngine: WorkspaceBackend {
         return [t.foreground?.cwd, t.cwd].compactMap { $0 }.first { !$0.isEmpty }
     }
 
-    func newSpace(machine: String?, name: String, folder: String?, launch: Launch, after: String?) async throws -> String {
+    func newSpace(machine: String?, name: String, folder: String?, launch: Launch, first: Bool) async throws -> String {
         let key = machine ?? ""
         let c = try requireDocument(key)
         let (sp, tb, p) = (LayoutID.fresh("sp"), LayoutID.fresh("tb"), LayoutID.fresh("p"))
@@ -584,10 +584,9 @@ public final class WorkspaceEngine: WorkspaceBackend {
         let (address, used) = try await spawn(c, argv: argv(launch), cwd: cwd, follow: follow, space: sp, tab: tb, machine: machine)
         let local = LayoutID.local(address, machine)
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let afterLocal = after.map { LayoutID.local($0, machine) }
         do {
             try await write(key) { LayoutEdits.newSpace($0, id: sp, name: trimmed, folder: used, tabID: tb, paneID: p,
-                                                         address: local, after: afterLocal) }
+                                                         address: local, first: first) }
         } catch {
             if slots[key]?.raw.paneShowing(local) == nil { await kill([address]) }
             throw error

@@ -126,8 +126,10 @@ struct EngineTests {
         #expect(run["argv"]?.array?.compactMap(\.string) == LaunchArgv.agent(["pi"], task: "hello"))
         #expect(run["labels"]?["herdr.space"]?.string == LayoutID.local(id, "lf"))
         let lf = try #require(core.doc("herdr-app", on: "lf"))
-        #expect(lf.version == 4 && lf.value.layoutSpaces.last?["name"] == "remote" && lf.value.layoutSpaces.last?["folder"] == "")
-        #expect(lf.value.layoutSpaces.last?.layoutTabs.first?["root"]?.terminalAddresses.first?.contains("/") == false)
+        // A new space goes first among its machine's.
+        #expect(lf.value.layoutSpaces.first?.nodeID == LayoutID.local(id, "lf"))
+        #expect(lf.version == 4 && lf.value.layoutSpaces.first?["name"] == "remote" && lf.value.layoutSpaces.first?["folder"] == "")
+        #expect(lf.value.layoutSpaces.first?.layoutTabs.first?["root"]?.terminalAddresses.first?.contains("/") == false)
         #expect(core.doc("herdr-app")?.version == 5)
         try await eventually { ws.space(id)?.name == "remote" }
     }
@@ -168,9 +170,10 @@ struct EngineTests {
         let doc = try #require(core.doc("herdr-app"))
         let address = core.state.withLock { $0.order.last! }
         #expect(doc.value.layoutSpaces.count == 3)
-        #expect(doc.value.layoutSpaces[2]["name"] == "Mine" && doc.value.layoutSpaces[2]["folder"] == "/live")
+        // The desktop appended it; ours names it and moves it first.
+        #expect(doc.value.layoutSpaces[0]["name"] == "Mine" && doc.value.layoutSpaces[0]["folder"] == "/live")
         #expect(doc.value.layoutSpaces.flatMap { $0.layoutTabs.flatMap { $0["root"]!.terminalAddresses } }.filter { $0 == address }.count == 1)
-        #expect(doc.value.layoutSpaces[2].nodeID == id)
+        #expect(doc.value.layoutSpaces.map(\.nodeID) == [id, "spA", "spB"])
         _ = ws
     }
 
