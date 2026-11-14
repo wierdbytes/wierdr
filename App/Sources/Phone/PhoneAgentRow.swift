@@ -22,10 +22,10 @@ enum PhoneRowMetrics {
 /// An agent's row, Telegram's chat row without the avatar (76 pt, full width):
 /// 1. its title, and where Telegram has the date: its machine (dim) and how long
 ///    it has been in its state;
-/// 2. its context (the number in its cache color, a bar with the cache's countdown
+/// 2. its context (the number in its cache color, a ring with the cache's countdown
 ///    mark), its model (cut first when room runs out) and @effort;
-/// 3. its space's name in a quiet gray frame (on "All"; cut when room runs out), its
-///    sub-agents and terminals (tap: fold or unfold them); on the right, Telegram's
+/// 3. its sub-agents and terminals (tap: fold or unfold them), its space's name on a
+///    gray chip as theirs (on "All"; cut when room runs out); on the right, Telegram's
 ///    unread badge: needs you (red), done (green), working (the spinner), nothing
 ///    while idle; the pin glyph there when it's pinned and has no badge.
 struct PhoneAgentRowContent: View {
@@ -108,9 +108,6 @@ struct PhoneAgentRowContent: View {
         // pi's own in-process sub-agents (pi-herdr's count) have no terminal: they only add to the count.
         let inner = terminal.meta?.subagents ?? 0
         return HStack(spacing: 8) {
-            if showsSpace {
-                PhoneSpaceTag(name: space.displayName)
-            }
             if kidAgents.count + inner > 0 {
                 PhoneKidBadge(icon: "bot", count: kidAgents.count + inner, open: open,
                               alert: kidAgents.contains { $0.terminal.status == .blocked },
@@ -122,6 +119,9 @@ struct PhoneAgentRowContent: View {
                 PhoneKidBadge(icon: "terminal", count: kidTerms, open: open, alert: false,
                               label: kidTerms == 1 ? "1 terminal" : "\(kidTerms) terminals", action: toggleKids)
                     .fixedSize()
+            }
+            if showsSpace {
+                PhoneSpaceTag(name: space.displayName)
             }
             Spacer(minLength: 0)
             PhoneStatusBadge(status: terminal.status, pinned: terminal.pinned)
@@ -165,7 +165,7 @@ struct PhoneAgentRowContent: View {
 
 // MARK: - Pieces
 
-/// An agent's model line: its context (the number in its cache color and the bar)
+/// An agent's model line: its context (the number in its cache color and the ring)
 /// and its model and @effort. The model is cut first when room runs out; the
 /// context and @effort stay whole. An agent's row has the context first, a
 /// sub-agent's after @effort.
@@ -207,27 +207,28 @@ struct PhoneModelLine: View {
                 Text(ctx)
                     .font(.system(size: size).monospacedDigit())
                     .foregroundStyle(theme.contextNumberColor(cacheUntil: meta?.cacheUntil, now: now))
-                PhoneContextBar(meta: meta, now: now)
+                PhoneContextRing(meta: meta, now: now)
             }
             .fixedSize()
         }
     }
 }
 
-/// A space's name in a quiet gray frame (no avatar); it is cut when room runs out.
+/// A space's name on a gray chip, as the sub-agent and terminal counts (`PhoneKidBadge`),
+/// no avatar; it is cut when room runs out.
 struct PhoneSpaceTag: View {
     var name: String
     @Environment(\.theme) private var theme
 
     var body: some View {
         Text(name)
-            .font(.system(size: 13, weight: .medium))
+            .font(.system(size: 14, weight: .medium))
             .foregroundStyle(theme.muted)
             .lineLimit(1)
             .truncationMode(.tail)
-            .padding(.horizontal, 6)
-            .frame(height: 20)
-            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(theme.dim.opacity(0.6), lineWidth: 1))
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(theme.hover, in: Capsule())
     }
 }
 
@@ -277,32 +278,41 @@ struct PhoneStatusBadge: View {
     }
 }
 
-/// The context window's use inline: a bar (its fraction in the context color) and
-/// the prompt cache's countdown mark on it.
-struct PhoneContextBar: View {
+/// The context window's use inline, as a ring: its fraction an arc from the top,
+/// clockwise, in the context color over a dim track, and the prompt cache's countdown
+/// mark across the ring, going round back to the top as the cache runs out (the
+/// bar's mark going left).
+struct PhoneContextRing: View {
     var meta: AgentMeta?
     var now: Date
     @Environment(\.theme) private var theme
 
-    static let width: CGFloat = 80
+    static let size: CGFloat = 16
+    static let line: CGFloat = 2.5
 
     var body: some View {
         if let meta, let ctx = meta.ctx, let max = meta.ctxMax, max > 0 {
             let fraction = min(1, Swift.max(0, Double(ctx) / Double(max)))
-            let w = Self.width
-            ZStack(alignment: .leading) {
-                Capsule().fill(theme.input).frame(width: w, height: 4)
-                Capsule().fill(theme.contextBarColor(fraction))
-                    .frame(width: Swift.max(4, w * fraction), height: 4)
+            let d = Self.size
+            ZStack {
+                Circle()
+                    .stroke(theme.input, lineWidth: Self.line)
+                Circle()
+                    .trim(from: 0, to: Swift.max(0.02, fraction))
+                    .stroke(theme.contextBarColor(fraction), style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
                 if let until = meta.cacheUntil, let ttl = meta.cacheTTL, ttl > 0, until > now {
                     let left = Swift.min(1, until.timeIntervalSince(now) / ttl)
+                    // A tick across the ring, from the middle out to its edge.
                     RoundedRectangle(cornerRadius: 0.75)
                         .fill(theme.foreground.opacity(0.6))
-                        .frame(width: 1.5, height: 9)
-                        .offset(x: (left * (w - 1.5)).rounded())
+                        .frame(width: 1.5, height: d / 2 - 1)
+                        .offset(y: -(d / 4 - 0.5) - 0.5)
+                        .rotationEffect(.degrees(360 * left))
                 }
             }
-            .frame(width: w, height: 10)
+            .padding(Self.line / 2)
+            .frame(width: d + Self.line, height: d + Self.line)
             .accessibilityHidden(true)
         }
     }
@@ -347,7 +357,7 @@ struct PhoneKidBadge: View {
 /// A sub-agent under its agent, in the agent's block (no separator between
 /// them), indented with the tree's lines: its status mark and title, its age;
 /// under that its model, @effort and, as an agent's row has it, its context (the
-/// number and the bar). 50 pt. A plain terminal an agent
+/// number and the ring). 50 pt. A plain terminal an agent
 /// started: its program's icon and name, 36 pt.
 struct PhoneKidRowContent: View {
     var kid: SubAgent
