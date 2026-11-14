@@ -22,8 +22,7 @@ enum PhoneRowMetrics {
 /// An agent's row, Telegram's chat row without the avatar (76 pt, full width):
 /// 1. its title, and where Telegram has the date: its machine (dim) and how long
 ///    it has been in its state;
-/// 2. its context (the number in its cache color, a ring with the cache's countdown
-///    mark), its model (cut first when room runs out) and @effort;
+/// 2. its model (cut first when room runs out), @effort and its context's ring;
 /// 3. its sub-agents and terminals (tap: fold or unfold them), its space's name on a
 ///    gray chip as theirs (on "All"; cut when room runs out); on the right, Telegram's
 ///    unread badge: needs you (red), done (green), working (the spinner), nothing
@@ -51,8 +50,7 @@ struct PhoneAgentRowContent: View {
     private var tickInterval: TimeInterval {
         let now = Date()
         let young = terminal.statusChangedAt.map { now.timeIntervalSince($0) < 3600 } ?? false
-        let cacheLive = terminal.meta?.cacheUntil.map { $0 > now } ?? false
-        return young || cacheLive ? 1 : 30
+        return young ? 1 : 30
     }
 
     private func content(now: Date) -> some View {
@@ -97,9 +95,9 @@ struct PhoneAgentRowContent: View {
         }
     }
 
-    /// Context, then model and @effort: the model gives way first, @effort stays whole.
+    /// Model, @effort, then the context's ring: the model gives way first.
     private func contextLine(now: Date) -> some View {
-        PhoneModelLine(terminal: terminal, now: now, contextFirst: true, size: 15)
+        PhoneModelLine(terminal: terminal, size: 15)
     }
 
     private var spaceLine: some View {
@@ -165,14 +163,10 @@ struct PhoneAgentRowContent: View {
 
 // MARK: - Pieces
 
-/// An agent's model line: its context (the number in its cache color and the ring)
-/// and its model and @effort. The model is cut first when room runs out; the
-/// context and @effort stay whole. An agent's row has the context first, a
-/// sub-agent's after @effort.
+/// An agent's model line: its model, @effort and its context's ring. The model is
+/// cut first when room runs out; @effort and the ring stay whole.
 struct PhoneModelLine: View {
     var terminal: TerminalInfo
-    var now: Date
-    var contextFirst: Bool
     var size: CGFloat
     /// A sub-agent's status (its own `kidStatus`): idle dims the model.
     var status: AgentStatus?? = nil
@@ -182,7 +176,6 @@ struct PhoneModelLine: View {
         let meta = terminal.meta
         let quiet = (status ?? terminal.status) == .idle
         HStack(spacing: 8) {
-            if contextFirst { context(meta) }
             HStack(spacing: 5) {
                 Text(meta?.model ?? terminal.program.name)
                     .foregroundStyle(quiet ? theme.dim : theme.muted)
@@ -194,23 +187,10 @@ struct PhoneModelLine: View {
                         .fixedSize()
                 }
             }
-            if !contextFirst { context(meta) }
+            PhoneContextRing(meta: meta).fixedSize()
             Spacer(minLength: 0)
         }
         .font(.system(size: size))
-    }
-
-    @ViewBuilder
-    private func context(_ meta: AgentMeta?) -> some View {
-        if let ctx = Format.context(meta?.ctx) {
-            HStack(spacing: 8) {
-                Text(ctx)
-                    .font(.system(size: size).monospacedDigit())
-                    .foregroundStyle(theme.contextNumberColor(cacheUntil: meta?.cacheUntil, now: now))
-                PhoneContextRing(meta: meta, now: now)
-            }
-            .fixedSize()
-        }
     }
 }
 
@@ -279,19 +259,16 @@ struct PhoneStatusBadge: View {
 }
 
 /// The context window's use inline, as a ring: its fraction an arc from the top,
-/// clockwise, in the context color over a dim track, and the prompt cache's countdown
-/// mark across the ring, going round back to the top as the cache runs out (the
-/// bar's mark going left).
+/// clockwise, in the context color over a dim track.
 struct PhoneContextRing: View {
     var meta: AgentMeta?
-    var now: Date
     @Environment(\.theme) private var theme
 
     static let size: CGFloat = 16
     static let line: CGFloat = 2.5
 
     var body: some View {
-        if let meta, let ctx = meta.ctx, let max = meta.ctxMax, max > 0 {
+        if let meta, let ctx = meta.ctx, ctx > 0, let max = meta.ctxMax, max > 0 {
             let fraction = min(1, Swift.max(0, Double(ctx) / Double(max)))
             let d = Self.size
             ZStack {
@@ -301,15 +278,6 @@ struct PhoneContextRing: View {
                     .trim(from: 0, to: Swift.max(0.02, fraction))
                     .stroke(theme.contextBarColor(fraction), style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                if let until = meta.cacheUntil, let ttl = meta.cacheTTL, ttl > 0, until > now {
-                    let left = Swift.min(1, until.timeIntervalSince(now) / ttl)
-                    // A tick across the ring, from the middle out to its edge.
-                    RoundedRectangle(cornerRadius: 0.75)
-                        .fill(theme.foreground.opacity(0.6))
-                        .frame(width: 1.5, height: d / 2 - 1)
-                        .offset(y: -(d / 4 - 0.5) - 0.5)
-                        .rotationEffect(.degrees(360 * left))
-                }
             }
             .padding(Self.line / 2)
             .frame(width: d + Self.line, height: d + Self.line)
@@ -356,8 +324,7 @@ struct PhoneKidBadge: View {
 
 /// A sub-agent under its agent, in the agent's block (no separator between
 /// them), indented with the tree's lines: its status mark and title, its age;
-/// under that its model, @effort and, as an agent's row has it, its context (the
-/// number and the ring). 50 pt. A plain terminal an agent
+/// under that its model, @effort and its context's ring. 50 pt. A plain terminal an agent
 /// started: its program's icon and name, 36 pt.
 struct PhoneKidRowContent: View {
     var kid: SubAgent
@@ -391,12 +358,11 @@ struct PhoneKidRowContent: View {
         }
     }
 
-    /// Second ticks while its age or its cache's countdown mark visibly moves each second.
+    /// Second ticks while its age visibly moves each second.
     private var tickInterval: TimeInterval {
         let now = Date()
         let young = t.statusChangedAt.map { now.timeIntervalSince($0) < 3600 } ?? false
-        let cacheLive = t.meta?.cacheUntil.map { $0 > now } ?? false
-        return young || cacheLive ? 1 : 30
+        return young ? 1 : 30
     }
 
     private func agent(now: Date) -> some View {
@@ -418,7 +384,7 @@ struct PhoneKidRowContent: View {
                         .fixedSize()
                 }
                 .frame(height: 22)
-                PhoneModelLine(terminal: t, now: now, contextFirst: false, size: 14, status: .some(status))
+                PhoneModelLine(terminal: t, size: 14, status: .some(status))
                     .padding(.leading, 22)
                     .frame(height: 18)
             }
