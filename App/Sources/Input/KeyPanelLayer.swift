@@ -19,8 +19,8 @@ extension View {
 /// The key panel (`PhoneKeyPanel`) over a terminal area, and how it and the keyboards come.
 ///
 /// A swipe to the left anywhere on a terminal pulls the panel out at the right
-/// with the finger (on the iPad its pane gets the focus). Its keys come to
-/// rest at the height the swipe began, under the thumb (⏎ there as it opens).
+/// with the finger (on the iPad its pane gets the focus), with ⏎ at the
+/// height the swipe began, under the thumb.
 /// VoiceOver: the terminal's action Keys.
 ///
 /// The terminal's own keyboard comes with a double tap on the terminal
@@ -43,7 +43,7 @@ struct KeyPanelLayer: ViewModifier {
     @State private var drag: CGFloat?
     /// The terminal area in global coordinates.
     @State private var area: CGRect = .zero
-    /// The window y the last swipe that pulled the panel out began at (its keys rest there).
+    /// The window y the last swipe that pulled the panel out began at (⏎ comes out there).
     @State private var swipeY: CGFloat?
 
     func body(content: Content) -> some View {
@@ -110,12 +110,11 @@ struct KeyPanelLayer: ViewModifier {
         return state.open ? 1 - min(max(d, 0), w) / w : min(max(-d, 0), w) / w
     }
 
-    /// Always there while the terminal is (so it slides both ways and an
-    /// upload goes on), just past the area's right side while hidden.
+    /// Always there while the terminal is (so it slides both ways), just past
+    /// the area's right side while hidden.
     private func panel(_ address: String) -> some View {
         let progress = progress
-        return PhoneKeyPanel(address: address, shown: progress > 0, restY: swipeY ?? area.midY,
-                             close: { setPanel(open: false) })
+        return PhoneKeyPanel(address: address, shown: progress > 0, restY: swipeY ?? area.midY)
             .id(address)
             .offset(x: (1 - progress) * PhoneKeyPanel.width)
             .allowsHitTesting(progress > 0)

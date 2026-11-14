@@ -450,7 +450,7 @@ struct SendGlyph: Shape {
 
 /// Telegram's glass container: on iOS 26 one `GlassEffectContainer` (7-pt
 /// merging) holds the attach button's and the field's glass (and, mirrored,
-/// the iPhone's top bar).
+/// the iPhone's top bar; the key panel's keys, `PhoneKeyPanel`).
 struct ComposerGlassGroup<Content: View>: View {
     @ViewBuilder var content: Content
 

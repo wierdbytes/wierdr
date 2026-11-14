@@ -11,62 +11,60 @@ import WierdrModel
 /// it. Each time it opens, ⏎ comes to the height the swipe began (with the
 /// keyboard up, to the column's bottom), where the keys an agent asks for are
 /// (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys and Paste above (and Hide
-/// over Paste while a keyboard is up). Then the keys stay where they are until
-/// a finger scrolls them: the keyboard coming or going and the message field
-/// growing or shrinking don't move them, they only cover the lower ones (or
-/// show them again). A scroll comes to rest past either end only so far: the
-/// first key down to the height the swipe began, ⏎ up to it (with the keyboard
-/// up, the first key down to the column's middle and ⏎ up to its bottom).
+/// over Paste while a keyboard is up). A scroll past either end comes back to
+/// where the end key shows whole and the next one half: ⏎ at the column's top
+/// with half of esc, or the first key at its bottom with half of the next one
+/// (`restRange`). Less room for the column (the keyboard, a taller message
+/// field) moves the keys only when that breaks these limits, to the nearest
+/// place that keeps them, animated; more room leaves them where they are.
 /// Keys don't close it, so ↓ ↓ ⏎ is three taps; a swipe to the right does.
 /// The message field is under the terminal (`ComposerBar`, attachments there
 /// too); a double tap on the terminal brings its own keyboard, with its key bar.
 struct PhoneKeyPanel: View {
     var address: String
-    /// On screen (even partly): each time it comes out, it starts at its bottom.
+    /// On screen (even partly): each time it comes out, ⏎ comes to `restY`.
     var shown: Bool
-    /// Where the first or the last key comes to rest, in global coordinates
-    /// (under the thumb, where the swipe began; 0: unknown, the column's
-    /// middle). It comes out with ⏎ there (the column's bottom may be far
-    /// below the thumb); with the keyboard up, ⏎ goes no higher than the bottom.
+    /// Where ⏎ comes out, in global coordinates: under the thumb, where the
+    /// swipe began (0: unknown, the column's middle). With the keyboard up, at
+    /// the column's bottom instead.
     var restY: CGFloat
-    var close: () -> Void
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.services) private var services
-    @Environment(\.theme) private var theme
     @State private var pressed = 0
-    /// The column's top and height in the window: where a scroll may come to rest.
+    /// The column's top and height in the window: its limits, where ⏎ comes out.
     @State private var frame: CGRect = .zero
     /// The keys' height, Hide's place too: where ⏎ is in the column's content.
     @State private var keysHeight: CGFloat = 0
-    /// Where the keys stood when the keyboard or the message field changed the
-    /// column and left them past its rest limits: a scroll may still come to rest
-    /// there. Never where a finger left them (a finger's scroll rests within the
-    /// limits or here), so swipes can't take the keys away bit by bit.
-    @State private var kept: CGFloat?
     /// Where the column is scrolled to and what moves it, as it goes (not state:
     /// it changes every frame, and the scroll target behavior reads it as it's asked).
     @State private var scroll = KeyColumnScroll()
+    /// The app's own scrolls of the column, always to an offset: one to a key and
+    /// an anchor the scroll view did again when it changed size (the keys jumped
+    /// as the keyboard came, after a spring back); an offset done again stays put.
+    @State private var position = ScrollPosition()
+    /// Out before the column's or the keys' height was known: placed once it is.
+    @State private var unplaced = false
 
     static let width: CGFloat = 96
     fileprivate static let keyHeight: CGFloat = 52
     /// Between the keys of a group.
     private static let spacing: CGFloat = 6
+    /// Between groups.
+    private static let groupSpacing: CGFloat = 14
     /// Under ⏎: the margin it keeps from the column's bottom.
     private static let bottomMargin: CGFloat = 12
     /// Empty room above and below the keys, more than any screen is tall. The
     /// content never changes size (Hide's place is kept while it's away), so the
     /// scroll view never has to move it back into range when it grows or shrinks.
     private static let room: CGFloat = 1600
-    private static let bottomID = "bottom"
-    private static let enterID = "enter"
-    /// Back to a limit when the finger let go past it: quick, no overshoot (as a scroll view's own bounce).
+    /// Back to a limit (a finger let go past it, or the column got shorter): quick,
+    /// no overshoot, as a scroll view's own bounce.
     private static let springBack = Animation.spring(duration: 0.3, bounce: 0)
 
     var body: some View {
         let session = services.terminalSession(address)
         let typing = session?.hasKeyboardFocus == true || composing
-        ScrollViewReader { proxy in
         ScrollView(.vertical, showsIndicators: false) {
             // One glass container, as the bars': the keys' glass renders together.
             ComposerGlassGroup { keys(session, typing: typing) }
@@ -74,33 +72,27 @@ struct PhoneKeyPanel: View {
                 .padding(.horizontal, 7)
                 .padding(.vertical, Self.room)
         }
-        // Not when the column changes size: the system asks for a target then
-        // too, and the keys stay where they are.
-        .scrollTargetBehavior(KeyColumnStops(range: restRange(typing: typing, keeping: kept), scroll: scroll))
+        .scrollPosition($position)
+        // A finger's scroll comes to rest within the limits.
+        .scrollTargetBehavior(KeyColumnStops(range: restRange(typing: typing), scroll: scroll))
         .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { [scroll] _, y in scroll.y = y }
         .onScrollPhaseChange { _, new, context in
             scroll.phase = new
-            guard new == .idle, shown else { return }
-            let y = context.geometry.contentOffset.y
-            // A finger brought the keys back within the limits: nothing to keep.
-            if restRange(typing: typing).contains(y) { kept = nil }
-            // Come to rest past where it may (a finger let go of it there, see
+            // Come to rest past a limit (a finger let go of it there, see
             // `KeyColumnStops`, or however else): back, in one spring.
-            let range = restRange(typing: typing, keeping: kept)
-            // Not for a fraction of a point: the scroll lands on whole pixels, off the limit by that.
-            if y < range.lowerBound - 1 || y > range.upperBound + 1 {
-                withAnimation(Self.springBack) { scrollTo(proxy, min(max(y, range.lowerBound), range.upperBound)) }
-            }
+            if new == .idle, shown { settle(context.geometry.contentOffset.y, typing: typing) }
         }
         // Made while out too (another pane's terminal got the keys): placed at once.
-        .onChange(of: shown, initial: true) { _, shown in
-            guard shown else { return }
-            kept = nil
-            toStart(proxy, typing: typing)
+        .onChange(of: shown, initial: true) { _, shown in if shown { place(typing: typing) } }
+        .onChange(of: frame.height) { before, after in
+            if unplaced { return place(typing: typing) }
+            // Less room: back within the limits if it broke them (not under a
+            // finger: its scroll's end has them). More room: the keys stay.
+            if after < before, shown, scroll.phase != .interacting, scroll.phase != .decelerating {
+                settle(scroll.y, typing: typing)
+            }
         }
-        .onChange(of: frame.height) { layoutChanged(typing: typing) }
-        .onChange(of: typing) { layoutChanged(typing: typing) }
-        }
+        .onChange(of: keysHeight) { if unplaced { place(typing: typing) } }
         // Only the top and height (not x, which the back swipe moves every frame).
         .onGeometryChange(for: CGRect.self) { p in
             let f = p.frame(in: .global)
@@ -117,7 +109,7 @@ struct PhoneKeyPanel: View {
     /// empty otherwise, so nothing moves when it comes), Paste, ctrl keys,
     /// ! @ /, n y 3 2 1, ⇧tab tab, the arrows, esc and ⏎.
     private func keys(_ session: TerminalSession?, typing: Bool) -> some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Self.groupSpacing) {
             group {
                 if typing {
                     PanelButton(icon: "keyboard.chevron.compact.down", caption: "Hide", a11y: "Hide the Keyboard") {
@@ -162,84 +154,53 @@ struct PhoneKeyPanel: View {
             group {
                 key("esc", .escape, a11y: "Escape")
                 key("⏎", .enter, symbol: "return", prominent: true, a11y: "Return")
-                    // A point at its middle: `toStart` puts it exactly on the line.
-                    .background(Color.clear.frame(width: 1, height: 1).id(Self.enterID))
             }
             .padding(.bottom, Self.bottomMargin)
-            .id(Self.bottomID)
         }
     }
 
-    /// Where it starts each time it comes out: ⏎ at the rest line (with the keyboard up, at the bottom).
-    private func toStart(_ proxy: ScrollViewProxy, typing: Bool) {
-        // Where it lands, known at once (the scroll's own report comes a moment later).
-        if frame.height > 0, keysHeight > 0 {
-            let enter = Self.room + keysHeight - Self.bottomMargin - Self.keyHeight / 2
-            scroll.y = typing ? Self.room + keysHeight - frame.height : enter - restLine(typing: false)
-        }
-        guard !typing, frame.height > 0 else { return proxy.scrollTo(Self.bottomID, anchor: .bottom) }
-        // ⏎'s middle this far down the column.
-        proxy.scrollTo(Self.enterID, anchor: UnitPoint(x: 0.5, y: min(max(restLine(typing: false) / frame.height, 0), 1)))
+    /// Where it starts each time it comes out: ⏎'s middle on the rest line (with
+    /// the keyboard up, the ⏎ group's margin at the column's bottom), within the
+    /// limits. Before the column's and the keys' heights are known, once they
+    /// are (`unplaced`).
+    private func place(typing: Bool) {
+        guard frame.height > 0, keysHeight > 0 else { unplaced = true; return }
+        unplaced = false
+        let enter = Self.room + keysHeight - Self.bottomMargin - Self.keyHeight / 2
+        let range = restRange(typing: typing)
+        let y = min(max(typing ? Self.room + keysHeight - frame.height : enter - restLine, range.lowerBound), range.upperBound)
+        // Known at once (the scroll's own report comes a moment later).
+        scroll.y = y
+        position.scrollTo(y: y)
     }
 
-    /// Scrolls the column to the offset `y`, by ⏎'s 1-pt mark: the anchor's point
-    /// in the mark (its top + a) goes to the same point of the column (a × height),
-    /// so `a` is where the mark's top is to land, over the height less the mark's.
-    /// It may be past the column's ends (the content has room enough).
-    private func scrollTo(_ proxy: ScrollViewProxy, _ y: CGFloat) {
-        guard frame.height > 1, keysHeight > 0 else { return }
-        let mark = Self.room + keysHeight - Self.bottomMargin - Self.keyHeight / 2 - 0.5
-        proxy.scrollTo(Self.enterID, anchor: UnitPoint(x: 0.5, y: (mark - y) / (frame.height - 1)))
-    }
-
-    /// The line the first and the last key may come to at the end of a
-    /// scroll, from the column's top: `restY`; with the keyboard up, the
-    /// middle of the column (above it), for the first one.
-    private func restLine(typing: Bool) -> CGFloat {
-        guard !typing, restY > 0 else { return frame.height / 2 }
+    /// Where ⏎'s middle comes out, from the column's top: `restY` (0: the middle).
+    private var restLine: CGFloat {
+        guard restY > 0 else { return frame.height / 2 }
         return min(max(restY - frame.minY, Self.keyHeight), frame.height - Self.keyHeight)
     }
 
-    /// The keyboard or the message field changed the column (or the keyboard
-    /// came or went) while the keys rest: if that left them past the limits,
-    /// that is where they may still come back to (`kept`).
-    private func layoutChanged(typing: Bool) {
-        guard shown, scroll.phase == .idle, frame.height > 0, keysHeight > 0 else { return }
-        let y = scroll.y
-        // Only where keys show: not the offset before the first placement (the empty room's top).
-        kept = restRange(typing: typing).contains(y) || !showsKeys(at: y, typing: typing) ? nil : y
-    }
-
-    /// Some key shows in the column scrolled to `y` (Hide's empty place doesn't count).
-    private func showsKeys(at y: CGFloat, typing: Bool) -> Bool {
-        let top = Self.room + (typing ? 0 : Self.keyHeight + Self.spacing)
-        let bottom = Self.room + keysHeight - Self.bottomMargin
-        return top - y < frame.height && bottom - y > 0
-    }
-
-    /// The offsets a scroll may come to rest at: the limits (`restRange(typing:)`)
-    /// and, out past them, up to `kept`: a scroll further that way comes back to
-    /// where the keys were, not short of it.
-    private func restRange(typing: Bool, keeping kept: CGFloat?) -> ClosedRange<CGFloat> {
+    /// At `y` past a limit (by more than the pixel the scroll lands on): to the
+    /// nearest place within them, in one spring.
+    private func settle(_ y: CGFloat, typing: Bool) {
         let range = restRange(typing: typing)
-        guard let kept else { return range }
-        return min(range.lowerBound, kept)...max(range.upperBound, kept)
+        guard y < range.lowerBound - 1 || y > range.upperBound + 1 else { return }
+        let to = min(max(y, range.lowerBound), range.upperBound)
+        scroll.y = to
+        withAnimation(Self.springBack) { position.scrollTo(y: to) }
     }
 
-    /// The limits, for the column as it is now: the first key no lower than the
-    /// rest line (with the keyboard up, the middle), ⏎ no higher than it (with
-    /// the keyboard up, the column's bottom).
+    /// The offsets the column may rest at: up to where ⏎ shows whole at its top,
+    /// with half of esc above it, and down to where the first key shows whole at
+    /// its bottom, with half of the next one under it (with the keyboard up, Hide
+    /// and Paste; without, Paste and ^R, past Hide's empty place and a group's gap).
     private func restRange(typing: Bool) -> ClosedRange<CGFloat> {
         let h = frame.height, k = Self.keyHeight
         guard h > 0, keysHeight > 0 else { return 0...(.greatestFiniteMagnitude) }
-        let lowest = h - Self.bottomMargin - k / 2
-        let rest = restLine(typing: typing)
-        // The middles of the first key (Hide's place is empty without a keyboard) and ⏎ in the content.
-        let first = Self.room + (typing ? 0 : k + Self.spacing) + k / 2
-        let enter = Self.room + keysHeight - Self.bottomMargin - k / 2
-        let low = first - min(max(rest, Self.bottomMargin + k / 2), lowest)
-        let high = enter - (typing ? lowest : min(rest, lowest))
-        return low...max(low, high)
+        // The middles of the second key and of esc, in the content.
+        let second = Self.room + (typing ? k + Self.spacing : 2 * k + Self.spacing + Self.groupSpacing) + k / 2
+        let esc = Self.room + keysHeight - Self.bottomMargin - k - Self.spacing - k / 2
+        return (second - h)...max(second - h, esc)
     }
 
     private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -308,9 +269,8 @@ private final class KeyColumnScroll {
 
 /// Where a finger's scroll of the key column comes to rest: within `range`.
 /// The system asks at other times too: when the column changes size (the
-/// keyboard, the message field: the keys stay put) and every frame of a
-/// scroll the app animates (its target is a key's frame with an anchor, not
-/// an offset); those it leaves as they are.
+/// keyboard, the message field: `PhoneKeyPanel` settles that itself) and every
+/// frame of a scroll the app animates; those it leaves as they are.
 ///
 /// Let go within the range, or thrown back towards it, the column slows down
 /// to its natural end, cut at the limit (in the direction it goes). Let go
@@ -324,7 +284,7 @@ private struct KeyColumnStops: ScrollTargetBehavior {
 
     func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
         // Read as it's asked: the phase the view was last drawn with lags behind.
-        guard scroll.phase == .interacting, target.anchor == nil else { return }
+        guard scroll.phase == .interacting else { return }
         let lo = range.lowerBound, hi = range.upperBound
         let now = scroll.y, end = target.rect.origin.y
         // Past a limit (by more than the pixel it lands on) and going on, or not back far enough: stop.
@@ -348,29 +308,25 @@ private struct PanelButton: View {
     var a11y: String
     var repeats = false
     var prominent = false
-    var busy = false
     var action: () -> Void
 
     @Environment(\.theme) private var theme
 
     init(label: String? = nil, icon: String? = nil, caption: String? = nil, a11y: String,
-         repeats: Bool = false, prominent: Bool = false, busy: Bool = false, action: @escaping () -> Void) {
+         repeats: Bool = false, prominent: Bool = false, action: @escaping () -> Void) {
         self.label = label
         self.icon = icon
         self.caption = caption
         self.a11y = a11y
         self.repeats = repeats
         self.prominent = prominent
-        self.busy = busy
         self.action = action
     }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 2) {
-                if busy {
-                    ProgressView().controlSize(.small).tint(theme.foreground)
-                } else if let icon {
+                if let icon {
                     Image(systemName: icon)
                         .font(.system(size: caption == nil ? 20 : 18, weight: prominent ? .semibold : .medium))
                 } else if let label {
@@ -391,7 +347,6 @@ private struct PanelButton: View {
         }
         .buttonStyle(PanelPressStyle(prominent: prominent))
         .buttonRepeatBehavior(repeats ? .enabled : .disabled)
-        .disabled(busy)
         .composerGlass(Capsule(), theme: theme)
         .accessibilityLabel(a11y)
     }
