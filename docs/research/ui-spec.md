@@ -420,7 +420,8 @@ Agent status as shown (docs/labels.md, `model.rs::status`): `status.state` `work
 client's own rule), else idle. The iPad should also **write** `herdr.seen=<turn>` via
 `terminal.label` once per turn while an agent is really on screen (only raising it), so "done"
 clears on every client; "mark unread" = `turn-1`. Pinned = `labels["herdr.pinned"]` non-empty;
-pin/unpin = `terminal.label {herdr.pinned:"1"|""}`. A terminal belongs to a space/tab via labels
+pin/unpin = `terminal.label {herdr.pinned:"1"|""}` (Wierdr writes the pin's Unix time in seconds
+instead of "1", still non-empty, for the iPhone list's pin order). A terminal belongs to a space/tab via labels
 `herdr.space`/`herdr.tab` (ids local to its machine).
 
 ### 10.2 OSC 7501 status record (live, `hc get t5w --json`)

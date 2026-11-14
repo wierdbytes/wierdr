@@ -149,7 +149,7 @@ struct PhoneAgentList: View {
         switch t.status {
         case .idle:
             out.append(PhoneSwipeAction(id: "unread", title: "Unread", symbol: "message.badge.filled.fill",
-                                        color: theme.accent, iconColor: theme.accentForeground) {
+                                        color: PhoneSwipeColors.unread(theme)) {
                 controller.markUnread(t.address)
             })
         case .done:
@@ -230,8 +230,9 @@ struct PhoneAgentList: View {
     }
 }
 
-/// The swipe buttons' fills: Telegram's (day/night) for pin, inactive and destructive.
+/// The swipe buttons' fills: Telegram's (day/night) for unread, pin, inactive and destructive.
 enum PhoneSwipeColors {
+    static func unread(_ theme: Theme) -> Color { Color(hex: theme.isDark ? "#666666" : "#0088ff") }
     static func pin(_ theme: Theme) -> Color { Color(hex: theme.isDark ? "#08a723" : "#00c900") }
     static func inactive(_ theme: Theme) -> Color { Color(hex: theme.isDark ? "#666666" : "#bcbcc3") }
     static func destructive(_ theme: Theme) -> Color { Color(hex: theme.isDark ? "#c70c0c" : "#ff3824") }
