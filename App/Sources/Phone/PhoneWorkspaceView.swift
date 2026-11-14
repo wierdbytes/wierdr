@@ -246,10 +246,11 @@ struct WindowSafeArea: UIViewRepresentable {
     }
 }
 
-/// The screen's corner radius (the cards' while they move) and scale.
+/// The screen's corner radius (the cards' while they move; none in an iPad's narrow
+/// window, which isn't at the screen's corners) and scale.
 enum DisplayCorner {
     @MainActor static let radius: CGFloat = {
-        guard let screen = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.screen }).first
+        guard Device.isPhone, let screen = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.screen }).first
         else { return 0 }
         let key = ["_display", "Corner", "Radius"].joined()
         guard screen.responds(to: NSSelectorFromString(key)) else { return 0 }
