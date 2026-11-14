@@ -58,6 +58,8 @@ struct PhoneAgentList: View {
                                     .animation(PhoneListMotion.restyle, value: line.pinned)
                             }
                         }
+                        // A row being pinned slides up over the rows it passes.
+                        .zIndex(line.pinned ? 1 : 0)
                 }
             }
             .animation(PhoneListMotion.move, value: pinKey(page))

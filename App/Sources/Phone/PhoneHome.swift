@@ -5,8 +5,8 @@ import WierdrModel
 /// (`PhoneSpaceTabs`), their pages side by side (`PhoneSpacePager`: a swipe in the
 /// middle of the screen pages between them), and a header floating over the pages
 /// (they scroll under it): settings, the title (or the connection's state), search
-/// and +, the strip under them. At the bottom the subscription limits and the status
-/// counts. No agent is "current" here: the list shows no focus and never scrolls to one.
+/// and +, the strip under them. At the bottom the subscription limits (not in
+/// landscape, where the header leaves the list little room) and the status counts. No agent is "current" here: the list shows no focus and never scrolls to one.
 ///
 /// The tab shown is remembered (`phone.tab`: "all" or the space's id); when its
 /// space goes, its neighbour takes over. Without spaces the strip fades out and
@@ -16,6 +16,8 @@ struct PhoneHome: View {
     @Environment(\.theme) private var theme
     /// The tab last shown: "all" or a space's id.
     @AppStorage("phone.tab") private var savedTab = "all"
+    /// Landscape on an iPhone: the limits give their room to the list.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var paging = PhoneSpacePaging()
     @State private var safeTop: CGFloat = 0
 
@@ -44,7 +46,7 @@ struct PhoneHome: View {
             .overlay(alignment: .bottom) {
                 ToastStack().padding(.horizontal, 12).padding(.bottom, 10)
             }
-            LimitsPanel(large: true)
+            if verticalSizeClass != .compact { LimitsPanel(large: true) }
             PhoneHomeFooter()
         }
         .background(theme.chrome.ignoresSafeArea())

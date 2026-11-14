@@ -114,8 +114,12 @@ struct PhoneListRow<Content: View, Menu: View>: View {
                 }
             }
             .background {
-                theme.hover.opacity(pinned ? 1 : 0)
-                    .animation(PhoneListMotion.restyle, value: pinned)
+                // Opaque: a row moving past others (a pin, an unpin) covers them instead of mixing with them.
+                ZStack {
+                    theme.chrome
+                    theme.hover.opacity(pinned ? 1 : 0)
+                        .animation(PhoneListMotion.restyle, value: pinned)
+                }
             }
             .overlay(alignment: .bottom) {
                 separatorLine(px: px)

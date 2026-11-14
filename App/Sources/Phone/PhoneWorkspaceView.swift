@@ -30,9 +30,9 @@ struct PhoneWorkspaceView: View {
     /// `progress` as the frame on screen draws it (mid-animation too).
     @State private var drawn = PhoneNavCard.Drawn()
     @State private var size: CGSize = CGSize(width: 430, height: 900)
-    /// The window's safe area (never the keyboard) and height.
-    @State private var window = WindowSafeArea.Metrics()
-    /// The list's and the pane screen's area in the window: above the keyboard while it is up.
+    /// The window's size.
+    @State private var window: CGSize = .zero
+    /// The list's and the pane screen's area in the window: the safe area, above the keyboard while it is up.
     @State private var frame: CGRect = .zero
 
     /// A push or a pop by a tap (or anything but a finger): critically damped, response 0.3 s.
@@ -57,7 +57,7 @@ struct PhoneWorkspaceView: View {
                         .transition(.identity)
                 }
             }
-            .modifier(PhoneNavCard(role: .top, progress: progress, width: width, insets: cardInsets, drawn: drawn))
+            .modifier(PhoneNavCard(role: .top, progress: progress, width: width, outset: outset, drawn: drawn))
             .allowsHitTesting(shown)
             .accessibilityHidden(!shown)
             .accessibilityAddTraits(.isModal)
@@ -81,7 +81,7 @@ struct PhoneWorkspaceView: View {
             )
             .frame(width: 0, height: 0)
         }
-        .background { WindowSafeArea { window = $0 }.frame(width: 0, height: 0) }
+        .background { WindowSize { window = $0 }.frame(width: 0, height: 0) }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
         .onChange(of: shown, initial: true) { _, shown in navigate(shown) }
@@ -94,12 +94,12 @@ struct PhoneWorkspaceView: View {
         }
     }
 
-    /// The safe area the pane screen's content gets back inside its edge-to-edge card: the
-    /// window's, but none at the bottom while the keyboard is up (the card ends at it then).
-    private var cardInsets: EdgeInsets {
-        var insets = window.insets
-        if window.height - frame.maxY > insets.bottom + 1 { insets.bottom = 0 }
-        return insets
+    /// From the cards' frame out to the window's edges (the status bar, the home indicator,
+    /// the keyboard): the pane screen's clip reaches there, where its backgrounds run.
+    private var outset: EdgeInsets {
+        guard window.width > 0, frame.width > 0 else { return EdgeInsets() }
+        return EdgeInsets(top: max(0, frame.minY), leading: max(0, frame.minX),
+                          bottom: max(0, window.height - frame.maxY), trailing: max(0, window.width - frame.maxX))
     }
 
     /// A push or a pop that no finger drives (a row, the back button, a status jump…).
@@ -159,9 +159,9 @@ struct PhoneWorkspaceView: View {
 /// that overshoots stops at either end, as Telegram's does (it halts at the first crossing).
 ///
 /// While it moves, the top card has the display's rounded corners and Telegram's faint
-/// shadow (black 4 %, radius 12, 3 pt up). Its content is laid out edge to edge with the
-/// screen's safe area given back to it (`insets`), so the clip is the screen's outline and
-/// the backgrounds that run into the safe area stay.
+/// shadow (black 4 %, radius 12, 3 pt up). The clip is the window's outline (`outset`: from
+/// the safe area out to the window's edges), so the backgrounds that run under the status bar
+/// and the home indicator stay; a clip on the frame cut them off (the list showed through).
 struct PhoneNavCard: ViewModifier, Animatable {
     enum Role { case bottom, top }
 
@@ -171,7 +171,8 @@ struct PhoneNavCard: ViewModifier, Animatable {
     var role: Role
     var progress: CGFloat
     var width: CGFloat
-    var insets = EdgeInsets()
+    /// From the frame out to the window's edges.
+    var outset = EdgeInsets()
     var drawn: Drawn? = nil
 
     var animatableData: CGFloat {
@@ -186,17 +187,14 @@ struct PhoneNavCard: ViewModifier, Animatable {
             content.offset(x: -0.3 * width * p)
         case .top:
             let moving = p > 0.0005 && p < 0.9995
-            let shape = RoundedRectangle(cornerRadius: moving ? DisplayCorner.radius : 0, style: .continuous)
+            let shape = CardShape(radius: moving ? DisplayCorner.radius : 0, outset: outset)
             let scale = DisplayCorner.scale
             content
-                .safeAreaPadding(insets)
-                .ignoresSafeArea(.container)
                 .clipShape(shape)
                 .background {
                     if moving {
                         shape.fill(Color.black)
                             .shadow(color: .black.opacity(0.04), radius: 12, x: 0, y: -3)
-                            .ignoresSafeArea(.container)
                     }
                 }
                 .offset(x: ((1 - p) * width * scale).rounded(.down) / scale)
@@ -210,14 +208,22 @@ struct PhoneNavCard: ViewModifier, Animatable {
     }
 }
 
-/// The window's safe area (never the keyboard's: SwiftUI's insets count it in) and height.
-struct WindowSafeArea: UIViewRepresentable {
-    struct Metrics: Equatable {
-        var insets = EdgeInsets()
-        var height: CGFloat = 0
-    }
+/// A rounded rectangle reaching `outset` past the frame it's given (the window's outline around the safe area).
+private struct CardShape: Shape {
+    var radius: CGFloat
+    var outset: EdgeInsets
 
-    var onChange: (Metrics) -> Void
+    func path(in rect: CGRect) -> Path {
+        let r = CGRect(x: rect.minX - outset.leading, y: rect.minY - outset.top,
+                       width: rect.width + outset.leading + outset.trailing,
+                       height: rect.height + outset.top + outset.bottom)
+        return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: r)
+    }
+}
+
+/// The window's size.
+private struct WindowSize: UIViewRepresentable {
+    var onChange: (CGSize) -> Void
 
     func makeUIView(context: Context) -> Probe { Probe() }
 
@@ -227,21 +233,18 @@ struct WindowSafeArea: UIViewRepresentable {
     }
 
     final class Probe: UIView {
-        var onChange: ((Metrics) -> Void)?
-        private var last: Metrics?
+        var onChange: ((CGSize) -> Void)?
+        private var last: CGSize?
 
         override func didMoveToWindow() { super.didMoveToWindow(); report() }
-        override func safeAreaInsetsDidChange() { super.safeAreaInsetsDidChange(); report() }
         override func layoutSubviews() { super.layoutSubviews(); report() }
 
         func report() {
             guard let window else { return }
-            let i = window.safeAreaInsets
-            let metrics = Metrics(insets: EdgeInsets(top: i.top, leading: i.left, bottom: i.bottom, trailing: i.right),
-                                  height: window.bounds.height)
-            guard metrics != last else { return }
-            last = metrics
-            DispatchQueue.main.async { [weak self] in self?.onChange?(metrics) }
+            let size = window.bounds.size
+            guard size != last else { return }
+            last = size
+            DispatchQueue.main.async { [weak self] in self?.onChange?(size) }
         }
     }
 }
