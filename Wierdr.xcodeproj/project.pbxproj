@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0E1CCC69D66751AABAD36B2A /* SidebarOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BBD742BB5614E0A3EFA587E /* SidebarOverlay.swift */; };
+		11B4EFC214452ECEFA5F9AAB /* GoToFlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E9EA9643A8C8483CC86734 /* GoToFlight.swift */; };
 		1642D3D62190FEAC7BF951F2 /* WierdrWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A5885A899767CC54AA835E1D /* WierdrWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1B05101B71E742280AB023DD /* WierdrTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90B1F34C74D7CADD79F2C52 /* WierdrTerminalView.swift */; };
 		1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */; };
@@ -90,6 +91,7 @@
 		ED3AFBEDB413912EC56AB45B /* SpaceDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = C803598F24AD47DB7A42D7D0 /* SpaceDrag.swift */; };
 		F247CF5AF89B8F79CB38DA41 /* HerdrCore in Frameworks */ = {isa = PBXBuildFile; productRef = D4DFE261604A49E49A1A80AC /* HerdrCore */; };
 		F326E4151756AAE8EA6FF4BB /* PhoneRowSwipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0230C11AC2046BFE622EA23F /* PhoneRowSwipe.swift */; };
+		F355AA2AB188BF28FD81CBC8 /* PullToSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762695928246040140DE0AE1 /* PullToSearch.swift */; };
 		FA794EAE57AB99AD1B479A7B /* TerminalTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BA0F685C194597C14F60C3 /* TerminalTheme.swift */; };
 		FE68228E3BC4FFF12901741C /* TerminalSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3970FD27B3DF671D83DC038E /* TerminalSession.swift */; };
 		FFF085F26F93DD76B88BEA24 /* LiveActivityDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3EB0A0AFF104DECDC52251 /* LiveActivityDemo.swift */; };
@@ -162,6 +164,7 @@
 		6BBD742BB5614E0A3EFA587E /* SidebarOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarOverlay.swift; sourceTree = "<group>"; };
 		7056E4DE60E7F76AD6B1A7D3 /* Chrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chrome.swift; sourceTree = "<group>"; };
 		73B8BBCCDAF57164EE74D110 /* DemoTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoTerminalView.swift; sourceTree = "<group>"; };
+		762695928246040140DE0AE1 /* PullToSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullToSearch.swift; sourceTree = "<group>"; };
 		8089262433D04F1C14D569AE /* OFL-Geist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-Geist.txt"; sourceTree = "<group>"; };
 		8635A004239A05A30EA934E3 /* PhonePaneMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhonePaneMenu.swift; sourceTree = "<group>"; };
 		8A94262DB139809864F08002 /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
@@ -188,6 +191,7 @@
 		C803598F24AD47DB7A42D7D0 /* SpaceDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceDrag.swift; sourceTree = "<group>"; };
 		CF024919F7CC3D81C9D998B7 /* Host.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Host.swift; sourceTree = "<group>"; };
 		CFF1A4D9E311EDC3924AE60C /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
+		D1E9EA9643A8C8483CC86734 /* GoToFlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToFlight.swift; sourceTree = "<group>"; };
 		D52861BA8BB122CA7C65ADB2 /* ComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerBar.swift; sourceTree = "<group>"; };
 		D8291C8C0633695801471D97 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		D8759F1896EBC5B50A01F9AE /* PhoneHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHome.swift; sourceTree = "<group>"; };
@@ -324,10 +328,12 @@
 				7056E4DE60E7F76AD6B1A7D3 /* Chrome.swift */,
 				0666454A0F3654CFD8BB3434 /* Device.swift */,
 				12EDAF530116B45FFE732B07 /* Format.swift */,
+				D1E9EA9643A8C8483CC86734 /* GoToFlight.swift */,
 				B54E74013AE71827D89D4EE3 /* ImageForAgent.swift */,
 				5823D0557BDD5B47A25FCE33 /* KeyboardFirstDismissal.swift */,
 				B80B3C068CD2BFADEDBF7680 /* ModelAliases.swift */,
 				ABD1D033D2D7C97DEF34DCD0 /* Previews.swift */,
+				762695928246040140DE0AE1 /* PullToSearch.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -630,6 +636,7 @@
 				7A57026423B9387BD4E6A220 /* Device.swift in Sources */,
 				8377F88C268CF5DD0D793B99 /* Fonts.swift in Sources */,
 				53D04AE9997992E9BBE12C7A /* Format.swift in Sources */,
+				11B4EFC214452ECEFA5F9AAB /* GoToFlight.swift in Sources */,
 				5DE17110AF38FD23F49BD1A1 /* Host.swift in Sources */,
 				3512B271D51EC67E882F5CE6 /* HostEditor.swift in Sources */,
 				622613C1FB10D809676F9DEB /* HostKeyAlert.swift in Sources */,
@@ -659,6 +666,7 @@
 				4A425BBB1D38458C918B5A1A /* PhoneTabReorder.swift in Sources */,
 				5BD604DAF4EF2A94EE0366F5 /* PhoneWorkspaceView.swift in Sources */,
 				9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */,
+				F355AA2AB188BF28FD81CBC8 /* PullToSearch.swift in Sources */,
 				CC6CA5DD5FA692EB2E3DF779 /* QuickSwitcher.swift in Sources */,
 				7CC2C3A024443CF62DBEE2E2 /* SettingsView.swift in Sources */,
 				0E1CCC69D66751AABAD36B2A /* SidebarOverlay.swift in Sources */,
@@ -763,7 +771,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 55;
+				CURRENT_PROJECT_VERSION = 56;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -849,7 +857,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 55;
+				CURRENT_PROJECT_VERSION = 56;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

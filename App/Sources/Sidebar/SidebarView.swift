@@ -17,7 +17,8 @@ struct SidebarView: View {
     }
 }
 
-/// Brand bar (§2): logo, "Wierdr", search (quick switcher), sidebar toggle. 46 pt.
+/// Brand bar (§2): logo, "Wierdr", sidebar toggle. 46 pt. Go to (Herdr's search
+/// button here) comes out of the spaces list pulled down past its top (`SpacesList`).
 struct BrandBar: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -38,7 +39,8 @@ struct BrandBar: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            ChromeIconButton(icon: "search", label: "Quick Switcher") { controller.showSwitcher = true }
+            // Go to is a pull of the list; VoiceOver's is here.
+            GoToAccessibilityButton()
             if !isCompact {
                 // On iPhone the panel is pushed over the sidebar instead.
                 ChromeIconButton(icon: "sidebar", label: "Hide Sidebar") { controller.toggleSidebar() }

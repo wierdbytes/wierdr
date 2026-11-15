@@ -17,6 +17,8 @@ final class WorkspaceController {
     /// The sidebar slid over the panel while it's hidden (`SidebarOverlay`).
     var sidebarOverlay = false
     var showSwitcher = false
+    /// Go to's field flying in from a pulled list (`PullToSearch`).
+    let goToFlight = GoToFlight()
     var showSettings = false
     /// The iPhone list's tab to show: a space's id (Go to sets it, `PhoneHome` takes it).
     var listTabRequest: String?

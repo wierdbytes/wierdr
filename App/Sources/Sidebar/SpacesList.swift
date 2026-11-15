@@ -7,12 +7,14 @@ import WierdrModel
 /// whose rows draw the pieces of each card: the card itself is the rows'
 /// `listRowBackground` (`CardSlice`), so swiping a row slides its content over
 /// a card that stays put. Cards are dragged by their header to reorder them
-/// among their machine's (`SpaceDrag`).
+/// among their machine's (`SpaceDrag`). Pulled down past its top, it brings out a
+/// search field over the first card; let go past 56 pt, Go to opens (`PullToSearch`).
 struct SpacesList: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
     @Environment(\.isCompactLayout) private var compact
     @State private var drag = SpaceDrag()
+    @State private var pull = PullToSearch(threshold: PullToSearchStyle.sidebar.threshold)
 
     var body: some View {
         let ws = controller.workspace
@@ -53,6 +55,15 @@ struct SpacesList: View {
             .scrollContentBackground(.hidden)
             .environment(\.defaultMinListRowHeight, 0)
             .contentMargins(.top, 4, for: .scrollContent)
+            .onScrollGeometryChange(for: CGFloat.self, of: PullToSearch.overscroll) { _, d in
+                pull.scrolled(d)
+            }
+            .onScrollPhaseChange { old, phase in
+                if pull.phaseChanged(from: old, to: phase) { controller.openGoTo(pulledFrom: pull, theme: theme) }
+            }
+            .overlay(alignment: .top) {
+                PullToSearchField(pull: pull, style: .sidebar, top: 0, lead: 4)
+            }
             .environment(drag)
             .background(SpaceDropTarget(drag: drag))
             .onAppear {

@@ -25,6 +25,9 @@ enum PhoneListScope: Hashable {
 /// the row's pane (`controller.focus(pane:)`), a sub-agent's row its sub-agent.
 /// Pinning or unpinning moves rows with Telegram's list spring; status changes
 /// reorder without animation.
+///
+/// Pulled down past its top, it brings out Go to's field over the first row; let go
+/// past 72 pt, Go to opens (`PullToSearch`).
 struct PhoneAgentList: View {
     var scope: PhoneListScope
     /// Room the floating header takes over the top of the page (content starts under it, scrolls under it).
@@ -38,6 +41,7 @@ struct PhoneAgentList: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
     @State private var swipes = PhoneRowSwipes()
+    @State private var pull = PullToSearch(threshold: PullToSearchStyle.phone.threshold)
     @State private var position = ScrollPosition(edge: .top)
     /// The page's height under its insets.
     @State private var viewport: CGFloat = 0
@@ -79,11 +83,18 @@ struct PhoneAgentList: View {
         } action: { _, h in
             viewport = max(0, h)
         }
+        .onScrollGeometryChange(for: CGFloat.self, of: PullToSearch.overscroll) { _, d in
+            pull.scrolled(d)
+        }
+        .overlay(alignment: .top) {
+            PullToSearchField(pull: pull, style: .phone, top: topInset)
+        }
         .background(theme.chrome)
         .environment(swipes)
-        .onScrollPhaseChange { _, phase in
+        .onScrollPhaseChange { old, phase in
             // Scrolling closes an open row (Telegram: as the list's drag begins).
             if phase == .interacting, swipes.openID != nil { swipes.closeAll() }
+            if pull.phaseChanged(from: old, to: phase) { controller.openGoTo(pulledFrom: pull, theme: theme) }
         }
         .onChange(of: scrollToTop) { _, _ in
             withAnimation(.smooth(duration: 0.4)) { position.scrollTo(edge: .top) }

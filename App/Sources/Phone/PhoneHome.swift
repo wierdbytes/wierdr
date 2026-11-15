@@ -5,7 +5,8 @@ import WierdrModel
 /// (`PhoneSpaceTabs`), their pages side by side (`PhoneSpacePager`: a swipe in the
 /// middle of the screen pages between them), and a header floating over the pages
 /// (they scroll under it): settings, the status counts (or the connection's state),
-/// search and +, the strip under them. At the bottom the subscription limits (not in
+/// +, the strip under them. Go to comes out of a page pulled down past its top
+/// (`PhoneAgentList`, `PullToSearch`). At the bottom the subscription limits (not in
 /// landscape, where the header leaves the list little room). No agent is "current" here: the list shows no focus and never scrolls to one.
 ///
 /// The tab shown is remembered (`phone.tab`: "all" or the space's id); when its
@@ -100,7 +101,7 @@ struct PhoneHome: View {
 
 /// Telegram's chat-list header over the pages: a 44-pt row 10 pt under the status
 /// bar (settings in a glass circle where Telegram has Edit, the title in the middle,
-/// search and + in one glass pill, 16 pt from the sides), then the strip 10 pt
+/// + in a glass circle, 16 pt from the sides), then the strip 10 pt
 /// under it, 3 pt above the header's bottom. While the tabs are reordered, the row
 /// has only Done (where settings is) and the title.
 private struct PhoneHomeHeader: View {
@@ -137,11 +138,12 @@ private struct PhoneHomeHeader: View {
     }
 
     private var row: some View {
-        let trailingWidth: CGFloat = 2 * Self.rowHeight + 8
+        // The widest side: Done while reordering.
+        let sideWidth: CGFloat = 72
         return ZStack {
             PhoneHomeTitle()
                 // Centered on the screen, clear of the widest side.
-                .padding(.horizontal, Self.sideInset + trailingWidth + 8)
+                .padding(.horizontal, Self.sideInset + sideWidth + 8)
             ComposerGlassGroup {
                 HStack(spacing: 0) {
                     if reorder.isActive {
@@ -158,18 +160,10 @@ private struct PhoneHomeHeader: View {
                     }
                     Spacer(minLength: 0)
                     if !reorder.isActive {
-                        HStack(spacing: 0) {
-                            Button { controller.showSwitcher = true } label: {
-                                Icon("search", size: 21, color: theme.foreground)
-                                    .frame(width: Self.rowHeight, height: Self.rowHeight)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(AttachPressStyle())
-                            .accessibilityLabel("Go to")
-                            PhoneNewMenu(paging: paging, tabs: showsTabs ? tabs : [])
-                        }
-                        .padding(.horizontal, 4)
-                        .composerGlass(Capsule(), theme: theme)
+                        // Go to is a pull of the list; VoiceOver's is here.
+                        GoToAccessibilityButton()
+                        PhoneNewMenu(paging: paging, tabs: showsTabs ? tabs : [])
+                            .composerGlass(Circle(), theme: theme)
                     }
                 }
             }
@@ -374,7 +368,7 @@ private struct PhoneNewMenu: View {
                 .font(.system(size: 21, weight: .medium))
                 .foregroundStyle(theme.accent)
                 .frame(width: PhoneHomeHeader.rowHeight, height: PhoneHomeHeader.rowHeight)
-                .contentShape(Rectangle())
+                .contentShape(Circle())
         }
         .menuOrder(.fixed)
         .accessibilityLabel(space == nil ? "New Space" : "New Tab")

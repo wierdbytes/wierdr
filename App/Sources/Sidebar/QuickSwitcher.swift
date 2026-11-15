@@ -1,7 +1,7 @@
 import SwiftUI
 import WierdrModel
 
-/// Go to (⌘P, the search button), in the iPhone list's look: spaces (this
+/// Go to (⌘P, or a list pulled down, `PullToSearch`), in the iPhone list's look: spaces (this
 /// computer's, then each added machine's under a divider with its name), then
 /// agents with their sub-agents under them, as the list has them. Typing filters
 /// them fuzzily (`Fuzzy`): spaces by name, agents and sub-agents by title, the
@@ -13,7 +13,8 @@ import WierdrModel
 /// the keyboard away (it slides down, the field with it). The sheet closes as
 /// sheets do (a swipe down, a tap beside it on the iPad) and with Esc; while
 /// the keyboard is up, a swipe down puts the keyboard away instead
-/// (`KeyboardFirstDismissal`).
+/// (`KeyboardFirstDismissal`). Opened by a pull of a list, its field flies in from
+/// there (`GoToFlight`): the field here hides till the flyer lands on it.
 struct QuickSwitcher: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.dismiss) private var dismiss
@@ -50,6 +51,7 @@ struct QuickSwitcher: View {
         .environment(swipes)
         .onChange(of: query) { _, _ in position.scrollTo(edge: .top) }
         .onAppear { fieldFocused = true }
+        .onDisappear { controller.goToFlight.cancel() }
     }
 
     // MARK: Rows
@@ -118,10 +120,14 @@ struct QuickSwitcher: View {
             .padding(.leading, 14)
             .padding(.trailing, 12)
             .frame(height: 44)
+            // Where a pulled list's field lands (`GoToFlight`).
+            .background(GoToFieldAnchor(flight: controller.goToFlight))
             .contentShape(Capsule())
             // A tap on the capsule's margins brings the keyboard too.
             .onTapGesture { fieldFocused = true }
             .composerGlass(Capsule(), theme: theme, interactive: false)
+            // Hidden while the flyer is on its way here.
+            .opacity(controller.goToFlight.isFlying ? 0 : 1)
         }
         .background {
             // Esc closes (no button for it on screen).
