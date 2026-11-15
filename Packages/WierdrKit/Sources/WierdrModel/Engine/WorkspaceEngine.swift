@@ -535,6 +535,13 @@ public final class WorkspaceEngine: WorkspaceBackend {
     /// Kills terminals and their non-kept descendants (`AppWindow::kill`).
     private func kill(_ addresses: [String]) async {
         guard let c = connection, options.allowWrites else { return }
+        for a in withDescendants(addresses) {
+            do { try await c.killTerminal(a) } catch { emit("kill \(a): \(error)") }
+        }
+    }
+
+    /// `addresses`, then their descendants that aren't kept, parents first.
+    private func withDescendants(_ addresses: [String]) -> [String] {
         var doomed = addresses
         var i = 0
         while i < doomed.count {
@@ -546,9 +553,7 @@ public final class WorkspaceEngine: WorkspaceBackend {
             }
             i += 1
         }
-        for a in doomed {
-            do { try await c.killTerminal(a) } catch { emit("kill \(a): \(error)") }
-        }
+        return doomed
     }
 
     /// Parent references may use the core's own or a machine's host name
@@ -749,6 +754,22 @@ public final class WorkspaceEngine: WorkspaceBackend {
             return LayoutID.qualify(slots[key]!.raw.layoutSpaces[placed.location.space].layoutTabs[ti].nodeID, machine)
         }
         return LayoutID.qualify(tb, machine)
+    }
+
+    /// Ends a terminal without a pane (a sub-agent), then the sub-agents it started
+    /// that aren't kept. One shown in a pane closes with its pane instead.
+    func endTerminal(_ address: String) async throws {
+        guard let c = connection else { throw WorkspaceError.notConnected }
+        guard options.allowWrites else { throw WorkspaceError.core("Writing is disabled") }
+        guard let record = records[address], record.isLive else { throw WorkspaceError.notFound("Terminal") }
+        do {
+            _ = try await c.killTerminal(address)
+        } catch let e as CoreError {
+            throw WorkspaceError.core("Cannot stop it: \(e.message)")
+        } catch is ConnectionError {
+            throw WorkspaceError.notConnected
+        }
+        await kill(Array(withDescendants([address]).dropFirst()))
     }
 
     // MARK: Seen, unread, pinned

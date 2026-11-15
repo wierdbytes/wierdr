@@ -503,6 +503,8 @@ private struct KidRowChrome: ViewModifier {
                     Button { controller.open(kid, from: rowPane) } label: { Label("Show", image: "ui.terminal") }
                     Button { controller.keep(kid.terminal.address) } label: { Label("Keep as Tab", image: "ui.plus") }
                 }
+                Divider()
+                Button(role: .destructive) { controller.close(kid) } label: { Label("Close", image: "ui.x") }
             }
             .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
     }

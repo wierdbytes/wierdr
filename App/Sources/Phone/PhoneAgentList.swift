@@ -103,6 +103,7 @@ struct PhoneAgentList: View {
             agentRow(item, line: line, next: next)
         case .kid(let kid, let parent, let first):
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
+                         trailing: [kidCloseAction(kid)],
                          edgeSwipesOnly: edgeSwipesOnly, tap: { controller.open(kid, from: parent.row.paneID) }) {
                 kidMenu(kid, parent: parent)
             } content: {
@@ -170,10 +171,17 @@ struct PhoneAgentList: View {
         return out
     }
 
-    /// Swipe left: Close (an agent's asks first).
+    /// Swipe left: Close (asks first).
     private func closeAction(_ paneID: String) -> PhoneSwipeAction {
-        PhoneSwipeAction(id: "close", title: "Close", symbol: "xmark", color: PhoneSwipeColors.destructive(theme)) {
+        PhoneSwipeAction(id: "close", title: "Close", symbol: "xmark", color: PhoneSwipeColors.destructive(theme), fillsRow: true) {
             controller.closePane(paneID)
+        }
+    }
+
+    /// A sub-agent's swipe left: Close (kept, its pane; else it stops; asks first).
+    private func kidCloseAction(_ kid: SubAgent) -> PhoneSwipeAction {
+        PhoneSwipeAction(id: "close", title: "Close", symbol: "xmark", color: PhoneSwipeColors.destructive(theme), fillsRow: true) {
+            controller.close(kid)
         }
     }
 
@@ -202,7 +210,7 @@ struct PhoneAgentList: View {
         Button(role: .destructive) { controller.closePane(row.paneID) } label: { Label("Close Pane", image: "ui.x") }
     }
 
-    /// A sub-agent's: show it or keep it as a tab; a kept one, go to its tab.
+    /// A sub-agent's: show it or keep it as a tab; a kept one, go to its tab; Close.
     @ViewBuilder
     private func kidMenu(_ kid: SubAgent, parent: PhoneListLine.Item) -> some View {
         if let pane = kid.paneID {
@@ -211,6 +219,8 @@ struct PhoneAgentList: View {
             Button { controller.open(kid, from: parent.row.paneID) } label: { Label("Show", image: "ui.terminal") }
             Button { controller.keep(kid.terminal.address) } label: { Label("Keep as Tab", image: "ui.plus") }
         }
+        Divider()
+        Button(role: .destructive) { controller.close(kid) } label: { Label("Close", image: "ui.x") }
     }
 
     // MARK: Empty

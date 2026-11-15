@@ -194,6 +194,19 @@ struct EngineTests {
         try await eventually { ws.space("spB") == nil }
     }
 
+    /// Close on a sub-agent's row: it ends, and so do the sub-agents it started, but not a kept one.
+    @Test func endingASubAgentKillsItsTreeButSparesKeptOnes() async throws {
+        let core = makeCore()
+        core.addTerminal(terminalJSON("t50", parent: "t3"))
+        core.addTerminal(terminalJSON("t51", parent: "mock/t50"))
+        core.addTerminal(terminalJSON("t52", labels: ["herdr.space": "spX"], parent: "t50"))
+        let (ws, _) = try await start(core)
+        try await ws.endTerminal("t50")
+        #expect(core.calls("terminal.kill").compactMap { $0["terminal"]?.string } == ["t50", "t51"])
+        #expect(core.doc("herdr-app")?.value.layoutSpaces.count == 2)
+        await #expect(throws: WorkspaceError.self) { try await ws.endTerminal("t404") }
+    }
+
     /// Keep: a sub-agent gets a tab right after its parent's (labels first, then
     /// keep, then the document); it still shows under its parent.
     @Test func keepGivesASubAgentATabNextToItsParent() async throws {

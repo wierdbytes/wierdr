@@ -224,6 +224,14 @@ public final class Workspace {
         return try await backend.keepAsTab(address, in: spaceID, after: afterTab)
     }
 
+    /// End a terminal that has no pane (a sub-agent shown under its parent) and the
+    /// sub-agents it started that have none either (`terminal.kill`). In the demo, here only.
+    public func endTerminal(_ address: String) async throws {
+        if isLocal { return endHere(address) }
+        guard let backend else { throw WorkspaceError.notConnected }
+        try await backend.endTerminal(address)
+    }
+
     /// The person is looking at these agents now, and only these (pass all of
     /// them each time; `[]` when nothing is on screen or the app is in the
     /// background): raise their shared `herdr.seen` to their current turn
@@ -275,6 +283,20 @@ public final class Workspace {
         if list != spaces { spaces = list }
     }
 
+    /// The demo's `terminal.kill`: it and its descendants without a pane are no longer live.
+    private func endHere(_ address: String) {
+        let shown = Set(spaces.flatMap { $0.tabs.flatMap { $0.panes.compactMap(\.terminal) } })
+        var doomed = [address], i = 0
+        while i < doomed.count {
+            let parent = doomed[i]
+            doomed += terminals.values
+                .filter { $0.parent == parent && $0.isLive && !shown.contains($0.address) && !doomed.contains($0.address) }
+                .map(\.address)
+            i += 1
+        }
+        for a in doomed { changeHere(a) { $0.isLive = false } }
+    }
+
     private func changeHere(_ address: String, _ change: (inout TerminalInfo) -> Void) {
         guard var t = terminals[address] else { return }
         change(&t)
@@ -302,6 +324,7 @@ protocol WorkspaceBackend: AnyObject {
     func moveSpace(_ spaceID: String, before: String?) async throws
     func moveTab(_ tabID: String, to index: Int) async throws
     func keepAsTab(_ address: String, in spaceID: String, after: String?) async throws -> String
+    func endTerminal(_ address: String) async throws
     func markSeen(_ addresses: [String])
     func markUnread(_ address: String)
     func markRead(_ address: String)

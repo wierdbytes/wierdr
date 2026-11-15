@@ -4,8 +4,9 @@ import UIKit.UIGestureRecognizerSubclass
 
 // Telegram's swipe actions on a chat row (ItemListRevealOptionsNode, ItemListRevealMotion,
 // ItemListRevealTouchGestureRecognizer), for the rows of the iPhone's list: round 50-pt buttons
-// with a label under them, revealed in the strip the row slides away from; the outermost one
-// runs on a full swipe. See `PhoneListRow` for the row that uses them.
+// with a label under them (Close: the row's full height, no label), revealed in the strip the
+// row slides away from; the outermost one runs on a full swipe. See `PhoneListRow` for the row
+// that uses them.
 
 /// One swipe action of a row: a round button, its label under it.
 struct PhoneSwipeAction: Identifiable {
@@ -14,6 +15,9 @@ struct PhoneSwipeAction: Identifiable {
     var symbol: String
     var color: Color
     var iconColor: Color = .white
+    /// The button takes the row's full height (rounded as the plate is) and has no
+    /// label under it; the title stays for VoiceOver.
+    var fillsRow = false
     var run: () -> Void
 }
 
@@ -170,22 +174,25 @@ struct PhoneSwipeButtons: View {
         let iconShift = (g.width / 2 - (m.compact ? 16 : 20)) * e * (side == .leading ? 1 : -1)
         return Button { tap(action) } label: {
             VStack(spacing: PhoneSwipeMetrics.titleSpacing) {
-                Capsule()
+                let h = action.fillsRow ? height : m.buttonHeight
+                RoundedRectangle(cornerRadius: min(26, h / 2), style: .continuous)
                     .fill(action.color)
-                    .frame(width: g.width, height: m.buttonHeight)
+                    .frame(width: g.width, height: h)
                     .overlay {
                         Image(systemName: action.symbol)
                             .font(.system(size: m.compact ? 17 : 22, weight: .semibold))
                             .foregroundStyle(action.iconColor)
                             .offset(x: iconShift)
                     }
-                Text(action.title)
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.muted)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .frame(height: PhoneSwipeMetrics.titleHeight)
-                    .opacity(1 - e)
+                if !action.fillsRow {
+                    Text(action.title)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.muted)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .frame(height: PhoneSwipeMetrics.titleHeight)
+                        .opacity(1 - e)
+                }
             }
             .frame(width: stretched ? g.width : m.slotWidth)
             .contentShape(Rectangle())

@@ -40,7 +40,7 @@ final class WorkspaceController {
     var rename: RenameRequest?
 
     struct CloseRequest: Identifiable {
-        enum Target { case space(String), tab(String), pane(String) }
+        enum Target { case space(String), tab(String), pane(String), terminal(String) }
         var id = UUID()
         var target: Target
         var title: String
@@ -224,6 +224,18 @@ final class WorkspaceController {
         }
     }
 
+    /// A sub-agent's Close (a swipe, its menu): kept, its pane closes (`closePane`);
+    /// else it ends, with the sub-agents it started. Asks first, as for a pane.
+    func close(_ kid: SubAgent) {
+        if let pane = kid.paneID { return closePane(pane) }
+        let t = kid.terminal
+        confirmClose = kid.isAgent
+            ? CloseRequest(target: .terminal(t.address), title: "Close \(t.program.name)?",
+                           message: "The sub-agent will be stopped.")
+            : CloseRequest(target: .terminal(t.address), title: "Close \(Format.processName(t))?",
+                           message: "The terminal will be stopped.")
+    }
+
     enum Direction { case left, right, up, down }
 
     /// ⌘⌥arrows: focus the geometric neighbor of the focused pane in the active tab.
@@ -301,13 +313,16 @@ final class WorkspaceController {
         }
     }
 
-    /// ⌘⇧W: close the focused pane (asks first when it runs an agent).
+    /// ⌘⇧W: close the focused pane (asks first when it runs an agent or a live terminal).
     func closePane(_ paneID: String? = nil) {
         guard let paneID = paneID ?? focusedPane?.id else { return }
         let pane = workspace.location(ofPane: paneID)?.tab.panes.first { $0.id == paneID }
         if let t = workspace.terminal(pane?.terminal), t.isAgent {
             confirmClose = CloseRequest(target: .pane(paneID), title: "Close \(t.program.name)?",
                                         message: "The agent in this pane will be stopped.")
+        } else if let t = workspace.terminal(pane?.terminal), t.isLive {
+            confirmClose = CloseRequest(target: .pane(paneID), title: "Close \(Format.processName(t))?",
+                                        message: "The terminal in this pane will be closed.")
         } else {
             run("Close pane") { [workspace] in try await workspace.closePane(paneID) }
         }
@@ -325,6 +340,7 @@ final class WorkspaceController {
         case .space(let id): run("Close space") { [workspace] in try await workspace.closeSpace(id) }
         case .tab(let id): run("Close tab") { [workspace] in try await workspace.closeTab(id) }
         case .pane(let id): run("Close pane") { [workspace] in try await workspace.closePane(id) }
+        case .terminal(let address): run("Close") { [workspace] in try await workspace.endTerminal(address) }
         }
     }
 
