@@ -127,4 +127,16 @@ enum LimitsFixture {
         let codex = Limits.parse(F.doc(["codex.d4800446": F.codex()]))[0]
         #expect(Limits.accountName(codex) == "dev")
     }
+
+    @Test func symbols() {
+        func s(_ id: String, _ label: String) -> String {
+            Limits.symbol(LimitWindow(id: id, label: label, used: 0, at: t0))
+        }
+        #expect(s("5h", "5 hours") == "5" && s("7d", "7 days") == "7" && s("15m", "15 minutes") == "15")
+        #expect(s("7d_opus", "Opus") == "O" && s("7d_sonnet", "Sonnet") == "S")
+        #expect(s("7d_fable", "Fable") == "F" && s("7d_fable", "7d_fable") == "F")
+        #expect(s("bengalfox.5h", "GPT-5.3-Codex-Spark 5h") == "G")
+        #expect(s("code_review.7d", "Code review 7d") == "C")
+        #expect(s("bengalfox.5h", "5h") == "B")
+    }
 }

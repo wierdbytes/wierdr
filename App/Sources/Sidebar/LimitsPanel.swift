@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 import WierdrModel
 
-/// Subscription limits at the bottom of the sidebar (and of the iPhone's
-/// list), like the desktop's `limits` mod in its sidebar: one row per account
+/// Subscription limits at the bottom of the sidebar, like the desktop's
+/// `limits` mod in its sidebar: one row per account
 /// (provider icon, name, plan); open, every limit under it as a 3 pt bar with
 /// a tick where the window's time stands, its share used colored by pace, and
 /// when it resets. Closed, the account shows its headline limit (the pinned
@@ -14,10 +14,10 @@ import WierdrModel
 /// account's headline (again: unpin). Both are remembered on this device.
 /// A closed account's row reads like an open one's limits (bar with its tick,
 /// share, reset), and their columns line up.
+///
+/// The iPhone's list has them as rings in its header instead (`PhoneLimits`),
+/// its popover drawn with the parts here in the `large` sizes.
 struct LimitsPanel: View {
-    /// iPhone: bigger rows and text.
-    var large = false
-
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
     @AppStorage("limits.closed") private var closedRaw = ""
@@ -39,13 +39,13 @@ struct LimitsPanel: View {
                                     multi: accounts.filter { $0.provider == account.provider }.count > 1,
                                     open: !closed.contains(account.id),
                                     pinned: pinned[account.id],
-                                    stacked: !large && width > 0 && width < 276,
+                                    stacked: width > 0 && width < 276,
                                     toggle: { toggle(account.id) },
                                     pin: { pin(account.id, $0) })
                     }
                 }
             }
-            .padding(.horizontal, large ? 12 : 10)
+            .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
@@ -58,7 +58,7 @@ struct LimitsPanel: View {
         }
     }
 
-    private var size: Size { large ? .large : .regular }
+    private var size: Size { .regular }
 
     // MARK: Remembered state
 
@@ -103,6 +103,7 @@ struct LimitsPanel: View {
 
         static let regular = Size(row: 28, limit: 20, limitStacked: 30, name: 12.5, text: 11.5, small: 10.5, icon: 13,
                                   label: 52, pct: 42, reset: 46)
+        /// The iPhone header's popover (`PhoneLimits`).
         static let large = Size(row: 40, limit: 30, limitStacked: 40, name: 15, text: 13.5, small: 12.5, icon: 17,
                                 label: 64, pct: 50, reset: 58)
     }
@@ -229,7 +230,7 @@ private struct AccountView: View {
         var parts = [Limits.providerName(account.provider)]
         if multi { parts.append(Limits.accountName(account)) }
         if let plan = Limits.planName(account.provider, account.plan) { parts.append(plan) }
-        if let top { parts.append(LimitRow.spoken(top, now: now)) }
+        if let top { parts.append(Limits.spoken(top, now: now)) }
         return parts.joined(separator: ", ")
     }
 }
@@ -278,7 +279,7 @@ private struct LimitRow: View {
         }
         .buttonStyle(PressStyle())
         .onHover { hovering = $0 }
-        .accessibilityLabel(Self.spoken(window, now: now))
+        .accessibilityLabel(Limits.spoken(window, now: now))
         .accessibilityHint(isPinned ? "Unpins it" : "Shows it on the closed account")
         .accessibilityAddTraits(isPinned ? .isSelected : [])
     }
@@ -290,19 +291,12 @@ private struct LimitRow: View {
             .lineLimit(1)
             .truncationMode(.tail)
     }
-
-    static func spoken(_ w: LimitWindow, now: Date) -> String {
-        if Limits.isReset(w, now: now) { return "\(w.label), reset" }
-        var text = "\(w.label) \(Limits.percent(w.used))"
-        if let at = w.resetsAt { text += ", resets in \(Limits.span(at.timeIntervalSince(now)))" }
-        return text
-    }
 }
 
 // MARK: - Parts
 
 /// Time to the window's reset, in its fixed-width column (empty once reset).
-private struct Resets: View {
+struct Resets: View {
     var window: LimitWindow
     var now: Date
     var size: LimitsPanel.Size
@@ -320,7 +314,7 @@ private struct Resets: View {
 }
 
 /// The share used in its pace color, with › / ›› when running ahead.
-private struct Percent: View {
+struct Percent: View {
     var window: LimitWindow
     var now: Date
     var size: LimitsPanel.Size
@@ -348,9 +342,8 @@ private struct Percent: View {
 }
 
 /// A 3 pt track: the used share filled in its pace color, a tick where the
-/// window's time stands; what's used past the tick is drawn 5 pt tall, so
-/// running ahead shows without numbers.
-private struct LimitBar: View {
+/// window's time stands.
+struct LimitBar: View {
     var window: LimitWindow
     var now: Date
 
@@ -360,17 +353,13 @@ private struct LimitBar: View {
         let reset = Limits.isReset(window, now: now)
         let used = reset ? 0 : min(100, max(0, window.used)) / 100
         let tick = reset ? nil : Limits.elapsed(window, now: now)
-        let under = tick.map { min(used, $0) } ?? used
         let color = theme.limitColor(Limits.tone(window, now: now).tone)
         GeometryReader { geo in
             let w = geo.size.width
             ZStack(alignment: .leading) {
                 Capsule().fill(theme.raised).frame(height: 3)
-                if under > 0 {
-                    Capsule().fill(color).frame(width: max(2, w * under), height: 3)
-                }
-                if let tick, used > tick {
-                    Capsule().fill(color).frame(width: w * (used - tick), height: 5).offset(x: w * tick)
+                if used > 0 {
+                    Capsule().fill(color).frame(width: max(2, w * used), height: 3)
                 }
                 if let tick {
                     Rectangle().fill(theme.foreground.opacity(0.5)).frame(width: 1, height: 9).offset(x: min(w - 1, w * tick))
@@ -384,7 +373,7 @@ private struct LimitBar: View {
     }
 }
 
-private struct PlanBadge: View {
+struct PlanBadge: View {
     var text: String
     var size: LimitsPanel.Size
     @Environment(\.theme) private var theme
@@ -402,7 +391,7 @@ private struct PlanBadge: View {
 }
 
 /// The provider's program icon (`program.claude`, `program.codex`), else its initial on a tile.
-private struct ProviderIcon: View {
+struct ProviderIcon: View {
     var provider: String
     var size: CGFloat
     @Environment(\.theme) private var theme
@@ -422,6 +411,16 @@ private struct ProviderIcon: View {
                 .frame(width: size, height: size)
                 .background(theme.raised, in: RoundedRectangle(cornerRadius: 3))
         }
+    }
+}
+
+extension Limits {
+    /// A limit as VoiceOver reads it: "5 hours 37%, resets in 16m".
+    static func spoken(_ w: LimitWindow, now: Date) -> String {
+        if isReset(w, now: now) { return "\(w.label), reset" }
+        var text = "\(w.label) \(percent(w.used))"
+        if let at = w.resetsAt { text += ", resets in \(span(at.timeIntervalSince(now)))" }
+        return text
     }
 }
 

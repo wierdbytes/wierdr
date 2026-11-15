@@ -4,10 +4,11 @@ import WierdrModel
 /// The iPhone's list, Telegram's chat list: a tab per space after "All"
 /// (`PhoneSpaceTabs`), their pages side by side (`PhoneSpacePager`: a swipe in the
 /// middle of the screen pages between them), and a header floating over the pages
-/// (they scroll under it): settings and the status counts (or the connection's state),
-/// the strip under them with + at its right (within the right thumb's reach). Go to comes out of a page pulled down past its top
-/// (`PhoneAgentList`, `PullToSearch`). At the bottom the subscription limits (not in
-/// landscape, where the header leaves the list little room). No agent is "current" here: the list shows no focus and never scrolls to one.
+/// (they scroll under it): settings, the status counts (or the connection's state) and
+/// the subscription limits (`PhoneLimits`), the strip under them with + at its right
+/// (within the right thumb's reach). The pages run to the screen's bottom (their rows
+/// scroll under the home indicator). Go to comes out of a page pulled down past its top
+/// (`PhoneAgentList`, `PullToSearch`). No agent is "current" here: the list shows no focus and never scrolls to one.
 ///
 /// The tab shown is remembered (`phone.tab`: "all" or the space's id); when its
 /// space goes, its neighbour takes over. Without spaces the strip fades out (+ stays
@@ -19,11 +20,10 @@ import WierdrModel
 struct PhoneHome: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    /// Landscape on an iPhone: the limits give their room to the list.
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var paging = PhoneSpacePaging()
     @State private var reorder = PhoneTabReorder()
     @State private var safeTop: CGFloat = 0
+    @State private var safeBottom: CGFloat = 0
 
     var body: some View {
         let tabs = self.tabs
@@ -32,35 +32,34 @@ struct PhoneHome: View {
         let headerHeight = safeTop + PhoneHomeHeader.height
         // Read here: the pages are made outside SwiftUI's update (`PhoneSpacePager`).
         let scrollToTop = paging.scrollToTop
-        VStack(spacing: 0) {
-            ZStack(alignment: .top) {
-                PhoneSpacePager(paging: paging, topInset: headerHeight,
-                                isEnabled: showsTabs && controller.compactColumn == .sidebar && !reorder.isActive,
-                                pageInputs: [AnyHashable(headerHeight), AnyHashable(showsTabs), AnyHashable(scrollToTop)]) { scope in
-                    PhoneAgentList(scope: scope, topInset: headerHeight, edgeSwipesOnly: showsTabs,
-                                   scrollToTop: scrollToTop[scope] ?? 0)
-                }
-                .modifier(PhoneReorderDim(isOn: reorder.isActive))
-                PhoneHeaderEdge(height: headerHeight)
-                PhoneHomeHeader(tabs: tabs, paging: paging, reorder: reorder, showsTabs: showsTabs)
-                    .padding(.top, safeTop)
-                if case .failed = controller.workspace.phase {
-                    // The reason and Retry, under the header (its title says "Not Connected").
-                    ConnectionBanner(top: headerHeight + 8)
-                }
+        let bottomInset = safeBottom
+        ZStack(alignment: .top) {
+            PhoneSpacePager(paging: paging, topInset: headerHeight,
+                            isEnabled: showsTabs && controller.compactColumn == .sidebar && !reorder.isActive,
+                            pageInputs: [AnyHashable(headerHeight), AnyHashable(bottomInset), AnyHashable(showsTabs),
+                                         AnyHashable(scrollToTop)]) { scope in
+                PhoneAgentList(scope: scope, topInset: headerHeight, bottomInset: bottomInset, edgeSwipesOnly: showsTabs,
+                               scrollToTop: scrollToTop[scope] ?? 0)
             }
-            .ignoresSafeArea(.container, edges: .top)
-            .animation(PhonePagingMotion.relayout, value: showsTabs)
-            .overlay(alignment: .bottom) {
-                ToastStack().padding(.horizontal, 12).padding(.bottom, 10)
-            }
-            if verticalSizeClass != .compact {
-                LimitsPanel(large: true)
-                    .modifier(PhoneReorderDim(isOn: reorder.isActive))
+            .modifier(PhoneReorderDim(isOn: reorder.isActive))
+            PhoneHeaderEdge(height: headerHeight)
+            PhoneHomeHeader(tabs: tabs, paging: paging, reorder: reorder, showsTabs: showsTabs)
+                .padding(.top, safeTop)
+            if case .failed = controller.workspace.phase {
+                // The reason and Retry, under the header (its title says "Not Connected").
+                ConnectionBanner(top: headerHeight + 8)
             }
         }
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
+        .animation(PhonePagingMotion.relayout, value: showsTabs)
+        .overlay(alignment: .bottom) {
+            ToastStack().padding(.horizontal, 12).padding(.bottom, 10)
+        }
         .background(theme.chrome.ignoresSafeArea())
-        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { safeTop = $0 }
+        .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: {
+            safeTop = $0.top
+            safeBottom = $0.bottom
+        }
         .onChange(of: tabs.map(\.scope), initial: true) { _, scopes in
             // The pages are only put in their places (a tab dragged over moves them by a page).
             withTransaction(Transaction(animation: nil)) {
@@ -101,10 +100,10 @@ struct PhoneHome: View {
 
 /// Telegram's chat-list header over the pages: a 44-pt row 10 pt under the status
 /// bar (settings in a glass circle where Telegram has Edit, the title in the middle,
-/// 16 pt from the sides), then 10 pt under it the strip and + in a glass circle as
+/// the limits at the right, 16 pt from the sides; `PhoneHeaderRow`), then 10 pt under it the strip and + in a glass circle as
 /// tall as the strip, 8 pt after it, 3 pt above the header's bottom. Without spaces
-/// only + is there, in the same place. While the tabs are reordered, the row has only
-/// Done (where settings is) and the title, and the strip takes +'s room.
+/// only + is there, in the same place. While the tabs are reordered, the row has
+/// Done (where settings is), the title and the limits dimmed, and the strip takes +'s room.
 private struct PhoneHomeHeader: View {
     var tabs: [PhoneSpaceTab]
     var paging: PhoneSpacePaging
@@ -137,14 +136,9 @@ private struct PhoneHomeHeader: View {
     }
 
     private var row: some View {
-        // The widest side: Done while reordering.
-        let sideWidth: CGFloat = 72
-        return ZStack {
-            PhoneHomeTitle()
-                // Centered on the screen, clear of the widest side.
-                .padding(.horizontal, Self.sideInset + sideWidth + 8)
-            ComposerGlassGroup {
-                HStack(spacing: 0) {
+        PhoneHeaderRow {
+            HStack(spacing: 0) {
+                ComposerGlassGroup {
                     if reorder.isActive {
                         done
                     } else {
@@ -157,15 +151,19 @@ private struct PhoneHomeHeader: View {
                         .composerGlass(Circle(), theme: theme)
                         .accessibilityLabel("Settings")
                     }
-                    Spacer(minLength: 0)
-                    if !reorder.isActive {
-                        // Go to is a pull of the list; VoiceOver's is here.
-                        GoToAccessibilityButton()
-                    }
                 }
             }
-            .padding(.horizontal, Self.sideInset)
+            PhoneHomeTitle()
+            HStack(spacing: 0) {
+                PhoneLimits(height: Self.rowHeight)
+                    .modifier(PhoneReorderDim(isOn: reorder.isActive))
+                if !reorder.isActive {
+                    // Go to is a pull of the list; VoiceOver's is here.
+                    GoToAccessibilityButton()
+                }
+            }
         }
+        .padding(.horizontal, Self.sideInset)
     }
 
     /// The strip (none without spaces) and + at its right (none while reordering).
@@ -200,6 +198,35 @@ private struct PhoneHomeHeader: View {
         }
         .buttonStyle(AttachPressStyle())
         .composerGlass(Capsule(), theme: theme)
+    }
+}
+
+/// The header's row: its leading button at the left, what's at its right (the limits)
+/// at the right, and the title (three views, in that order) in the middle of the row,
+/// so of the screen, when it fits there clear of both by 8 pt; else as near the middle
+/// as it fits between them, and as wide as the room there.
+private struct PhoneHeaderRow: Layout {
+    static let spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        return CGSize(width: proposal.width ?? sizes.reduce(0) { $0 + $1.width } + 2 * Self.spacing,
+                      height: proposal.height ?? sizes.map(\.height).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 3 else { return }
+        let (leading, title, trailing) = (subviews[0], subviews[1], subviews[2])
+        let l = leading.sizeThatFits(.unspecified), t = trailing.sizeThatFits(.unspecified)
+        leading.place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(l))
+        trailing.place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing, proposal: ProposedViewSize(t))
+        let lo = bounds.minX + l.width + Self.spacing
+        let hi = bounds.maxX - t.width - Self.spacing
+        let room = max(0, hi - lo)
+        let width = min(room, title.sizeThatFits(ProposedViewSize(width: room, height: bounds.height)).width)
+        let x = min(max(bounds.midX - width / 2, lo), hi - width)
+        title.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading,
+                    proposal: ProposedViewSize(width: width, height: bounds.height))
     }
 }
 

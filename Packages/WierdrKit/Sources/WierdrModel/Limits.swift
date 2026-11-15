@@ -275,4 +275,19 @@ public enum Limits {
 
     /// `›`, `››` or nothing.
     public static func chevrons(_ speed: Int) -> String { speed == 2 ? "››" : speed == 1 ? "›" : "" }
+
+    /// A window's mark inside its ring: a plain window's number (`5h` → 5, `7d` → 7);
+    /// a named one's initial, from its label ("Opus" → O, "Fable" → F, Codex's
+    /// "GPT-5.3-Codex-Spark 5h" → G), else from the name in its id when the label
+    /// is only the id (`7d_fable` → F).
+    public static func symbol(_ w: LimitWindow) -> String {
+        let digits = w.id.prefix(while: \.isNumber)
+        let rest = w.id.dropFirst(digits.count)
+        let unit = !digits.isEmpty && rest.first.map { "mhd".contains($0) } == true
+        if unit, rest.count == 1 { return String(digits) }
+        if let c = w.label.first, c.isLetter { return c.uppercased() }
+        let name = unit ? rest.dropFirst() : Substring(w.id)
+        if let c = name.first(where: \.isLetter) { return c.uppercased() }
+        return String(w.id.prefix(1)).uppercased()
+    }
 }

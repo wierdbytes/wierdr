@@ -32,6 +32,8 @@ struct PhoneAgentList: View {
     var scope: PhoneListScope
     /// Room the floating header takes over the top of the page (content starts under it, scrolls under it).
     var topInset: CGFloat
+    /// The screen's bottom safe area the page runs into (the last row scrolls up out of it).
+    var bottomInset: CGFloat = 0
     /// The pager pages between several tabs: a row's swipe actions start only in the edge zones
     /// (x < e or x > width - e, e = clamp(width / 6, 22, 80)), the middle belongs to the pager. False: anywhere.
     var edgeSwipesOnly: Bool
@@ -78,6 +80,8 @@ struct PhoneAgentList: View {
         .scrollPosition($position)
         .contentMargins(.top, topInset, for: .scrollContent)
         .contentMargins(.top, topInset, for: .scrollIndicators)
+        .contentMargins(.bottom, bottomInset, for: .scrollContent)
+        .contentMargins(.bottom, bottomInset, for: .scrollIndicators)
         .onScrollGeometryChange(for: CGFloat.self) { g in
             g.containerSize.height - g.contentInsets.top - g.contentInsets.bottom
         } action: { _, h in

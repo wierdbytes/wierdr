@@ -115,6 +115,7 @@ extension Workspace {
             LimitAccount(id: "claude.849d2d8c", provider: "claude", account: "849d2d8c", status: "ok", binding: "5h", at: now,
                          host: "mentoair", windows: [window("5h", "5 hours", 18_000, used: 37, left: 16 * 60),
                                                      window("7d", "7 days", 604_800, used: 58, left: 40 * 3600),
+                                                     window("7d_fable", "Fable", 604_800, used: 44, left: 5 * 86_400),
                                                      window("7d_oi", "7 days + extra", 604_800, used: 58, left: 40 * 3600)]),
             LimitAccount(id: "codex.d4800446", provider: "codex", account: "d4800446", label: "dev@example.com", plan: "plus",
                          at: now.addingTimeInterval(-3600),
