@@ -3,13 +3,13 @@ import UIKit
 import WierdrModel
 
 /// Telegram's folder motion (`ChatListContainerNode`, `HorizontalTabsComponent`): its
-/// "spring" transition curve, a cubic bezier, for the pages and the strip's pill.
+/// "spring" transition curve, a cubic bezier (`PhoneMotion.telegramCurve`), for the
+/// pages and the strip's pill.
 enum PhonePagingMotion {
     /// The pages and the pill settling after a swipe; the pill and the strip after a tap.
     static let settle = Animation.timingCurve(0.38, 0.7, 0.125, 1.0, duration: 0.45)
     static let settleDuration = 0.45
     /// The pages sliding after a tap on a tab.
-    static let tapSlide = Animation.timingCurve(0.38, 0.7, 0.125, 1.0, duration: 0.35)
     static let tapSlideDuration = 0.35
     /// Tabs coming and going: the strip lays itself out again.
     static let relayout = Animation.easeInOut(duration: 0.2)
@@ -19,28 +19,30 @@ enum PhonePagingMotion {
 
     /// A swipe past the first or last tab: 0.4 of the finger's way at first, never past 600 pt.
     static func rubberBand(_ x: CGFloat) -> CGFloat { 0.4 * x / (1 + x / 1500) }
+}
 
-    /// How far along the curve the motion is at `t` (0...1 of its duration).
-    static func progress(_ t: Double) -> Double {
-        let (x1, y1, x2, y2) = (0.38, 0.7, 0.125, 1.0)
-        func bezier(_ s: Double, _ a: Double, _ b: Double) -> Double {
-            let u = 1 - s
-            return 3 * u * u * s * a + 3 * u * s * s * b + s * s * s
-        }
-        let t = min(max(t, 0), 1)
-        var lo = 0.0, hi = 1.0
-        for _ in 0..<32 {
-            let mid = (lo + hi) / 2
-            if bezier(mid, x1, x2) < t { lo = mid } else { hi = mid }
-        }
-        return bezier((lo + hi) / 2, y1, y2)
-    }
+/// What moves the pages on screen (`PhonePagerController`): Core Animation, outside SwiftUI.
+@MainActor
+protocol PhonePagerSurface: AnyObject {
+    /// Where the pages are drawn now (mid-slide too): page i is (i − position) widths from the left.
+    var drawnPosition: CGFloat { get }
+    /// The pages for `PhoneSpacePaging.pages` in their places at its position, at once (a slide
+    /// stops): the ones missing are made, the others let go.
+    func place()
+    /// The finger: the pages at `position`, at once.
+    func track(_ position: CGFloat)
+    /// From where the pages are drawn to `position` along Telegram's curve; `done` when it
+    /// gets there (not when something else took the pages first).
+    func slide(to position: CGFloat, duration: Double, done: @escaping () -> Void)
 }
 
 /// Which tab of the iPhone's list shows, and how far a swipe or a slide has moved
 /// the pages: shared by the strip (`PhoneSpaceTabs`, its pill) and the pages
 /// (`PhoneSpacePager`). Telegram's folder paging: the pages and the pill follow the
 /// finger, and settle on a tab when it lets go.
+///
+/// The pages move by Core Animation (`PhonePagerSurface`), so their place isn't
+/// observed: a finger's step changes only the pill here, and the views that draw it.
 @MainActor
 @Observable
 final class PhoneSpacePaging {
@@ -48,40 +50,50 @@ final class PhoneSpacePaging {
     private(set) var scopes: [PhoneListScope] = [.all]
     /// The page in place, or the one the pages are settling on.
     private(set) var selected = 0
-    /// How far the pages are off `selected`, in page widths; a finger moving right is positive.
-    private(set) var fraction: CGFloat = 0
     /// The strip's pill: its tab and how far toward the next one (same sign as `fraction`).
     /// After a swipe it moves with the pages; after a tap on its own, slower.
     private(set) var pillIndex = 0
     private(set) var pillFraction: CGFloat = 0
     /// A finger is moving the pages.
     private(set) var isDragging = false
-    /// A tap on a tab that isn't next to the current one: the page it left, sliding
-    /// out beside the new one (none of the tabs between show).
-    private(set) var leaving: Int?
     /// Bumped by a tap on the current tab: its list scrolls to the top.
     private(set) var scrollToTop: [PhoneListScope: Int] = [:]
 
-    /// The pages' last animated move, to know where they are on screen when a finger
-    /// takes them mid-way (SwiftUI doesn't tell).
-    @ObservationIgnored private var motion: Motion?
+    /// How far the pages are off `selected`, in page widths; a finger moving right is positive.
+    @ObservationIgnored private(set) var fraction: CGFloat = 0
+    /// A tap on a tab that isn't next to the current one: the page it left, sliding
+    /// out beside the new one (none of the tabs between show).
+    @ObservationIgnored private(set) var leaving: Int?
+    @ObservationIgnored weak var surface: PhonePagerSurface?
     /// Where the pages were when the finger took them, in page widths.
     @ObservationIgnored private var dragStart: CGFloat = 0
-    /// Counts the taps' slides, so a finished one doesn't end a later one.
+    /// Counts the slides, so a finished one doesn't end a later one.
     @ObservationIgnored private var slideID = 0
-
-    private struct Motion {
-        var start: CFTimeInterval
-        var duration: Double
-        /// `position` before and after.
-        var from: CGFloat
-        var to: CGFloat
-    }
 
     /// The tab at the center of the screen, fractional while moving (page i is at (i − position) widths).
     var position: CGFloat { CGFloat(selected) - fraction }
 
     var selectedScope: PhoneListScope { scopes[min(selected, scopes.count - 1)] }
+
+    /// The tab last shown, kept across launches (`phone.tab`: "all" or a space's id). In
+    /// UserDefaults, not SwiftUI's `@AppStorage` (a new tab would redraw the whole list),
+    /// and written once the pages are at rest: any write redraws every `@AppStorage`
+    /// view (the limits under the list).
+    var savedScope: PhoneListScope {
+        let id = UserDefaults.standard.string(forKey: Self.savedKey) ?? "all"
+        return id == "all" || id.isEmpty ? .all : .space(id)
+    }
+
+    private static let savedKey = "phone.tab"
+
+    private func saveTab() {
+        let id: String
+        switch selectedScope {
+        case .all: id = "all"
+        case .space(let space): id = space
+        }
+        if UserDefaults.standard.string(forKey: Self.savedKey) != id { UserDefaults.standard.set(id, forKey: Self.savedKey) }
+    }
 
     /// One page on screen: the tab it shows and where it sits (its index; for a tab
     /// left by a far tap, the place beside the new one).
@@ -128,7 +140,9 @@ final class PhoneSpacePaging {
         pillFraction = isDragging ? fraction : 0
         leaving = leavingScope.flatMap { scopes.firstIndex(of: $0) }.flatMap { $0 == selected ? nil : $0 }
         if scopes.count < 2 { fraction = 0; pillFraction = 0 }
-        motion = nil
+        slideID += 1
+        surface?.place()
+        saveTab()
     }
 
     /// A tap on tab `index`: the pages slide to it (0.35 s), the pill moves (0.45 s).
@@ -143,43 +157,35 @@ final class PhoneSpacePaging {
             pillIndex = index
             pillFraction = 0
         }
-        let from = presentedPosition()
+        slideID += 1
+        let id = slideID
         if abs(index - selected) <= 1 && leaving == nil || index == selected {
             // Next to it: the pages slide side by side.
-            withAnimation(PhonePagingMotion.tapSlide) {
-                selected = index
-                fraction = 0
+            selected = index
+            fraction = 0
+            surface?.slide(to: CGFloat(index), duration: PhonePagingMotion.tapSlideDuration) { [weak self] in
+                guard let self, id == self.slideID else { return }
+                self.surface?.place()
+                self.saveTab()
             }
-            motion = Motion(start: CACurrentMediaTime(), duration: PhonePagingMotion.tapSlideDuration,
-                            from: from, to: CGFloat(index))
             return
         }
         // Further: the page it leaves goes beside the new one where it is on screen, then both
         // slide (a lower tab comes from the left).
+        let from = surface?.drawnPosition ?? position
         let old = selected
         let place = index + (index > old ? -1 : 1)
         let oldOffset = CGFloat(old) - from
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) {
-            leaving = old
-            selected = index
-            fraction = CGFloat(index) - (CGFloat(place) - oldOffset)
-        }
-        slideID += 1
-        let id = slideID
-        let start = position
-        // Next turn: the new page has been placed beside the old one before they move.
-        Task { @MainActor [weak self] in
-            guard let self, id == self.slideID, !self.isDragging else { return }
-            withAnimation(PhonePagingMotion.tapSlide, completionCriteria: .logicallyComplete) {
-                self.fraction = 0
-            } completion: { [weak self] in
-                guard let self, id == self.slideID, !self.isDragging else { return }
-                self.leaving = nil
-            }
-            self.motion = Motion(start: CACurrentMediaTime(), duration: PhonePagingMotion.tapSlideDuration,
-                                 from: start, to: CGFloat(index))
+        leaving = old
+        selected = index
+        fraction = CGFloat(index) - (CGFloat(place) - oldOffset)
+        surface?.place()
+        fraction = 0
+        surface?.slide(to: CGFloat(index), duration: PhonePagingMotion.tapSlideDuration) { [weak self] in
+            guard let self, id == self.slideID else { return }
+            self.leaving = nil
+            self.surface?.place()
+            self.saveTab()
         }
     }
 
@@ -187,20 +193,21 @@ final class PhoneSpacePaging {
 
     /// A finger took the pages: they go on from where they are, even mid-slide.
     func dragBegan() {
-        let at = presentedPosition()
+        let at = surface?.drawnPosition ?? position
         slideID += 1
-        motion = nil
+        // A far tap's slide ends here: the page beside the new one is its real neighbour again.
+        leaving = nil
+        fraction = CGFloat(selected) - at
+        dragStart = fraction
+        // Its neighbours (made after the last slide, or now if it's still on its way).
+        surface?.place()
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) {
             isDragging = true
-            // A far tap's slide ends here: the page beside the new one is its real neighbour again.
-            leaving = nil
-            fraction = CGFloat(selected) - at
-            pillIndex = selected
+            if pillIndex != selected { pillIndex = selected }
             pillFraction = fraction
         }
-        dragStart = fraction
     }
 
     /// The finger moved `translation` points (right is positive) on pages `width` wide.
@@ -210,11 +217,12 @@ final class PhoneSpacePaging {
         // Past the first or last tab the pages resist.
         if selected == 0 && x > 0 { x = PhonePagingMotion.rubberBand(x) }
         if selected == scopes.count - 1 && x < 0 { x = -PhonePagingMotion.rubberBand(-x) }
+        fraction = x / width + dragStart
+        surface?.track(position)
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) {
-            fraction = x / width + dragStart
-            pillIndex = selected
+            if pillIndex != selected { pillIndex = selected }
             pillFraction = fraction
         }
     }
@@ -232,67 +240,246 @@ final class PhoneSpacePaging {
             }
         }
         target = min(max(target, 0), scopes.count - 1)
-        let from = position
+        slideID += 1
+        let id = slideID
+        // The pages' slide first, sent to the render server before SwiftUI redraws what the
+        // new tab changes (the pill, the header, the strip): no frame waits for that.
+        surface?.slide(to: CGFloat(target), duration: PhonePagingMotion.settleDuration) { [weak self] in
+            guard let self, id == self.slideID else { return }
+            // At rest: the new tab's neighbours are made now, not while the pages move.
+            self.surface?.place()
+            self.saveTab()
+        }
+        CATransaction.flush()
+        fraction = 0
         withAnimation(PhonePagingMotion.settle) {
             isDragging = false
             selected = target
-            fraction = 0
             pillIndex = target
             pillFraction = 0
         }
-        motion = Motion(start: CACurrentMediaTime(), duration: PhonePagingMotion.settleDuration,
-                        from: from, to: CGFloat(target))
-    }
-
-    /// Where the pages are on screen now: mid-way through their last animated move, else where they rest.
-    private func presentedPosition() -> CGFloat {
-        guard let m = motion else { return position }
-        let t = (CACurrentMediaTime() - m.start) / m.duration
-        guard t < 1 else {
-            motion = nil
-            return position
-        }
-        return m.from + (m.to - m.from) * CGFloat(PhonePagingMotion.progress(t))
     }
 }
 
+// MARK: - The pages
+
 /// The iPhone list's pages, one per tab, side by side and as wide as the screen:
 /// Telegram's folder paging. Only the current page and its neighbours exist (and
-/// during a far tap's slide, the page it left); page i sits (i − selected + fraction)
-/// widths from the left, without parallax.
+/// during a far tap's slide, the page it left); page i sits (i − position) widths
+/// from the left, without parallax.
+///
+/// The pages are UIKit views (`PhonePagerController`), each a hosting controller with
+/// its tab's list, on one layer that a finger moves and Core Animation settles: no
+/// SwiftUI update per frame, and the slide plays on at the display's rate whatever the
+/// main thread does. A new tab's neighbour is made once the pages are at rest.
 ///
 /// A horizontal swipe that starts in the middle of the screen (not in the edge zones,
 /// which are the rows' swipe actions; not over the header, `topInset`) moves the
 /// pages (`PhonePagerPan`); vertical moves are the pages' own scrolling.
-struct PhoneSpacePager<Page: View>: View {
+struct PhoneSpacePager<Page: View>: UIViewControllerRepresentable {
     var paging: PhoneSpacePaging
     /// The floating header's height over the pages' top: no swipes start there.
     var topInset: CGFloat
     /// Swipes page (more than one tab, the list on screen).
     var isEnabled: Bool
+    /// What the pages are made from besides their tab: the pages there are made again
+    /// only when it changes.
+    var pageInputs: AnyHashable
     /// A tab's page.
     @ViewBuilder var page: (PhoneListScope) -> Page
 
-    var body: some View {
-        GeometryReader { geo in
-            let width = geo.size.width
-            ZStack(alignment: .topLeading) {
-                ForEach(paging.pages, id: \.scope) { p in
-                    page(p.scope)
-                        // The page's top is the screen's: the header's room is `topInset`, not a safe area.
-                        .ignoresSafeArea(.container, edges: .top)
-                        .frame(width: width, height: geo.size.height)
-                        .offset(x: (CGFloat(p.place) - paging.position) * width)
-                        .allowsHitTesting(p.index == paging.selected)
-                        .accessibilityHidden(p.index != paging.selected)
-                }
+    @Environment(WorkspaceController.self) private var controller
+    @Environment(AppModel.self) private var app: AppModel?
+    @Environment(LiveConnector.self) private var connector: LiveConnector?
+
+    func makeUIViewController(context: Context) -> PhonePagerController {
+        let host = PhoneHostContext(context.environment, controller: controller, app: app, connector: connector)
+        let pager = PhonePagerController(paging: paging, host: host)
+        paging.surface = pager
+        return pager
+    }
+
+    func updateUIViewController(_ pager: PhonePagerController, context: Context) {
+        pager.host.update(context.environment)
+        pager.gesture.topInset = topInset
+        let enabled = isEnabled && paging.scopes.count > 1
+        // Off while a drag runs: it is cancelled, the pages settle back.
+        if pager.gesture.pan.isEnabled != enabled { pager.gesture.pan.isEnabled = enabled }
+        let page = self.page
+        pager.makePage = { scope in AnyView(page(scope).ignoresSafeArea(.container, edges: .top)) }
+        pager.refresh(inputs: pageInputs)
+    }
+
+    static func dismantleUIViewController(_ pager: PhonePagerController, coordinator: ()) {
+        pager.gesture.detach()
+    }
+}
+
+/// The pages' container: a clipping view with one moving layer (`canvas`), the pages on
+/// it at their places (page i at i widths), the layer at −position widths.
+final class PhonePagerController: UIViewController, PhonePagerSurface {
+    let paging: PhoneSpacePaging
+    let host: PhoneHostContext
+    let gesture = PhonePagerGesture()
+    /// A tab's page (its list), set by the representable.
+    var makePage: ((PhoneListScope) -> AnyView)?
+
+    private let canvas = Canvas()
+    private var hosts: [PhoneListScope: UIHostingController<PhoneHosted<AnyView>>] = [:]
+    private var size: CGSize = .zero
+    private var pageInputs: AnyHashable?
+    /// The slide under way (its id), nil at rest.
+    private var sliding: Int?
+    private var slideCount = 0
+    private static let slideKey = "slide"
+
+    init(paging: PhoneSpacePaging, host: PhoneHostContext) {
+        self.paging = paging
+        self.host = host
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func loadView() {
+        let view = PagerView()
+        view.pager = self
+        view.clipsToBounds = true // a neighbour doesn't show beside the pages (in landscape, in the side safe areas)
+        view.backgroundColor = .clear
+        canvas.backgroundColor = .clear
+        view.addSubview(canvas)
+        self.view = view
+        gesture.paging = paging
+        gesture.anchor = view
+    }
+
+    /// The representable updated: the pages there are made again if what they're made
+    /// from changed; pages are made or let go only at rest.
+    func refresh(inputs: AnyHashable) {
+        if inputs != pageInputs {
+            pageInputs = inputs
+            for (scope, host) in hosts {
+                if let page = makePage?(scope) { host.rootView = PhoneHosted(context: self.host, content: page) }
             }
-            .frame(width: width, height: geo.size.height, alignment: .topLeading)
-            // A neighbour doesn't show beside the pages (in landscape, in the side safe areas).
-            .clipped()
         }
-        .background {
-            PhonePagerGesture(paging: paging, topInset: topInset, isEnabled: isEnabled && paging.scopes.count > 1)
+        if sliding == nil { place() }
+    }
+
+    fileprivate func laidOut() {
+        guard view.bounds.size != size else { return }
+        size = view.bounds.size
+        canvas.bounds = CGRect(origin: .zero, size: size)
+        canvas.center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+        // A new size (rotation): every page and the layer where they belong, at once.
+        place()
+    }
+
+    // MARK: PhonePagerSurface
+
+    var drawnPosition: CGFloat {
+        let w = view.bounds.width
+        guard w > 0 else { return paging.position }
+        return -PhoneMotion.drawnTranslationX(canvas.layer) / w
+    }
+
+    func place() {
+        let size = view.bounds.size
+        guard size.width > 0 else { return }
+        if sliding != nil {
+            canvas.layer.removeAnimation(forKey: Self.slideKey)
+            sliding = nil
+        }
+        canvas.transform = CGAffineTransform(translationX: -paging.position * size.width, y: 0)
+        let pages = paging.pages
+        let wanted = Set(pages.map(\.scope))
+        for (scope, host) in hosts where !wanted.contains(scope) {
+            host.willMove(toParent: nil)
+            host.view.removeFromSuperview()
+            host.removeFromParent()
+            hosts[scope] = nil
+        }
+        for p in pages {
+            let host: UIHostingController<PhoneHosted<AnyView>>
+            if let h = hosts[p.scope] {
+                host = h
+            } else {
+                guard let page = makePage?(p.scope) else { continue }
+                host = .moving(PhoneHosted(context: self.host, content: page))
+                addChild(host)
+                canvas.addSubview(host.view)
+                host.didMove(toParent: self)
+                hosts[p.scope] = host
+            }
+            host.view.frame = CGRect(x: CGFloat(p.place) * size.width, y: 0, width: size.width, height: size.height)
+            let current = p.index == paging.selected
+            host.view.isUserInteractionEnabled = current
+            host.view.accessibilityElementsHidden = !current
+        }
+    }
+
+    func track(_ position: CGFloat) {
+        if sliding != nil {
+            canvas.layer.removeAnimation(forKey: Self.slideKey)
+            sliding = nil
+        }
+        canvas.transform = CGAffineTransform(translationX: -position * view.bounds.width, y: 0)
+    }
+
+    func slide(to position: CGFloat, duration: Double, done: @escaping () -> Void) {
+        let w = view.bounds.width
+        let from = -PhoneMotion.drawnTranslationX(canvas.layer)
+        let to = position * w
+        canvas.layer.removeAnimation(forKey: Self.slideKey)
+        canvas.transform = CGAffineTransform(translationX: -to, y: 0)
+        slideCount += 1
+        let id = slideCount
+        sliding = id
+        guard w > 0, abs(from - to) > 0.25 else {
+            // Already there: done on the next turn (the caller sets the tab after this).
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.sliding == id else { return }
+                self.sliding = nil
+                done()
+            }
+            return
+        }
+        let a = CABasicAnimation(keyPath: PhoneMotion.translationX)
+        a.fromValue = -from
+        a.toValue = -to
+        a.duration = duration
+        a.timingFunction = PhoneMotion.telegramCurve
+        a.preferredFrameRateRange = PhoneMotion.frameRate
+        a.delegate = PhoneAnimationEnd { [weak self] finished in
+            guard finished, let self, self.sliding == id else { return }
+            self.sliding = nil
+            done()
+        }
+        canvas.layer.add(a, forKey: Self.slideKey)
+    }
+
+    /// The moving layer: as big as one page, its pages at their places beside it, so it
+    /// looks for touches in them, not in its own bounds.
+    private final class Canvas: UIView {
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            for page in subviews.reversed() where page.isUserInteractionEnabled && !page.isHidden {
+                if let hit = page.hitTest(page.convert(point, from: self), with: event) { return hit }
+            }
+            return nil
+        }
+    }
+
+    /// Lays the pages out with its size, and puts the pan on the window.
+    private final class PagerView: UIView {
+        weak var pager: PhonePagerController?
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            pager?.laidOut()
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            pager?.gesture.attach(to: window?.rootViewController?.view)
         }
     }
 }
@@ -362,111 +549,70 @@ final class PhonePagerPan: UIPanGestureRecognizer {
     }
 }
 
-/// Puts the pages' pan on the window's root view (it sees the touches on the pages'
-/// scroll views, and theirs wait for it), and tells it where the pages are: a
-/// zero-content view with the pager's frame.
-private struct PhonePagerGesture: UIViewRepresentable {
-    var paging: PhoneSpacePaging
-    var topInset: CGFloat
-    var isEnabled: Bool
+/// The pages' pan, on the window's root view (it sees the touches on the pages' scroll
+/// views, and theirs wait for it); `anchor` is the pages' view, where swipes may start.
+@MainActor
+final class PhonePagerGesture: NSObject, UIGestureRecognizerDelegate {
+    let pan = PhonePagerPan()
+    weak var anchor: UIView?
+    weak var paging: PhoneSpacePaging?
+    var topInset: CGFloat = 0
+    private let boost = PhoneFrameRateBoost()
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeUIView(context: Context) -> Anchor {
-        let anchor = Anchor()
-        anchor.coordinator = context.coordinator
-        context.coordinator.anchor = anchor
-        return anchor
+    override init() {
+        super.init()
+        pan.delegate = self
+        pan.addTarget(self, action: #selector(handle(_:)))
     }
 
-    func updateUIView(_ anchor: Anchor, context: Context) {
-        let c = context.coordinator
-        c.paging = paging
-        c.topInset = topInset
-        // Off while a drag runs: it is cancelled, the pages settle back.
-        if c.pan.isEnabled != isEnabled { c.pan.isEnabled = isEnabled }
+    func attach(to view: UIView?) {
+        guard let view, pan.view !== view else { return }
+        detach()
+        view.addGestureRecognizer(pan)
     }
 
-    static func dismantleUIView(_ anchor: Anchor, coordinator: Coordinator) {
-        coordinator.detach()
+    func detach() {
+        pan.view?.removeGestureRecognizer(pan)
     }
 
-    final class Anchor: UIView {
-        weak var coordinator: Coordinator?
-
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-            isUserInteractionEnabled = false
-            backgroundColor = .clear
-        }
-
-        required init?(coder: NSCoder) { fatalError() }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            coordinator?.attach(to: window?.rootViewController?.view)
+    @objc private func handle(_ pan: PhonePagerPan) {
+        guard let paging, let anchor else { return }
+        let width = anchor.bounds.width
+        switch pan.state {
+        case .began:
+            boost.start()
+            paging.dragBegan()
+            paging.dragChanged(translation: pan.translationX, width: width)
+        case .changed:
+            paging.dragChanged(translation: pan.translationX, width: width)
+        case .ended:
+            boost.stop()
+            paging.dragEnded(translation: pan.translationX, velocity: pan.velocity(in: pan.view).x, width: width)
+        case .cancelled, .failed:
+            boost.stop()
+            paging.dragEnded(translation: pan.translationX, velocity: 0, width: width, cancelled: true)
+        default:
+            break
         }
     }
 
-    @MainActor
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        let pan = PhonePagerPan()
-        weak var anchor: UIView?
-        var paging: PhoneSpacePaging?
-        var topInset: CGFloat = 0
+    /// Only touches that start on the pages, under the header and outside the edge zones.
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let anchor, anchor.window != nil else { return false }
+        let p = touch.location(in: anchor)
+        let bounds = anchor.bounds
+        let edge = PhonePagingMotion.edgeWidth(bounds.width)
+        return bounds.contains(p) && p.y >= topInset && p.x >= edge && p.x <= bounds.width - edge
+    }
 
-        override init() {
-            super.init()
-            pan.delegate = self
-            pan.addTarget(self, action: #selector(handle(_:)))
-        }
+    // Every other pan (the pages' scrolling first) waits for it: it fails within
+    // about 2 pt of an up or down move, so scrolling still starts at once.
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        other is UIPanGestureRecognizer && !(other is PhonePagerPan)
+    }
 
-        func attach(to view: UIView?) {
-            guard let view, pan.view !== view else { return }
-            detach()
-            view.addGestureRecognizer(pan)
-        }
-
-        func detach() {
-            pan.view?.removeGestureRecognizer(pan)
-        }
-
-        @objc private func handle(_ pan: PhonePagerPan) {
-            guard let paging, let anchor else { return }
-            let width = anchor.bounds.width
-            switch pan.state {
-            case .began:
-                paging.dragBegan()
-                paging.dragChanged(translation: pan.translationX, width: width)
-            case .changed:
-                paging.dragChanged(translation: pan.translationX, width: width)
-            case .ended:
-                paging.dragEnded(translation: pan.translationX, velocity: pan.velocity(in: pan.view).x, width: width)
-            case .cancelled, .failed:
-                paging.dragEnded(translation: pan.translationX, velocity: 0, width: width, cancelled: true)
-            default:
-                break
-            }
-        }
-
-        /// Only touches that start on the pages, under the header and outside the edge zones.
-        func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            guard let anchor, anchor.window != nil else { return false }
-            let p = touch.location(in: anchor)
-            let bounds = anchor.bounds
-            let edge = PhonePagingMotion.edgeWidth(bounds.width)
-            return bounds.contains(p) && p.y >= topInset && p.x >= edge && p.x <= bounds.width - edge
-        }
-
-        // Every other pan (the pages' scrolling first) waits for it: it fails within
-        // about 2 pt of an up or down move, so scrolling still starts at once.
-        func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            other is UIPanGestureRecognizer && !(other is PhonePagerPan)
-        }
-
-        func gestureRecognizer(_ g: UIGestureRecognizer,
-                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            false
-        }
+    func gestureRecognizer(_ g: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        false
     }
 }

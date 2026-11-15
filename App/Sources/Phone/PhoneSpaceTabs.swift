@@ -71,7 +71,8 @@ struct PhoneSpaceTabs: View {
     @Environment(\.theme) private var theme
     /// The width inside the border.
     @State private var lensWidth: CGFloat = 0
-    @State private var position = ScrollPosition(edge: .leading)
+    /// Where the app scrolls the strip to (`PhoneStripScroll`).
+    @State private var scroll = PhoneStripScroll()
     /// Where the strip is scrolled to, or is going (the app's scrolls are animated).
     @State private var scrolledX: CGFloat = 0
     @State private var scrollPhase: ScrollPhase = .idle
@@ -98,10 +99,12 @@ struct PhoneSpaceTabs: View {
         var x: CGFloat { startX + finger - fingerStart }
     }
 
+    // The pill moves at every step of a swipe: only the small views that draw it and
+    // keep it in sight (`PhoneTabPill`, `PhoneTabPillFollower`) follow it, not this
+    // body (its tabs are menus, costly to redraw).
     var body: some View {
         let tabs = shownTabs
         let layout = Self.layout(tabs, width: lensWidth)
-        let pill = pillFrame(layout, tabs)
         ZStack(alignment: .topLeading) {
             ComposerGlassGroup {
                 Color.clear
@@ -111,17 +114,8 @@ struct PhoneSpaceTabs: View {
             }
             // The lifted pill: glass over the strip's (outside its group, so they don't
             // merge), outside the scrolling tabs' clip, under the titles.
-            if let pill {
-                Color.clear
-                    .frame(width: pill.width, height: Self.itemHeight)
-                    .padding(lifted ? -Self.liftInset : 0)
-                    .composerGlass(Capsule(), theme: theme, interactive: false)
-                    .opacity(lifted ? 1 : 0)
-                    .position(x: Self.lensInset + pill.x + pill.width / 2 - scrolledX, y: Self.height / 2)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-            lens(tabs, layout, pill: pill)
+            PhoneTabPill(paging: paging, tabs: tabs, layout: layout, kind: .lifted(lifted), scrolledX: $scrolledX)
+            lens(tabs, layout)
                 .padding(Self.lensInset)
             draggedTab(tabs, layout)
         }
@@ -131,35 +125,30 @@ struct PhoneSpaceTabs: View {
                               canBegin: { spaceTab(atStripX: $0) != nil },
                               began: beginDrag, moved: moveDrag, ended: endDrag, tick: autoScroll))
         .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Self.lensInset } action: { lensWidth = max(0, $0) }
-        .onChange(of: Focus(pill: pill, layout: layout, width: lensWidth, reordering: reorder.isActive)) { old, focus in
-            // Reordering moves the tabs, not the strip (but for its auto-scroll).
-            guard !focus.reordering else { return }
-            guard old.reordering else { return scrollToPill(focus, animated: !paging.isDragging) }
-            // Done: once the strip has its badges back (a wider row it can scroll further in).
-            Task { @MainActor in scrollToPill(focus, animated: true) }
+        .background {
+            PhoneTabPillFollower(paging: paging, tabs: tabs, layout: layout, width: lensWidth,
+                                 reordering: reorder.isActive) { focus, animated in
+                scrollToPill(focus, animated: animated)
+            }
         }
         .onChange(of: reorder.isActive) { _, active in
             if !active { drag = nil }
         }
-        .onAppear { scrollToPill(Focus(pill: pill, layout: layout, width: lensWidth), animated: false) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Spaces")
     }
 
     /// The tabs and the resting pill, scrolling inside the border, clipped to its capsule.
-    private func lens(_ tabs: [PhoneSpaceTab], _ layout: Layout, pill: (x: CGFloat, width: CGFloat)?) -> some View {
+    private func lens(_ tabs: [PhoneSpaceTab], _ layout: Layout) -> some View {
         // The current tab dragged: its pill goes with it, over the strip.
         let pillDragged = drag != nil && tabs.first { $0.scope == paging.selectedScope }?.space?.id == drag?.id
-        return ScrollView(.horizontal) {
+        return PhoneStripScrollView(scroll: scroll, disabled: layout.fits, phase: { scrollPhase = $0 }, offset: { x in
+            // A finger's scroll (the app's own set `scrolledX` where they go).
+            if scrollPhase != .animating { scrolledX = x }
+        }) {
             ZStack(alignment: .leading) {
-                if let pill {
-                    Capsule()
-                        .fill(restingFill)
-                        .frame(width: pill.width, height: Self.itemHeight)
-                        .offset(x: pill.x)
-                        .opacity(lifted || pillDragged ? 0 : 1)
-                        .accessibilityHidden(true)
-                }
+                PhoneTabPill(paging: paging, tabs: tabs, layout: layout,
+                             kind: .resting(restingFill, hidden: lifted || pillDragged), scrolledX: $scrolledX)
                 HStack(spacing: 0) {
                     ForEach(Array(tabs.enumerated()), id: \.element.id) { i, tab in
                         // Into reorder mode and out: the same title, crossfaded (the badge goes and comes).
@@ -184,23 +173,13 @@ struct PhoneSpaceTabs: View {
             .animation(reorder.isActive ? PhoneTabReorder.motion : PhonePagingMotion.relayout,
                        value: tabs.map(\.layoutKey))
         }
-        .scrollIndicators(.hidden)
-        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-        .scrollDisabled(layout.fits)
-        .scrollPosition($position)
-        .onScrollPhaseChange { _, phase in scrollPhase = phase }
-        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in
-            // A finger's scroll (the app's own set `scrolledX` where they go).
-            if scrollPhase != .animating { scrolledX = x }
-        }
         .frame(height: Self.itemHeight)
         .clipShape(Capsule())
     }
 
     /// A tab: its title (and badge) centered in its slot; a tap selects it, a long press shows its menu.
     private func item(_ tab: PhoneSpaceTab, index: Int, canReorder: Bool) -> some View {
-        let selected = index == paging.selected
-        return Menu {
+        Menu {
             if let space = tab.space {
                 SpaceMenu(space: space)
                 if canReorder { Divider() }
@@ -221,8 +200,7 @@ struct PhoneSpaceTabs: View {
         .menuOrder(.fixed)
         .accessibilityLabel(tab.title)
         .accessibilityValue(tab.unread > 0 ? "\(tab.unread) \(Format.statusWord(tab.status))" : "")
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityHint(selected ? "Scrolls to the top" : "")
+        .modifier(PhoneTabSelection(paging: paging, index: index))
     }
 
     /// A tab's title and badge, centered in its slot.
@@ -301,7 +279,7 @@ struct PhoneSpaceTabs: View {
     /// The pill in the tabs' row: the current tab's slot (found by its scope: reordered,
     /// the tabs move before the pages know), or between it and the next one by the
     /// swipe's fraction (no neighbour that way: it stays).
-    private func pillFrame(_ layout: Layout, _ tabs: [PhoneSpaceTab]) -> (x: CGFloat, width: CGFloat)? {
+    static func pillFrame(_ layout: Layout, _ tabs: [PhoneSpaceTab], _ paging: PhoneSpacePaging) -> (x: CGFloat, width: CGFloat)? {
         let scopes = paging.scopes
         let scope = scopes.indices.contains(paging.pillIndex) ? scopes[paging.pillIndex] : nil
         let i = tabs.firstIndex { $0.scope == scope } ?? paging.pillIndex
@@ -317,7 +295,7 @@ struct PhoneSpaceTabs: View {
     }
 
     /// What the strip's scroll follows.
-    private struct Focus: Equatable {
+    fileprivate struct Focus: Equatable {
         var minX: CGFloat = 0
         var maxX: CGFloat = 0
         var content: CGFloat = 0
@@ -334,7 +312,7 @@ struct PhoneSpaceTabs: View {
 
     /// Scrolls the strip to keep the pill 100 pt in from its ends: with the pages
     /// while a finger moves them, else in the pill's 0.45 s.
-    private func scrollToPill(_ focus: Focus, animated: Bool) {
+    fileprivate func scrollToPill(_ focus: Focus, animated: Bool) {
         guard focus.width > 0 else { return }
         var x = scrolledX
         if focus.content <= focus.width {
@@ -349,14 +327,14 @@ struct PhoneSpaceTabs: View {
         guard abs(x - scrolledX) > 0.25 else { return }
         if animated {
             withAnimation(PhonePagingMotion.settle) {
-                position.scrollTo(x: x)
+                scroll.position.scrollTo(x: x)
                 scrolledX = x
             }
         } else {
             var t = Transaction()
             t.disablesAnimations = true
             withTransaction(t) {
-                position.scrollTo(x: x)
+                scroll.position.scrollTo(x: x)
                 scrolledX = x
             }
         }
@@ -502,7 +480,7 @@ struct PhoneSpaceTabs: View {
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) {
-            position.scrollTo(x: x)
+            scroll.position.scrollTo(x: x)
             scrolledX = x
         }
         dragMoved()
@@ -624,5 +602,121 @@ struct PhoneSpaceTabs: View {
             edge = next
         }
         return slots
+    }
+}
+
+/// The strip's scroll position, out of the strip's state: the app scrolls the strip at
+/// every step of a swipe (keeping the pill in sight), and a change of its state would
+/// redraw the whole strip (its tabs are menus) each time.
+@MainActor
+@Observable
+private final class PhoneStripScroll {
+    var position = ScrollPosition(edge: .leading)
+}
+
+/// The strip's scroll view, on its own: `scrollPosition` reads where the app scrolls it
+/// (`PhoneStripScroll`) as its body is made, so each scroll redraws this view, and the
+/// tabs inside (`content`, made by the strip) stay as they are.
+private struct PhoneStripScrollView<Content: View>: View {
+    var scroll: PhoneStripScroll
+    var disabled: Bool
+    var phase: (ScrollPhase) -> Void
+    var offset: (CGFloat) -> Void
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView(.horizontal) { content }
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+            .scrollDisabled(disabled)
+            .scrollPosition(Binding(get: { scroll.position }, set: { scroll.position = $0 }))
+            .onScrollPhaseChange { _, new in phase(new) }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in offset(x) }
+    }
+}
+
+/// A tab's selected trait and hint for VoiceOver: its own modifier, so a new tab
+/// redraws only these, not the strip's menus.
+private struct PhoneTabSelection: ViewModifier {
+    var paging: PhoneSpacePaging
+    var index: Int
+
+    func body(content: Content) -> some View {
+        let selected = index == paging.selected
+        content
+            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityHint(selected ? "Scrolls to the top" : "")
+    }
+}
+
+// MARK: - The pill
+
+/// The strip's pill where the pages have it (`PhoneSpaceTabs.pillFrame`): the resting
+/// one in the tabs' row, or the lifted glass one over the strip. Its own view, so a
+/// swipe's every step redraws only it.
+private struct PhoneTabPill: View {
+    enum Kind {
+        /// In the tabs' row, in its fill; hidden while lifted or dragged.
+        case resting(Color, hidden: Bool)
+        /// Over the strip, in glass, shown while lifted.
+        case lifted(Bool)
+    }
+
+    var paging: PhoneSpacePaging
+    var tabs: [PhoneSpaceTab]
+    var layout: PhoneSpaceTabs.Layout
+    var kind: Kind
+    /// Where the strip is scrolled to (the lifted pill is outside the scrolling row).
+    @Binding var scrolledX: CGFloat
+
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        if let pill = PhoneSpaceTabs.pillFrame(layout, tabs, paging) {
+            switch kind {
+            case .resting(let fill, let hidden):
+                Capsule()
+                    .fill(fill)
+                    .frame(width: pill.width, height: PhoneSpaceTabs.itemHeight)
+                    .offset(x: pill.x)
+                    .opacity(hidden ? 0 : 1)
+                    .accessibilityHidden(true)
+            case .lifted(let lifted):
+                Color.clear
+                    .frame(width: pill.width, height: PhoneSpaceTabs.itemHeight)
+                    .padding(lifted ? -PhoneSpaceTabs.liftInset : 0)
+                    .composerGlass(Capsule(), theme: theme, interactive: false)
+                    .opacity(lifted ? 1 : 0)
+                    .position(x: PhoneSpaceTabs.lensInset + pill.x + pill.width / 2 - scrolledX,
+                              y: PhoneSpaceTabs.height / 2)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+/// Keeps the pill in sight: scrolls the strip as it moves (`PhoneSpaceTabs.scrollToPill`),
+/// the first time at once. Its own view, as the pill's.
+private struct PhoneTabPillFollower: View {
+    var paging: PhoneSpacePaging
+    var tabs: [PhoneSpaceTab]
+    var layout: PhoneSpaceTabs.Layout
+    var width: CGFloat
+    var reordering: Bool
+    var scroll: (PhoneSpaceTabs.Focus, _ animated: Bool) -> Void
+
+    var body: some View {
+        let pill = PhoneSpaceTabs.pillFrame(layout, tabs, paging)
+        Color.clear
+            .onChange(of: PhoneSpaceTabs.Focus(pill: pill, layout: layout, width: width, reordering: reordering)) { old, focus in
+                // Reordering moves the tabs, not the strip (but for its auto-scroll).
+                guard !focus.reordering else { return }
+                guard old.reordering else { return scroll(focus, !paging.isDragging) }
+                // Done: once the strip has its badges back (a wider row it can scroll further in).
+                Task { @MainActor in scroll(focus, true) }
+            }
+            .onAppear { scroll(PhoneSpaceTabs.Focus(pill: pill, layout: layout, width: width), false) }
+            .accessibilityHidden(true)
     }
 }

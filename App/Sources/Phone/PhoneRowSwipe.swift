@@ -278,7 +278,8 @@ struct PhoneRowPan: UIGestureRecognizerRepresentable {
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             let p = parent
             guard p.edgeOnly, !p.isOpen, p.width > 0 else { return true }
-            let x = converter.convert(globalPoint: touch.location(in: nil), to: .local).x
+            // SwiftUI's global space is its hosting view's (the page's, `PhoneSpacePager`), not the window's.
+            let x = converter.convert(globalPoint: touch.location(in: g.view?.controllerRoot), to: .local).x
             let e = PhoneRowPan.edgeZone(p.width)
             return x < e || x > p.width - e
         }

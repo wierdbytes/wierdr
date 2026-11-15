@@ -11,7 +11,7 @@ import WierdrModel
 /// `.sidebar` = the list), so focusing a pane from anywhere (rows, quick switcher,
 /// status jumps, the Live Activity) pushes it, and `showSidebar()` pops it.
 ///
-/// Telegram's (iOS 26's) motion, `PhoneNavCard`: the pane screen slides in from
+/// Telegram's (iOS 26's) motion (`PhoneNavController`): the pane screen slides in from
 /// the right edge over the full width, the list goes 0.3 of the width left under it
 /// and dims (black, up to 10 %); while it moves, the pane screen has the display's
 /// rounded corners and a faint shadow. A tap pushes or pops on a critically damped
@@ -19,72 +19,27 @@ import WierdrModel
 /// (`PhoneBackSwipe`) pops it with the finger; let go, it finishes or goes back by
 /// UIKit's rule (`PhonePopTracker`) on a spring (response 0.3, damping 0.85) that
 /// starts at the finger's speed.
+///
+/// The two screens are UIKit views (each a hosting controller), moved by Core Animation
+/// as Telegram's are: the finger moves layers, the springs play in the render server
+/// at the display's rate, and no frame waits for SwiftUI.
 struct PhoneWorkspaceView: View {
     @Environment(WorkspaceController.self) private var controller
-    /// How much the pane screen covers the list: 0 the list alone, 1 the pane screen over it.
-    @State private var progress: CGFloat = 0
-    /// Where `progress` is headed: the last push, pop or swipe's end.
-    @State private var target: CGFloat = 0
-    /// The pane screen is in the hierarchy: pushed, or on its way in or out.
-    @State private var mounted = false
-    /// `progress` as the frame on screen draws it (mid-animation too).
-    @State private var drawn = PhoneNavCard.Drawn()
-    @State private var size: CGSize = CGSize(width: 430, height: 900)
-    /// The window's size.
-    @State private var window: CGSize = .zero
-    /// The list's and the pane screen's area in the window: the safe area, above the keyboard while it is up.
-    @State private var frame: CGRect = .zero
-
-    /// A push or a pop by a tap (or anything but a finger): critically damped, response 0.3 s.
-    static let push = Animation.spring(duration: 0.3, bounce: 0)
+    @Environment(\.theme) private var theme
 
     var body: some View {
         let shown = controller.compactColumn == .detail
-        let width = max(1, size.width)
-        ZStack {
-            PhoneHome()
-                .modifier(PhoneNavCard(role: .bottom, progress: progress, width: width))
-                .allowsHitTesting(!shown)
-                .accessibilityHidden(shown)
-            // The list dims as the pane screen comes over it.
-            Color.black.opacity(0.1 * min(max(progress, 0), 1))
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            Group {
-                if mounted {
-                    PhonePaneScreen(covered: !shown)
-                        .transition(.identity)
-                }
-            }
-            .modifier(PhoneNavCard(role: .top, progress: progress, width: width, outset: outset, drawn: drawn))
-            .allowsHitTesting(shown)
-            .accessibilityHidden(!shown)
-            .accessibilityAddTraits(.isModal)
-            .accessibilityAction(.escape) { controller.showSidebar() }
+        ZStack(alignment: .top) {
+            PhoneNavigation(shown: shown)
+                // The whole window (the screens' grounds run under the status bar and the home
+                // indicator; their content keeps to the safe area, `PhoneHostContext`), above
+                // the keyboard while it is up.
+                .ignoresSafeArea(.container)
+            AttentionBanner(showing: shown)
         }
-        // The size offered, whatever the content's: it is measured below for the cards' width,
-        // so taking a wider content's size (maxWidth alone does) kept the landscape width back in
-        // portrait, everything laid out 832 pt wide and centered in the 428-pt screen.
-        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .leading)
-        .overlay(alignment: .top) { AttentionBanner(showing: shown) }
-        .background {
-            PhoneBackSwipe(
-                enabled: shown && mounted,
-                onBegin: beginSwipe,
-                onDrag: { p in
-                    var t = Transaction()
-                    t.disablesAnimations = true
-                    withTransaction(t) { progress = p }
-                },
-                onEnd: endSwipe
-            )
-            .frame(width: 0, height: 0)
-        }
-        .background { WindowSize { window = $0 }.frame(width: 0, height: 0) }
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
-        .onChange(of: shown, initial: true) { _, shown in navigate(shown) }
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+        // Behind the keyboard's edge as it comes and goes: the pane screen's ground.
+        .background(theme.background.ignoresSafeArea())
         .onChange(of: controller.workspace.spaces) { old, new in
             // The pane on screen was closed (here, on the desktop, or its program
             // exited): back to the list rather than some other pane showing.
@@ -92,54 +47,6 @@ struct PhoneWorkspaceView: View {
                   !new.contains(where: { $0.tabs.contains { $0.panes.contains { $0.id == id } } }) else { return }
             controller.showSidebar()
         }
-    }
-
-    /// From the cards' frame out to the window's edges (the status bar, the home indicator,
-    /// the keyboard): the pane screen's clip reaches there, where its backgrounds run.
-    private var outset: EdgeInsets {
-        guard window.width > 0, frame.width > 0 else { return EdgeInsets() }
-        return EdgeInsets(top: max(0, frame.minY), leading: max(0, frame.minX),
-                          bottom: max(0, window.height - frame.maxY), trailing: max(0, window.width - frame.maxX))
-    }
-
-    /// A push or a pop that no finger drives (a row, the back button, a status jump…).
-    private func navigate(_ shown: Bool) {
-        let goal: CGFloat = shown ? 1 : 0
-        if !shown { controller.workspace.refreshLaunchers(machine: controller.activeSpace?.machine) }
-        // The swipe's end already set off this very move.
-        guard goal != target else { return }
-        target = goal
-        if shown { mounted = true }
-        withAnimation(Self.push) { progress = goal } completion: { settle() }
-    }
-
-    /// A finger took the pane screen: from where it is drawn (a push on its way in too).
-    /// The keyboards go at once, as Telegram's chat ends editing.
-    private func beginSwipe() -> CGFloat {
-        controller.closeCompose()
-        UIView.performWithoutAnimation {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        }
-        return min(max(drawn.value, 0), 1)
-    }
-
-    /// The finger left: the pop finishes or the pane screen goes back, from the finger's
-    /// speed (`velocity`, points per second, rightward positive); a swipe the system cancelled
-    /// goes back on the tap's spring.
-    private func endSwipe(_ finish: Bool, velocity: CGFloat, cancelled: Bool) {
-        let goal: CGFloat = finish ? 0 : 1
-        target = goal
-        if finish { controller.showSidebar() }
-        let delta = goal - progress
-        // SwiftUI's initial velocity is in units of the whole change.
-        let initial = abs(delta) > 0.001 ? min(max((-velocity / max(1, size.width)) / delta, -100), 100) : 0
-        let animation = cancelled ? Self.push : .interpolatingSpring(duration: 0.3, bounce: 0.15, initialVelocity: initial)
-        withAnimation(animation) { progress = goal } completion: { settle() }
-    }
-
-    /// A transition ended: popped, the pane screen leaves the hierarchy (its terminal detaches later).
-    private func settle() {
-        if target == 0, controller.compactColumn != .detail { mounted = false }
     }
 
     /// The pane the screen showed with these spaces (`ScreenState`'s resolution, fallbacks included).
@@ -151,101 +58,357 @@ struct PhoneWorkspaceView: View {
     }
 }
 
-// MARK: - Cards
+/// The list and the pane screen in their UIKit container (`PhoneNavController`).
+private struct PhoneNavigation: UIViewControllerRepresentable {
+    var shown: Bool
 
-/// Where a screen of the push is drawn at `progress` (0 the list alone, 1 the pane screen
-/// over it), as Telegram's (iOS 26's) navigation transition: the pane screen ("top") at
-/// x = (1 − p)·W, pixel-rounded; the list ("bottom") at −0.3·W·p. Animatable, so a spring
-/// that overshoots stops at either end, as Telegram's does (it halts at the first crossing).
+    @Environment(WorkspaceController.self) private var controller
+    @Environment(AppModel.self) private var app: AppModel?
+    @Environment(LiveConnector.self) private var connector: LiveConnector?
+
+    func makeUIViewController(context: Context) -> PhoneNavController {
+        PhoneNavController(host: PhoneHostContext(context.environment, controller: controller, app: app, connector: connector))
+    }
+
+    func updateUIViewController(_ nav: PhoneNavController, context: Context) {
+        nav.host.update(context.environment)
+        nav.setShown(shown)
+    }
+
+    static func dismantleUIViewController(_ nav: PhoneNavController, coordinator: ()) {
+        nav.swipe.detach()
+    }
+}
+
+// MARK: - Container
+
+/// Where the two screens are drawn at `progress` (0 the list alone, 1 the pane screen
+/// over it), as Telegram's (iOS 26's) navigation transition: the pane screen at
+/// x = (1 − p)·W, pixel-rounded; the list at −0.3·W·p; the dim between them at 0.1·p.
+/// A spring that would overshoot stops at either end, as Telegram's does (it halts at
+/// the first crossing, `PhoneSpring`).
 ///
-/// While it moves, the top card has the display's rounded corners and Telegram's faint
-/// shadow (black 4 %, radius 12, 3 pt up). The clip is the window's outline (`outset`: from
-/// the safe area out to the window's edges), so the backgrounds that run under the status bar
-/// and the home indicator stay; a clip on the frame cut them off (the list showed through).
-struct PhoneNavCard: ViewModifier, Animatable {
-    enum Role { case bottom, top }
+/// While it moves, the pane screen (`PhoneCardView`) has the display's rounded corners
+/// and Telegram's faint shadow (black 4 %, radius 12, 3 pt up). Both screens fill the
+/// window (their grounds run under the status bar and the home indicator) and lay out
+/// in its safe area, which this container hands down (`PhoneHostContext`).
+final class PhoneNavController: UIViewController {
+    let host: PhoneHostContext
+    let swipe = PhoneBackSwipe()
 
-    /// The progress the frame on screen shows, kept out of SwiftUI's state (read when a finger takes over).
-    final class Drawn { var value: CGFloat = 0 }
+    private var list: UIHostingController<PhoneHosted<PhoneHome>>!
+    private let dim = UIView()
+    private let card = PhoneCardView()
+    /// The pane screen: pushed, or on its way in or out.
+    private var pane: UIHostingController<PhoneHosted<PhonePaneScreen>>?
+    /// A pane is pushed (`compactColumn`); nil before the first update.
+    private var shown: Bool?
+    /// Where the screens are headed: the last push, pop or swipe's end.
+    private var target: CGFloat = 0
+    /// The progress the layers are set to (mid-move, its end).
+    private var progress: CGFloat = 0
+    /// The spring under way (its speed carries into the next one).
+    private var move: PhoneSpringMove?
+    private var moveID = 0
+    private var width: CGFloat = 0
 
-    var role: Role
-    var progress: CGFloat
-    var width: CGFloat
-    /// From the frame out to the window's edges.
-    var outset = EdgeInsets()
-    var drawn: Drawn? = nil
+    /// A push or a pop by a tap (or anything but a finger): critically damped, response 0.3 s.
+    static let push = PhoneSpring(duration: 0.3, bounce: 0)
+    /// A swipe let go: response 0.3 s, damping 0.85, from the finger's speed.
+    static let release = PhoneSpring(duration: 0.3, bounce: 0.15)
+    private static let moveKey = "nav"
 
-    var animatableData: CGFloat {
-        get { progress }
-        set { progress = newValue }
+    private var controller: WorkspaceController { host.controller }
+
+    init(host: PhoneHostContext) {
+        self.host = host
+        super.init(nibName: nil, bundle: nil)
     }
 
-    func body(content: Content) -> some View {
-        let p = drawnProgress()
-        switch role {
-        case .bottom:
-            content.offset(x: -0.3 * width * p)
-        case .top:
-            let moving = p > 0.0005 && p < 0.9995
-            let shape = CardShape(radius: moving ? DisplayCorner.radius : 0, outset: outset)
-            let scale = DisplayCorner.scale
-            content
-                .clipShape(shape)
-                .background {
-                    if moving {
-                        shape.fill(Color.black)
-                            .shadow(color: .black.opacity(0.04), radius: 12, x: 0, y: -3)
-                    }
-                }
-                .offset(x: ((1 - p) * width * scale).rounded(.down) / scale)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func loadView() {
+        let view = NavView()
+        view.nav = self
+        view.backgroundColor = .clear
+        self.view = view
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        list = .moving(PhoneHosted(context: host, content: PhoneHome()))
+        addChild(list)
+        view.addSubview(list.view)
+        list.didMove(toParent: self)
+        dim.backgroundColor = .black
+        dim.alpha = 0
+        dim.isUserInteractionEnabled = false
+        dim.isAccessibilityElement = false
+        view.addSubview(dim)
+        card.onEscape = { [weak self] in self?.controller.showSidebar() }
+        view.addSubview(card)
+        swipe.onBegin = { [weak self] in self?.beginSwipe() ?? 1 }
+        swipe.onDrag = { [weak self] p in self?.drag(to: p) }
+        swipe.onEnd = { [weak self] finish, velocity, cancelled in
+            self?.endSwipe(finish, velocity: velocity, cancelled: cancelled)
         }
+        apply(progress)
+        updateAccess()
     }
 
-    /// The progress within 0...1, after noting the frame's own for a finger that takes over.
-    private func drawnProgress() -> CGFloat {
-        drawn?.value = progress
-        return min(max(progress, 0), 1)
+    fileprivate func laidOut() {
+        let bounds = view.bounds
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        // Bounds and center, not frames: the layers carry the move's translation.
+        list.view.bounds = CGRect(origin: .zero, size: bounds.size)
+        list.view.center = center
+        card.bounds = CGRect(origin: .zero, size: bounds.size)
+        card.center = center
+        dim.frame = bounds
+        guard bounds.width != width else { return }
+        // A new width (first layout, rotation): at the move's end, at once.
+        width = bounds.width
+        stopMove()
+        apply(target)
+        moveEnded()
+    }
+
+    // MARK: Showing
+
+    /// The controller's word: a pane pushed or not. A change pushes or pops (`navigate`).
+    func setShown(_ shown: Bool) {
+        let changed = shown != self.shown
+        self.shown = shown
+        guard changed else { return }
+        if let pane { pane.rootView = PhoneHosted(context: host, content: PhonePaneScreen(covered: !shown)) }
+        updateAccess()
+        navigate(shown)
+    }
+
+    /// A push or a pop that no finger drives (a row, the back button, a status jump…).
+    private func navigate(_ shown: Bool) {
+        let goal: CGFloat = shown ? 1 : 0
+        if !shown { controller.workspace.refreshLaunchers(machine: controller.activeSpace?.machine) }
+        // The swipe's end already set off this very move.
+        guard goal != target else { return }
+        target = goal
+        if shown { mountPane() }
+        let velocity = move?.velocity(at: CACurrentMediaTime()) ?? 0
+        animate(to: goal, spring: Self.push, velocity: velocity)
+    }
+
+    private func mountPane() {
+        guard pane == nil else { return }
+        let pane = UIHostingController.moving(PhoneHosted(context: host, content: PhonePaneScreen(covered: shown != true)))
+        addChild(pane)
+        pane.view.frame = card.content.bounds
+        pane.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        card.content.addSubview(pane.view)
+        pane.didMove(toParent: self)
+        self.pane = pane
+        updateAccess()
+    }
+
+    /// Popped: the pane screen leaves the hierarchy (its terminal detaches later).
+    private func unmountPane() {
+        guard let pane else { return }
+        pane.willMove(toParent: nil)
+        pane.view.removeFromSuperview()
+        pane.removeFromParent()
+        self.pane = nil
+        updateAccess()
+    }
+
+    /// Who takes touches and VoiceOver: the pushed pane screen, else the list.
+    private func updateAccess() {
+        let shown = shown == true
+        list?.view.isUserInteractionEnabled = !shown
+        list?.view.accessibilityElementsHidden = shown
+        card.isUserInteractionEnabled = shown
+        card.accessibilityElementsHidden = !shown
+        card.accessibilityViewIsModal = shown
+        let swipes = shown && pane != nil
+        if swipe.pan.isEnabled != swipes { swipe.pan.isEnabled = swipes }
+    }
+
+    // MARK: Moving
+
+    /// The screens at `p`, at once.
+    private func apply(_ p: CGFloat) {
+        progress = p
+        let p = min(max(p, 0), 1)
+        card.transform = CGAffineTransform(translationX: Self.cardX(p, width), y: 0)
+        list?.view.transform = CGAffineTransform(translationX: -0.3 * width * p, y: 0)
+        dim.alpha = 0.1 * p
+        card.isRounded = p > 0.0005 && p < 0.9995
+    }
+
+    private static func cardX(_ p: CGFloat, _ width: CGFloat) -> CGFloat {
+        let scale = DisplayCorner.scale
+        return ((1 - p) * width * scale).rounded(.down) / scale
+    }
+
+    /// The progress the frame on screen shows (mid-move too).
+    private var drawnProgress: CGFloat {
+        guard width > 0 else { return progress }
+        return 1 - PhoneMotion.drawnTranslationX(card.layer) / width
+    }
+
+    private func stopMove() {
+        moveID += 1
+        move = nil
+        for layer in [card.layer, list?.view.layer, dim.layer] { layer?.removeAnimation(forKey: Self.moveKey) }
+    }
+
+    /// From where the screens are drawn to `goal` on `spring`, starting at `velocity`
+    /// (progress per second).
+    private func animate(to goal: CGFloat, spring: PhoneSpring, velocity: Double) {
+        let from = drawnProgress
+        stopMove()
+        apply(goal)
+        let id = moveID
+        guard width > 0, abs(from - goal) * width > 0.25 || abs(velocity) > 0.01 else {
+            return DispatchQueue.main.async { [weak self] in
+                guard let self, self.moveID == id else { return }
+                self.moveEnded()
+            }
+        }
+        let (duration, values) = spring.samples(from: Double(from), to: Double(goal), velocity: velocity)
+        move = PhoneSpringMove(spring: spring, start: CACurrentMediaTime(), duration: duration,
+                               from: Double(from), to: Double(goal), velocity: velocity)
+        card.isRounded = true
+        let w = width
+        let end = PhoneAnimationEnd { [weak self] finished in
+            guard finished, let self, self.moveID == id else { return }
+            self.moveEnded()
+        }
+        PhoneMotion.keyframes(card.layer, PhoneMotion.translationX, values.map { Self.cardX(CGFloat($0), w) },
+                              duration: duration, key: Self.moveKey, delegate: end)
+        if let layer = list?.view.layer {
+            PhoneMotion.keyframes(layer, PhoneMotion.translationX, values.map { -0.3 * w * CGFloat($0) },
+                                  duration: duration, key: Self.moveKey)
+        }
+        PhoneMotion.keyframes(dim.layer, "opacity", values.map { 0.1 * CGFloat($0) }, duration: duration, key: Self.moveKey)
+    }
+
+    /// A move got to its end: square corners; popped, the pane screen goes.
+    private func moveEnded() {
+        move = nil
+        card.isRounded = false
+        if target == 0, controller.compactColumn != .detail { unmountPane() }
+    }
+
+    // MARK: The swipe back
+
+    /// A finger took the pane screen: from where it is drawn (a push on its way in too).
+    /// The keyboards go at once, as Telegram's chat ends editing.
+    private func beginSwipe() -> CGFloat {
+        controller.closeCompose()
+        UIView.performWithoutAnimation {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        let p = min(max(drawnProgress, 0), 1)
+        stopMove()
+        apply(p)
+        card.isRounded = true
+        return p
+    }
+
+    private func drag(to p: CGFloat) {
+        apply(p)
+        card.isRounded = true
+    }
+
+    /// The finger left: the pop finishes or the pane screen goes back, from the finger's
+    /// speed (`velocity`, points per second, rightward positive); a swipe the system cancelled
+    /// goes back on the tap's spring.
+    private func endSwipe(_ finish: Bool, velocity: CGFloat, cancelled: Bool) {
+        let goal: CGFloat = finish ? 0 : 1
+        target = goal
+        let speed = cancelled ? 0 : Double(-velocity / max(1, width))
+        animate(to: goal, spring: cancelled ? Self.push : Self.release, velocity: speed)
+        guard finish else { return }
+        // The pop is on its way to the render server before the app redraws for the list.
+        CATransaction.flush()
+        controller.showSidebar()
+    }
+
+    /// Lays the screens out with its size, hands its safe area down, puts the swipe on the window.
+    private final class NavView: UIView {
+        weak var nav: PhoneNavController?
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            nav?.laidOut()
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            nav?.host.setInsets(safeAreaInsets)
+        }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            nav?.swipe.attach(to: window?.rootViewController?.view)
+        }
     }
 }
 
-/// A rounded rectangle reaching `outset` past the frame it's given (the window's outline around the safe area).
-private struct CardShape: Shape {
-    var radius: CGFloat
-    var outset: EdgeInsets
+/// The pane screen's card: its content clipped (to the display's rounded corners while
+/// it moves, `isRounded`) over a black shadow caster, shown only then.
+final class PhoneCardView: UIView {
+    /// Where the pane screen goes.
+    let content = UIView()
+    private let shadow = UIView()
+    /// VoiceOver's escape (the two-finger scrub): back to the list.
+    var onEscape: (() -> Void)?
 
-    func path(in rect: CGRect) -> Path {
-        let r = CGRect(x: rect.minX - outset.leading, y: rect.minY - outset.top,
-                       width: rect.width + outset.leading + outset.trailing,
-                       height: rect.height + outset.top + outset.bottom)
-        return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: r)
-    }
-}
-
-/// The window's size.
-private struct WindowSize: UIViewRepresentable {
-    var onChange: (CGSize) -> Void
-
-    func makeUIView(context: Context) -> Probe { Probe() }
-
-    func updateUIView(_ probe: Probe, context: Context) {
-        probe.onChange = onChange
-        probe.report()
+    var isRounded = false {
+        didSet { if isRounded != oldValue { restyle() } }
     }
 
-    final class Probe: UIView {
-        var onChange: ((CGSize) -> Void)?
-        private var last: CGSize?
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        shadow.backgroundColor = .black
+        shadow.isUserInteractionEnabled = false
+        shadow.isHidden = true
+        shadow.layer.shadowColor = UIColor.black.cgColor
+        shadow.layer.shadowOpacity = 0.04
+        shadow.layer.shadowRadius = 12
+        shadow.layer.shadowOffset = CGSize(width: 0, height: -3)
+        shadow.layer.cornerCurve = .continuous
+        content.clipsToBounds = true
+        content.layer.cornerCurve = .continuous
+        addSubview(shadow)
+        addSubview(content)
+    }
 
-        override func didMoveToWindow() { super.didMoveToWindow(); report() }
-        override func layoutSubviews() { super.layoutSubviews(); report() }
+    required init?(coder: NSCoder) { fatalError() }
 
-        func report() {
-            guard let window else { return }
-            let size = window.bounds.size
-            guard size != last else { return }
-            last = size
-            DispatchQueue.main.async { [weak self] in self?.onChange?(size) }
-        }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        shadow.frame = bounds
+        content.frame = bounds
+        if isRounded { shadow.layer.shadowPath = path() }
+    }
+
+    private func restyle() {
+        let radius = isRounded ? DisplayCorner.radius : 0
+        content.layer.cornerRadius = radius
+        shadow.layer.cornerRadius = radius
+        shadow.isHidden = !isRounded
+        if isRounded { shadow.layer.shadowPath = path() }
+    }
+
+    private func path() -> CGPath {
+        UIBezierPath(roundedRect: bounds, cornerRadius: DisplayCorner.radius).cgPath
+    }
+
+    override func accessibilityPerformEscape() -> Bool {
+        guard let onEscape else { return false }
+        onEscape()
+        return true
     }
 }
 
@@ -280,124 +443,92 @@ enum DisplayCorner {
 /// It reports the progress the finger sets (the finger's travel over the width, from where
 /// the pane screen was drawn when it took it) and, at the end, whether the pop finishes
 /// and the speed to hand over (`PhonePopTracker`).
-struct PhoneBackSwipe: UIViewRepresentable {
-    var enabled: Bool
+@MainActor
+final class PhoneBackSwipe: NSObject, UIGestureRecognizerDelegate {
+    let pan = PhoneBackSwipeRecognizer()
     /// The finger took the pane screen: the progress it is drawn at.
-    var onBegin: () -> CGFloat
-    var onDrag: (CGFloat) -> Void
+    var onBegin: () -> CGFloat = { 1 }
+    var onDrag: (CGFloat) -> Void = { _ in }
     /// Finishes (pops), the hand-off speed in points per second, cancelled by the system.
-    var onEnd: (Bool, CGFloat, Bool) -> Void
+    var onEnd: (Bool, CGFloat, Bool) -> Void = { _, _, _ in }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    private var tracker = PhonePopTracker(width: 1)
+    /// The progress the pane screen was drawn at when the finger took it.
+    private var start: CGFloat = 1
+    private let boost = PhoneFrameRateBoost()
 
-    func makeUIView(context: Context) -> Anchor {
-        let anchor = Anchor()
-        anchor.coordinator = context.coordinator
-        return anchor
+    override init() {
+        super.init()
+        pan.delegate = self
+        pan.isEnabled = false
+        pan.addTarget(self, action: #selector(moved(_:)))
     }
 
-    func updateUIView(_ anchor: Anchor, context: Context) {
-        let c = context.coordinator
-        c.parent = self
-        if c.pan.isEnabled != enabled { c.pan.isEnabled = enabled }
+    func attach(to view: UIView?) {
+        guard let view, pan.view !== view else { return }
+        detach()
+        view.addGestureRecognizer(pan)
     }
 
-    static func dismantleUIView(_ anchor: Anchor, coordinator: Coordinator) {
-        coordinator.detach()
+    func detach() {
+        pan.view?.removeGestureRecognizer(pan)
     }
 
-    final class Anchor: UIView {
-        weak var coordinator: Coordinator?
-
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-            isUserInteractionEnabled = false
-        }
-
-        required init?(coder: NSCoder) { fatalError() }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            coordinator?.attach(to: window?.rootViewController?.view)
+    @objc private func moved(_ g: PhoneBackSwipeRecognizer) {
+        guard let view = g.view else { return }
+        let width = max(1, view.bounds.width)
+        let x = g.location(in: view).x - g.firstLocation.x
+        let v = g.velocity(in: view).x
+        let now = CACurrentMediaTime()
+        // The pane screen's left edge: where it was taken plus the finger's travel, within the screen.
+        let position = min(max(1 - start + x / width, 0), 1)
+        switch g.state {
+        case .began:
+            boost.start()
+            start = onBegin()
+            tracker = PhonePopTracker(width: width)
+            tracker.add(time: now, translation: x, velocity: v, isChange: false)
+            onDrag(1 - min(max(1 - start + x / width, 0), 1))
+        case .changed:
+            tracker.add(time: now, translation: x, velocity: v, isChange: true)
+            onDrag(1 - position)
+        case .ended:
+            boost.stop()
+            tracker.add(time: now, translation: x, velocity: v, isChange: false)
+            let r = tracker.release(position: position, velocity: v)
+            onEnd(r.finish, r.velocity, false)
+        case .cancelled, .failed:
+            boost.stop()
+            onEnd(false, 0, true)
+        default:
+            break
         }
     }
 
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var parent: PhoneBackSwipe?
-        let pan = PhoneBackSwipeRecognizer()
-        private var tracker = PhonePopTracker(width: 1)
-        /// The progress the pane screen was drawn at when the finger took it.
-        private var start: CGFloat = 1
-
-        override init() {
-            super.init()
-            pan.delegate = self
-            pan.addTarget(self, action: #selector(moved(_:)))
-        }
-
-        func attach(to view: UIView?) {
-            guard let view, pan.view !== view else { return }
-            detach()
-            view.addGestureRecognizer(pan)
-        }
-
-        func detach() {
-            pan.view?.removeGestureRecognizer(pan)
-        }
-
-        @objc private func moved(_ g: PhoneBackSwipeRecognizer) {
-            guard let parent, let view = g.view else { return }
-            let width = max(1, view.bounds.width)
-            let x = g.location(in: view).x - g.firstLocation.x
-            let v = g.velocity(in: view).x
-            let now = CACurrentMediaTime()
-            // The pane screen's left edge: where it was taken plus the finger's travel, within the screen.
-            let position = min(max(1 - start + x / width, 0), 1)
-            switch g.state {
-            case .began:
-                start = parent.onBegin()
-                tracker = PhonePopTracker(width: width)
-                tracker.add(time: now, translation: x, velocity: v, isChange: false)
-                parent.onDrag(1 - min(max(1 - start + x / width, 0), 1))
-            case .changed:
-                tracker.add(time: now, translation: x, velocity: v, isChange: true)
-                parent.onDrag(1 - position)
-            case .ended:
-                tracker.add(time: now, translation: x, velocity: v, isChange: false)
-                let r = tracker.release(position: position, velocity: v)
-                parent.onEnd(r.finish, r.velocity, false)
-            case .cancelled, .failed:
-                parent.onEnd(false, 0, true)
-            default:
-                break
-            }
-        }
-
-        func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            guard let view = g.view else { return false }
-            // Not the rightmost 16 pt (Telegram's edge).
-            if touch.location(in: view).x > view.bounds.width - PhoneBackSwipeRecognizer.edge { return false }
-            // A drag over a terminal's selection extends it.
-            if let terminal = WierdrTerminalView.under(touch), terminal.hasActiveSelection { return false }
-            return true
-        }
-
-        // With the key panel out, its swipe right puts the panel back first.
-        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
-            guard other.name == PhoneKeyPanelGestures.panName else { return false }
-            return (other.delegate as? PhoneKeyPanelGestures.Coordinator)?.parent?.isOpen == true
-        }
-
-        // Every other pan waits for it (it fails at once on a vertical move or one to the
-        // left), not the root view's own (the key panel's). Only pans: a held finger never
-        // fails a pan, so the terminal's long press (its menu) or a held key would wait.
-        func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            other is UIPanGestureRecognizer && other.view !== g.view
-        }
-
-        func gestureRecognizer(_ g: UIGestureRecognizer,
-                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { false }
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let view = g.view else { return false }
+        // Not the rightmost 16 pt (Telegram's edge).
+        if touch.location(in: view).x > view.bounds.width - PhoneBackSwipeRecognizer.edge { return false }
+        // A drag over a terminal's selection extends it.
+        if let terminal = WierdrTerminalView.under(touch), terminal.hasActiveSelection { return false }
+        return true
     }
+
+    // With the key panel out, its swipe right puts the panel back first.
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
+        guard other.name == PhoneKeyPanelGestures.panName else { return false }
+        return (other.delegate as? PhoneKeyPanelGestures.Coordinator)?.parent?.isOpen == true
+    }
+
+    // Every other pan waits for it (it fails at once on a vertical move or one to the
+    // left), not the root view's own (the key panel's). Only pans: a held finger never
+    // fails a pan, so the terminal's long press (its menu) or a held key would wait.
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        other is UIPanGestureRecognizer && other.view !== g.view
+    }
+
+    func gestureRecognizer(_ g: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { false }
 }
 
 /// Telegram's start rule for a swipe that only goes right: it fails at once on a move

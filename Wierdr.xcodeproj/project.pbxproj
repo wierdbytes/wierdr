@@ -66,6 +66,7 @@
 		AF982C4C42B0466BC0894351 /* PhoneListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CAC83BAAFE0CB19F2F6FBF /* PhoneListRow.swift */; };
 		B5B1FD18194956E82415185A /* AgentsLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */; };
 		B643253F51979CBEAB68A2E0 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */; };
+		B751337140111B90B64EA832 /* PhoneHosting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84DDDCE899CB1DEAE132F06 /* PhoneHosting.swift */; };
 		B82746B64EACD7B8B4006AA7 /* PhonePaneMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8635A004239A05A30EA934E3 /* PhonePaneMenu.swift */; };
 		B8A0A0249281AC1ADF72D8AF /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8F94D9E6DF287A91E86496D /* SidebarView.swift */; };
 		B9A532B17350C2B1BDB29084 /* Icons.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C1DF8AA9B4279A363143AD /* Icons.swift */; };
@@ -193,6 +194,7 @@
 		DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "LICENSE-SymbolsNerdFont.txt"; sourceTree = "<group>"; };
 		DB5688005CEE92F5CBA92848 /* PhoneAgentRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneAgentRow.swift; sourceTree = "<group>"; };
 		DEFF448659A8E45E54D69258 /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
+		E84DDDCE899CB1DEAE132F06 /* PhoneHosting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHosting.swift; sourceTree = "<group>"; };
 		F859D6049AABA66F33A95A82 /* TerminalSessionPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionPool.swift; sourceTree = "<group>"; };
 		F884493E41282F237E5D6C75 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F8F94D9E6DF287A91E86496D /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
@@ -384,6 +386,7 @@
 				F95D8A8FA2917ACA5A8264F5 /* PhoneAgentList.swift */,
 				DB5688005CEE92F5CBA92848 /* PhoneAgentRow.swift */,
 				D8759F1896EBC5B50A01F9AE /* PhoneHome.swift */,
+				E84DDDCE899CB1DEAE132F06 /* PhoneHosting.swift */,
 				A56720A2FB2275CAC4539183 /* PhoneKeyPanel.swift */,
 				31CAC83BAAFE0CB19F2F6FBF /* PhoneListRow.swift */,
 				8635A004239A05A30EA934E3 /* PhonePaneMenu.swift */,
@@ -641,6 +644,7 @@
 				CA8971DAFCB3FE66C5466BB8 /* PhoneAgentList.swift in Sources */,
 				C5FAF1DECE25D0BBE058E166 /* PhoneAgentRow.swift in Sources */,
 				CF542979C43FBE032AEA0771 /* PhoneHome.swift in Sources */,
+				B751337140111B90B64EA832 /* PhoneHosting.swift in Sources */,
 				6679ED6C6B8022148808B45C /* PhoneKeyPanel.swift in Sources */,
 				AF982C4C42B0466BC0894351 /* PhoneListRow.swift in Sources */,
 				B82746B64EACD7B8B4006AA7 /* PhonePaneMenu.swift in Sources */,
@@ -755,7 +759,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 50;
+				CURRENT_PROJECT_VERSION = 51;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -841,7 +845,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 50;
+				CURRENT_PROJECT_VERSION = 51;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

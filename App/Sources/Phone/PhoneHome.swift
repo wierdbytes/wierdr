@@ -18,8 +18,6 @@ import WierdrModel
 struct PhoneHome: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    /// The tab last shown: "all" or a space's id.
-    @AppStorage("phone.tab") private var savedTab = "all"
     /// Landscape on an iPhone: the limits give their room to the list.
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var paging = PhoneSpacePaging()
@@ -31,12 +29,15 @@ struct PhoneHome: View {
         let showsTabs = tabs.count > 1
         // The header's bottom from the screen's top: the pages' room for it.
         let headerHeight = safeTop + PhoneHomeHeader.height(showsTabs: showsTabs)
+        // Read here: the pages are made outside SwiftUI's update (`PhoneSpacePager`).
+        let scrollToTop = paging.scrollToTop
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 PhoneSpacePager(paging: paging, topInset: headerHeight,
-                                isEnabled: showsTabs && controller.compactColumn == .sidebar && !reorder.isActive) { scope in
+                                isEnabled: showsTabs && controller.compactColumn == .sidebar && !reorder.isActive,
+                                pageInputs: [AnyHashable(headerHeight), AnyHashable(showsTabs), AnyHashable(scrollToTop)]) { scope in
                     PhoneAgentList(scope: scope, topInset: headerHeight, edgeSwipesOnly: showsTabs,
-                                   scrollToTop: paging.scrollToTop[scope] ?? 0)
+                                   scrollToTop: scrollToTop[scope] ?? 0)
                 }
                 .modifier(PhoneReorderDim(isOn: reorder.isActive))
                 PhoneHeaderEdge(height: headerHeight)
@@ -62,10 +63,9 @@ struct PhoneHome: View {
         .onChange(of: tabs.map(\.scope), initial: true) { _, scopes in
             // The pages are only put in their places (a tab dragged over moves them by a page).
             withTransaction(Transaction(animation: nil)) {
-                paging.update(scopes: scopes, keeping: Self.scope(savedTab))
+                paging.update(scopes: scopes, keeping: paging.savedScope)
             }
         }
-        .onChange(of: paging.selectedScope) { _, scope in savedTab = Self.id(scope) }
         .onAppear { reorder.controller = controller }
         // A pane pushed over the list ends reordering, as Done; so do fewer than two spaces.
         .onChange(of: controller.compactColumn) { _, column in
@@ -88,17 +88,6 @@ struct PhoneHome: View {
             return PhoneSpaceTab(scope: .space(space.id), title: space.displayName,
                                  unread: status.flatMap { counts[$0] } ?? 0, status: status ?? .done, space: space)
         }
-    }
-
-    private static func id(_ scope: PhoneListScope) -> String {
-        switch scope {
-        case .all: return "all"
-        case .space(let id): return id
-        }
-    }
-
-    private static func scope(_ id: String) -> PhoneListScope {
-        id == "all" || id.isEmpty ? .all : .space(id)
     }
 }
 
@@ -170,7 +159,7 @@ private struct PhoneHomeHeader: View {
                             }
                             .buttonStyle(AttachPressStyle())
                             .accessibilityLabel("Go to")
-                            PhoneNewMenu(space: selectedSpace)
+                            PhoneNewMenu(paging: paging, tabs: showsTabs ? tabs : [])
                         }
                         .padding(.horizontal, 4)
                         .composerGlass(Capsule(), theme: theme)
@@ -179,12 +168,6 @@ private struct PhoneHomeHeader: View {
             }
             .padding(.horizontal, Self.sideInset)
         }
-    }
-
-    /// The space whose tab is shown (nil on "All", or without the strip).
-    private var selectedSpace: Space? {
-        guard showsTabs, case .space(let id) = paging.selectedScope else { return nil }
-        return tabs.first { $0.scope == .space(id) }?.space
     }
 
     /// Reordering the tabs: Telegram's bold Done in its own glass pill (12 pt either
@@ -359,13 +342,18 @@ private struct PhoneHeaderEdge: View {
 
 /// The header's +, Telegram's compose. On a space's tab: a new tab (shell or agent)
 /// in that space, on its computer. On "All": a new space, in the folder of the last
-/// pane you looked at (as the desktop's New Space), on its computer.
+/// pane you looked at (as the desktop's New Space), on its computer. It follows the
+/// tab shown itself (not the header: a new tab redraws only it).
 private struct PhoneNewMenu: View {
-    var space: Space?
+    var paging: PhoneSpacePaging
+    /// The strip's tabs (none without the strip: then always a new space).
+    var tabs: [PhoneSpaceTab]
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
+        let selected = paging.selectedScope
+        let space = selected == .all ? nil : tabs.first { $0.scope == selected }?.space
         let machine = space != nil ? space?.machine : controller.activeSpace?.machine
         Menu {
             if let space {

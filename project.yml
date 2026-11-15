@@ -11,7 +11,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.2.0"
-    CURRENT_PROJECT_VERSION: "50"
+    CURRENT_PROJECT_VERSION: "51"
 packages:
   WierdrKit:
     path: Packages/WierdrKit
@@ -75,6 +75,8 @@ targets:
         NSBonjourServices:
           - _ssh._tcp
         UIApplicationSupportsIndirectInputEvents: true
+        # ProMotion iPhones: animations at up to 120 Hz (else capped at 60, while scrolling runs at 120).
+        CADisableMinimumFrameDurationOnPhone: true
   # The agents Live Activity (App/Widgets); `wierdr-push` on the Mac drives it.
   WierdrWidgets:
     type: app-extension
