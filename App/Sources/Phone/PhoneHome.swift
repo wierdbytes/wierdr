@@ -4,18 +4,18 @@ import WierdrModel
 /// The iPhone's list, Telegram's chat list: a tab per space after "All"
 /// (`PhoneSpaceTabs`), their pages side by side (`PhoneSpacePager`: a swipe in the
 /// middle of the screen pages between them), and a header floating over the pages
-/// (they scroll under it): settings, the status counts (or the connection's state),
-/// +, the strip under them. Go to comes out of a page pulled down past its top
+/// (they scroll under it): settings and the status counts (or the connection's state),
+/// the strip under them with + at its right (within the right thumb's reach). Go to comes out of a page pulled down past its top
 /// (`PhoneAgentList`, `PullToSearch`). At the bottom the subscription limits (not in
 /// landscape, where the header leaves the list little room). No agent is "current" here: the list shows no focus and never scrolls to one.
 ///
 /// The tab shown is remembered (`phone.tab`: "all" or the space's id); when its
-/// space goes, its neighbour takes over. Without spaces the strip fades out and
-/// swipes don't page.
+/// space goes, its neighbour takes over. Without spaces the strip fades out (+ stays
+/// where it is) and swipes don't page.
 ///
 /// Reordering the tabs (`PhoneTabReorder`, Telegram's): the header's row is a Done
-/// button over the title, the list under the strip dims to half and takes no touches,
-/// and swipes don't page. Done, or a pane pushed, ends it and saves the order.
+/// button over the title, + goes (the strip takes its room), the list under the strip
+/// dims to half and takes no touches, and swipes don't page. Done, or a pane pushed, ends it and saves the order.
 struct PhoneHome: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -29,7 +29,7 @@ struct PhoneHome: View {
         let tabs = self.tabs
         let showsTabs = tabs.count > 1
         // The header's bottom from the screen's top: the pages' room for it.
-        let headerHeight = safeTop + PhoneHomeHeader.height(showsTabs: showsTabs)
+        let headerHeight = safeTop + PhoneHomeHeader.height
         // Read here: the pages are made outside SwiftUI's update (`PhoneSpacePager`).
         let scrollToTop = paging.scrollToTop
         VStack(spacing: 0) {
@@ -101,9 +101,10 @@ struct PhoneHome: View {
 
 /// Telegram's chat-list header over the pages: a 44-pt row 10 pt under the status
 /// bar (settings in a glass circle where Telegram has Edit, the title in the middle,
-/// + in a glass circle, 16 pt from the sides), then the strip 10 pt
-/// under it, 3 pt above the header's bottom. While the tabs are reordered, the row
-/// has only Done (where settings is) and the title.
+/// 16 pt from the sides), then 10 pt under it the strip and + in a glass circle as
+/// tall as the strip, 8 pt after it, 3 pt above the header's bottom. Without spaces
+/// only + is there, in the same place. While the tabs are reordered, the row has only
+/// Done (where settings is) and the title, and the strip takes +'s room.
 private struct PhoneHomeHeader: View {
     var tabs: [PhoneSpaceTab]
     var paging: PhoneSpacePaging
@@ -112,11 +113,11 @@ private struct PhoneHomeHeader: View {
 
     static let rowHeight: CGFloat = 44
     static let sideInset: CGFloat = 16
+    /// Between the strip and +.
+    static let newSpacing: CGFloat = 8
 
-    /// The header's height under the status bar.
-    static func height(showsTabs: Bool) -> CGFloat {
-        10 + rowHeight + (showsTabs ? 10 + PhoneSpaceTabs.height : 0) + 3
-    }
+    /// The header's height under the status bar (the strip's row stays without spaces: + is in it).
+    static let height: CGFloat = 10 + rowHeight + 10 + PhoneSpaceTabs.height + 3
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -126,12 +127,10 @@ private struct PhoneHomeHeader: View {
             row
                 .frame(height: Self.rowHeight)
                 .padding(.top, 10)
-            if showsTabs {
-                PhoneSpaceTabs(tabs: tabs, paging: paging, reorder: reorder)
-                    .padding(.horizontal, Self.sideInset)
-                    .padding(.top, 10)
-                    .transition(.opacity)
-            }
+            strip
+                .frame(height: PhoneSpaceTabs.height)
+                .padding(.horizontal, Self.sideInset)
+                .padding(.top, 10)
         }
         .padding(.bottom, 3)
         .frame(maxWidth: .infinity, alignment: .top)
@@ -162,12 +161,29 @@ private struct PhoneHomeHeader: View {
                     if !reorder.isActive {
                         // Go to is a pull of the list; VoiceOver's is here.
                         GoToAccessibilityButton()
-                        PhoneNewMenu(paging: paging, tabs: showsTabs ? tabs : [])
-                            .composerGlass(Circle(), theme: theme)
                     }
                 }
             }
             .padding(.horizontal, Self.sideInset)
+        }
+    }
+
+    /// The strip (none without spaces) and + at its right (none while reordering).
+    private var strip: some View {
+        HStack(spacing: Self.newSpacing) {
+            if showsTabs {
+                PhoneSpaceTabs(tabs: tabs, paging: paging, reorder: reorder)
+                    .transition(.opacity)
+            } else {
+                Spacer(minLength: 0)
+            }
+            if !reorder.isActive {
+                ComposerGlassGroup {
+                    PhoneNewMenu(paging: paging, tabs: showsTabs ? tabs : [])
+                        .composerGlass(Circle(), theme: theme)
+                }
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
         }
     }
 
@@ -340,7 +356,7 @@ private struct PhoneHeaderEdge: View {
     }
 }
 
-/// The header's +, Telegram's compose. On a space's tab: a new tab (shell or agent)
+/// The header's + (at the strip's right), Telegram's compose. On a space's tab: a new tab (shell or agent)
 /// in that space, on its computer. On "All": a new space, in the folder of the last
 /// pane you looked at (as the desktop's New Space), on its computer. It follows the
 /// tab shown itself (not the header: a new tab redraws only it).
@@ -365,9 +381,9 @@ private struct PhoneNewMenu: View {
             }
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 21, weight: .medium))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(theme.accent)
-                .frame(width: PhoneHomeHeader.rowHeight, height: PhoneHomeHeader.rowHeight)
+                .frame(width: PhoneSpaceTabs.height, height: PhoneSpaceTabs.height)
                 .contentShape(Circle())
         }
         .menuOrder(.fixed)
