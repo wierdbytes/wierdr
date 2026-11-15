@@ -30,7 +30,8 @@ final class PhoneTabReorder {
     @ObservationIgnored private var settling: Task<Void, Never>?
 
     /// Tabs moving over (a swap, the drop): Telegram's easeInOut 0.25 s.
-    static let motion = Animation.easeInOut(duration: 0.25)
+    static let motion = Animation.easeInOut(duration: motionDuration)
+    static let motionDuration = 0.25
     /// After the last move, how long the strip keeps the new order without the workspace's word.
     static let settleAfter: Duration = .seconds(2)
 

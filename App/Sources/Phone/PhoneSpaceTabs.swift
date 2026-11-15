@@ -29,8 +29,10 @@ struct PhoneSpaceTab: Identifiable, Equatable {
 ///
 /// The pill follows the pages (`PhoneSpacePaging`): while a finger moves them it
 /// slides and stretches between the current tab and the next by the same fraction;
-/// it settles with them. A tap selects a tab (its pages slide), lifting the pill for a
-/// moment (iPhone, iOS 26); a tap on the current tab takes its list to the top. A long press
+/// it settles with them, the strip scrolling with it (both by Core Animation,
+/// `PhoneStripMotion`, in the pages' transaction and along their curve). A tap selects
+/// a tab (its pages slide), lifting the pill for a moment (iPhone, iOS 26); a tap on
+/// the current tab takes its list to the top. A long press
 /// opens the tab's menu without lifting it: the space's (Rename, New Tab, Close
 /// Space), on "All" New Space; with two spaces or more, Reorder Tabs.
 ///
@@ -59,8 +61,10 @@ struct PhoneSpaceTabs: View {
     static let titleFont = UIFont.systemFont(ofSize: 15, weight: .medium)
     static let badgeFont = UIFont.systemFont(ofSize: 12, weight: .medium)
     static let badgeSpacing: CGFloat = 5
-    /// The pill's lift and drop.
-    static let liftSpring = Animation.spring(duration: 0.25, bounce: 0)
+    /// The pill's lift and drop: a spring this long, without bounce.
+    static let liftDuration = 0.25
+    /// How long the pill stays lifted after a tap.
+    static let liftHold = 0.3
     /// A dragged tab: bigger and see-through (Telegram's).
     static let dragScale: CGFloat = 1.2
     static let dragOpacity: CGFloat = 0.9
@@ -71,16 +75,11 @@ struct PhoneSpaceTabs: View {
     @Environment(\.theme) private var theme
     /// The width inside the border.
     @State private var lensWidth: CGFloat = 0
-    /// Where the app scrolls the strip to (`PhoneStripScroll`).
-    @State private var scroll = PhoneStripScroll()
-    /// Where the strip is scrolled to, or is going (the app's scrolls are animated).
+    /// The pill (resting and lifted) and the strip's scroll, moved outside SwiftUI.
+    @State private var motion = PhoneStripMotion()
+    /// Where the strip is scrolled to, as SwiftUI last saw it (reordering works in it; the
+    /// auto-scroll sets it as it scrolls).
     @State private var scrolledX: CGFloat = 0
-    @State private var scrollPhase: ScrollPhase = .idle
-    /// The pill is lifted (glass, bigger) for a moment after a tap.
-    @State private var lifted = false
-    @State private var unlift: Task<Void, Never>?
-    /// The strip has been scrolled to the pill once (the first time, at once).
-    @State private var placed = false
     /// The tab a finger drags in reorder mode.
     @State private var drag: TabDrag?
 
@@ -99,9 +98,9 @@ struct PhoneSpaceTabs: View {
         var x: CGFloat { startX + finger - fingerStart }
     }
 
-    // The pill moves at every step of a swipe: only the small views that draw it and
-    // keep it in sight (`PhoneTabPill`, `PhoneTabPillFollower`) follow it, not this
-    // body (its tabs are menus, costly to redraw).
+    // The pill moves at every step of a swipe: Core Animation moves it and the strip
+    // (`PhoneStripMotion`), and no SwiftUI view follows it (the tabs are menus, costly
+    // to redraw).
     var body: some View {
         let tabs = shownTabs
         let layout = Self.layout(tabs, width: lensWidth)
@@ -114,7 +113,10 @@ struct PhoneSpaceTabs: View {
             }
             // The lifted pill: glass over the strip's (outside its group, so they don't
             // merge), outside the scrolling tabs' clip, under the titles.
-            PhoneTabPill(paging: paging, tabs: tabs, layout: layout, kind: .lifted(lifted), scrolledX: $scrolledX)
+            PhoneStripLift(motion: motion, isDark: theme.isDark)
+                .padding(Self.lensInset)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             lens(tabs, layout)
                 .padding(Self.lensInset)
             draggedTab(tabs, layout)
@@ -125,12 +127,6 @@ struct PhoneSpaceTabs: View {
                               canBegin: { spaceTab(atStripX: $0) != nil },
                               began: beginDrag, moved: moveDrag, ended: endDrag, tick: autoScroll))
         .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Self.lensInset } action: { lensWidth = max(0, $0) }
-        .background {
-            PhoneTabPillFollower(paging: paging, tabs: tabs, layout: layout, width: lensWidth,
-                                 reordering: reorder.isActive) { focus, animated in
-                scrollToPill(focus, animated: animated)
-            }
-        }
         .onChange(of: reorder.isActive) { _, active in
             if !active { drag = nil }
         }
@@ -142,13 +138,14 @@ struct PhoneSpaceTabs: View {
     private func lens(_ tabs: [PhoneSpaceTab], _ layout: Layout) -> some View {
         // The current tab dragged: its pill goes with it, over the strip.
         let pillDragged = drag != nil && tabs.first { $0.scope == paging.selectedScope }?.space?.id == drag?.id
-        return PhoneStripScrollView(scroll: scroll, disabled: layout.fits, phase: { scrollPhase = $0 }, offset: { x in
-            // A finger's scroll (the app's own set `scrolledX` where they go).
-            if scrollPhase != .animating { scrolledX = x }
+        return PhoneStripScrollView(disabled: layout.fits, offset: { x in
+            if abs(x - scrolledX) > 0.01 { scrolledX = x }
         }) {
             ZStack(alignment: .leading) {
-                PhoneTabPill(paging: paging, tabs: tabs, layout: layout,
-                             kind: .resting(restingFill, hidden: lifted || pillDragged), scrolledX: $scrolledX)
+                PhoneStripRow(motion: motion, paging: paging, scopes: tabs.map(\.scope), layout: layout,
+                              width: lensWidth, fill: restingFill, hidden: pillDragged,
+                              reordering: reorder.isActive)
+                    .accessibilityHidden(true)
                 HStack(spacing: 0) {
                     ForEach(Array(tabs.enumerated()), id: \.element.id) { i, tab in
                         // Into reorder mode and out: the same title, crossfaded (the badge goes and comes).
@@ -265,28 +262,19 @@ struct PhoneSpaceTabs: View {
         // Telegram lifts its lens on the iPhone only, and only with the system's glass (iOS 26):
         // the drawn stand-in, lifted, would only hide the pill.
         guard moves, Device.isPhone, #available(iOS 26.0, *) else { return }
-        withAnimation(Self.liftSpring) { lifted = true }
-        unlift?.cancel()
-        unlift = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(0.3))
-            guard !Task.isCancelled else { return }
-            withAnimation(Self.liftSpring) { lifted = false }
-        }
+        motion.lift()
     }
 
     // MARK: Pill
 
-    /// The pill in the tabs' row: the current tab's slot (found by its scope: reordered,
-    /// the tabs move before the pages know), or between it and the next one by the
-    /// swipe's fraction (no neighbour that way: it stays).
-    static func pillFrame(_ layout: Layout, _ tabs: [PhoneSpaceTab], _ paging: PhoneSpacePaging) -> (x: CGFloat, width: CGFloat)? {
-        let scopes = paging.scopes
-        let scope = scopes.indices.contains(paging.pillIndex) ? scopes[paging.pillIndex] : nil
-        let i = tabs.firstIndex { $0.scope == scope } ?? paging.pillIndex
+    /// The pill in the tabs' row: tab `i`'s slot (the strip finds it by its scope:
+    /// reordered, the tabs move before the pages know), or between it and its neighbour
+    /// by the swipe's fraction (a finger moving left, negative, brings the next tab; no
+    /// neighbour that way: it stays).
+    static func pillFrame(_ layout: Layout, slot i: Int, fraction: CGFloat) -> (x: CGFloat, width: CGFloat)? {
         guard layout.slots.indices.contains(i) else { return nil }
         let current = layout.slots[i]
-        // A finger moving left (negative) brings the next tab.
-        let f = -paging.pillFraction
+        let f = -fraction
         let j = f > 0 ? i + 1 : i - 1
         guard f != 0, layout.slots.indices.contains(j) else { return current }
         let next = layout.slots[j]
@@ -294,50 +282,14 @@ struct PhoneSpaceTabs: View {
         return (current.x * (1 - a) + next.x * a, current.width * (1 - a) + next.width * a)
     }
 
-    /// What the strip's scroll follows.
-    fileprivate struct Focus: Equatable {
-        var minX: CGFloat = 0
-        var maxX: CGFloat = 0
-        var content: CGFloat = 0
-        var width: CGFloat = 0
-        var reordering = false
-
-        init(pill: (x: CGFloat, width: CGFloat)?, layout: Layout, width: CGFloat, reordering: Bool = false) {
-            if let pill { minX = pill.x; maxX = pill.x + pill.width }
-            content = layout.contentWidth
-            self.width = width
-            self.reordering = reordering
-        }
-    }
-
-    /// Scrolls the strip to keep the pill 100 pt in from its ends: with the pages
-    /// while a finger moves them, else in the pill's 0.45 s.
-    fileprivate func scrollToPill(_ focus: Focus, animated: Bool) {
-        guard focus.width > 0 else { return }
-        var x = scrolledX
-        if focus.content <= focus.width {
-            x = 0
-        } else {
-            if focus.maxX > x + focus.width - Self.lookahead { x = focus.maxX - focus.width + Self.lookahead }
-            if focus.minX < x + Self.lookahead { x = focus.minX - Self.lookahead }
-            x = min(max(x, 0), focus.content - focus.width)
-        }
-        let animated = animated && placed
-        placed = true
-        guard abs(x - scrolledX) > 0.25 else { return }
-        if animated {
-            withAnimation(PhonePagingMotion.settle) {
-                scroll.position.scrollTo(x: x)
-                scrolledX = x
-            }
-        } else {
-            var t = Transaction()
-            t.disablesAnimations = true
-            withTransaction(t) {
-                scroll.position.scrollTo(x: x)
-                scrolledX = x
-            }
-        }
+    /// Where the strip scrolls from `x` to keep the pill (`minX...maxX`) 100 pt in from
+    /// its ends (Telegram's lookahead); at 0 when the tabs fit.
+    static func scrollX(from x: CGFloat, pill: ClosedRange<CGFloat>, content: CGFloat, width: CGFloat) -> CGFloat {
+        guard width > 0, content > width else { return 0 }
+        var x = x
+        if pill.upperBound > x + width - lookahead { x = pill.upperBound - width + lookahead }
+        if pill.lowerBound < x + lookahead { x = pill.lowerBound - lookahead }
+        return min(max(x, 0), content - width)
     }
 
     // MARK: Reordering
@@ -477,12 +429,10 @@ struct PhoneSpaceTabs: View {
         if step < 0 ? start >= scrolledX : end <= scrolledX + lensWidth { return }
         let x = min(max(scrolledX + step, 0), layout.contentWidth - lensWidth)
         guard abs(x - scrolledX) > 0.01 else { return }
+        motion.scroll(to: x)
         var t = Transaction()
         t.disablesAnimations = true
-        withTransaction(t) {
-            scroll.position.scrollTo(x: x)
-            scrolledX = x
-        }
+        withTransaction(t) { scrolledX = x }
         dragMoved()
     }
 
@@ -605,22 +555,10 @@ struct PhoneSpaceTabs: View {
     }
 }
 
-/// The strip's scroll position, out of the strip's state: the app scrolls the strip at
-/// every step of a swipe (keeping the pill in sight), and a change of its state would
-/// redraw the whole strip (its tabs are menus) each time.
-@MainActor
-@Observable
-private final class PhoneStripScroll {
-    var position = ScrollPosition(edge: .leading)
-}
-
-/// The strip's scroll view, on its own: `scrollPosition` reads where the app scrolls it
-/// (`PhoneStripScroll`) as its body is made, so each scroll redraws this view, and the
-/// tabs inside (`content`, made by the strip) stay as they are.
+/// The strip's scroll view. The app scrolls it through the UIKit scroll view under it
+/// (`PhoneStripMotion`); `offset` reports where it is.
 private struct PhoneStripScrollView<Content: View>: View {
-    var scroll: PhoneStripScroll
     var disabled: Bool
-    var phase: (ScrollPhase) -> Void
     var offset: (CGFloat) -> Void
     @ViewBuilder var content: Content
 
@@ -629,8 +567,6 @@ private struct PhoneStripScrollView<Content: View>: View {
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .scrollDisabled(disabled)
-            .scrollPosition(Binding(get: { scroll.position }, set: { scroll.position = $0 }))
-            .onScrollPhaseChange { _, new in phase(new) }
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, x in offset(x) }
     }
 }
@@ -651,72 +587,552 @@ private struct PhoneTabSelection: ViewModifier {
 
 // MARK: - The pill
 
-/// The strip's pill where the pages have it (`PhoneSpaceTabs.pillFrame`): the resting
-/// one in the tabs' row, or the lifted glass one over the strip. Its own view, so a
-/// swipe's every step redraws only it.
-private struct PhoneTabPill: View {
-    enum Kind {
-        /// In the tabs' row, in its fill; hidden while lifted or dragged.
-        case resting(Color, hidden: Bool)
-        /// Over the strip, in glass, shown while lifted.
-        case lifted(Bool)
+/// The resting pill's place: a UIKit view in the tabs' row, under the titles, where
+/// `PhoneStripMotion` draws the pill and moves it, and the strip's scroll with it.
+private struct PhoneStripRow: UIViewRepresentable {
+    var motion: PhoneStripMotion
+    var paging: PhoneSpacePaging
+    /// The tabs' scopes, in the strip's order.
+    var scopes: [PhoneListScope]
+    var layout: PhoneSpaceTabs.Layout
+    /// The lens's width (the scroll view's).
+    var width: CGFloat
+    var fill: Color
+    /// The current tab is dragged in reorder mode: its pill goes with it, over the strip.
+    var hidden: Bool
+    var reordering: Bool
+
+    func makeUIView(context: Context) -> UIView {
+        let row = motion.row
+        motion.attach(to: paging)
+        return row
     }
 
-    var paging: PhoneSpacePaging
-    var tabs: [PhoneSpaceTab]
-    var layout: PhoneSpaceTabs.Layout
-    var kind: Kind
-    /// Where the strip is scrolled to (the lifted pill is outside the scrolling row).
-    @Binding var scrolledX: CGFloat
-
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        if let pill = PhoneSpaceTabs.pillFrame(layout, tabs, paging) {
-            switch kind {
-            case .resting(let fill, let hidden):
-                Capsule()
-                    .fill(fill)
-                    .frame(width: pill.width, height: PhoneSpaceTabs.itemHeight)
-                    .offset(x: pill.x)
-                    .opacity(hidden ? 0 : 1)
-                    .accessibilityHidden(true)
-            case .lifted(let lifted):
-                Color.clear
-                    .frame(width: pill.width, height: PhoneSpaceTabs.itemHeight)
-                    .padding(lifted ? -PhoneSpaceTabs.liftInset : 0)
-                    .composerGlass(Capsule(), theme: theme, interactive: false)
-                    .opacity(lifted ? 1 : 0)
-                    .position(x: PhoneSpaceTabs.lensInset + pill.x + pill.width / 2 - scrolledX,
-                              y: PhoneSpaceTabs.height / 2)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        }
+    func updateUIView(_ view: UIView, context: Context) {
+        let t = context.transaction
+        motion.update(scopes: scopes, layout: layout, width: width, fill: UIColor(fill), hidden: hidden,
+                      reordering: reordering, animation: t.disablesAnimations ? nil : t.animation)
     }
 }
 
-/// Keeps the pill in sight: scrolls the strip as it moves (`PhoneSpaceTabs.scrollToPill`),
-/// the first time at once. Its own view, as the pill's.
-private struct PhoneTabPillFollower: View {
-    var paging: PhoneSpacePaging
-    var tabs: [PhoneSpaceTab]
-    var layout: PhoneSpaceTabs.Layout
-    var width: CGFloat
-    var reordering: Bool
-    var scroll: (PhoneSpaceTabs.Focus, _ animated: Bool) -> Void
+/// The lifted pill's place: over the strip, as big as the lens and not clipped by it,
+/// under the titles; `PhoneStripMotion` scrolls it with the strip.
+private struct PhoneStripLift: UIViewRepresentable {
+    var motion: PhoneStripMotion
+    var isDark: Bool
 
-    var body: some View {
-        let pill = PhoneSpaceTabs.pillFrame(layout, tabs, paging)
-        Color.clear
-            .onChange(of: PhoneSpaceTabs.Focus(pill: pill, layout: layout, width: width, reordering: reordering)) { old, focus in
-                // Reordering moves the tabs, not the strip (but for its auto-scroll).
-                guard !focus.reordering else { return }
-                guard old.reordering else { return scroll(focus, !paging.isDragging) }
-                // Done: once the strip has its badges back (a wider row it can scroll further in).
-                Task { @MainActor in scroll(focus, true) }
+    func makeUIView(context: Context) -> UIView { motion.liftView }
+
+    func updateUIView(_ view: UIView, context: Context) { motion.setDark(isDark) }
+}
+
+/// The strip's pill and scroll on Core Animation, as the pages (`PhonePagerController`):
+/// a finger's step sets them at once, and the settling moves are animations the render
+/// server plays, added in the pages' transaction along their curve, so the pill and the
+/// strip move with the pages whatever the main thread is doing. The only pill there is:
+/// the resting one in the tabs' row (`PhoneStripRow`), and after a tap the lifted glass
+/// one over the strip (`PhoneStripLift`), outside the lens's clip, moved with it.
+///
+/// Every move is an additive animation (`PhoneTrack`): where the pill and the strip are
+/// drawn is solved here, a frame ahead (`PhoneMotion.shownTime`), so a move taken over
+/// goes on from there; the tabs' new places (a badge, reordering) retarget a move under
+/// way, keeping its pace.
+///
+/// The strip's scroll is the UIKit scroll view SwiftUI's `ScrollView` draws with, the one
+/// around the row (its offset and bounds are moved here; nothing in the strip may depend
+/// on SwiftUI seeing the offset mid-move). The strip follows the pill while the pages move
+/// it; a finger on the strip stops a move where it's drawn and the strip stays where the
+/// finger leaves it until the pages move again. While the tabs are reordered the strip
+/// doesn't follow the pill (only the auto-scroll moves it).
+@MainActor
+final class PhoneStripMotion: NSObject, PhoneStripSurface {
+    // The views are made when first shown: the strip's state makes a motion at every
+    // update of its body, and keeps only the first.
+    /// The tabs' row: the resting pill's place.
+    private(set) lazy var row: Row = {
+        let row = Row()
+        row.motion = self
+        row.backgroundColor = .clear
+        row.isUserInteractionEnabled = false
+        row.addSubview(pill)
+        return row
+    }()
+    /// Over the strip: the lifted pill's place.
+    private(set) lazy var liftView = LiftView()
+    private lazy var pill: UIView = {
+        let pill = UIView()
+        pill.layer.cornerRadius = PhoneSpaceTabs.itemHeight / 2
+        pill.isUserInteractionEnabled = false
+        return pill
+    }()
+    /// The lifted pill: the system's glass (iPhone, iOS 26); none before.
+    private lazy var glass: UIVisualEffectView? = {
+        guard Device.isPhone, #available(iOS 26.0, *) else { return nil }
+        let glass = UIVisualEffectView(effect: Self.glassEffect(dark: isDark))
+        glass.cornerConfiguration = .capsule()
+        glass.isUserInteractionEnabled = false
+        glass.alpha = 0
+        liftView.space.addSubview(glass)
+        return glass
+    }()
+    private weak var scrollView: UIScrollView?
+    private var observations: [NSKeyValueObservation] = []
+
+    private var pillState = PhoneStripPill(scope: .all, fraction: 0)
+    private var scopes: [PhoneListScope] = []
+    private var layout = PhoneSpaceTabs.Layout(slots: [], contentWidth: 0, fits: true)
+    private var width: CGFloat = 0
+    private var reordering = false
+    /// The resting pill is hidden (the current tab dragged).
+    private var hidden = false
+    private var lifted = false
+    private var unlift: DispatchWorkItem?
+    private var isDark = true
+    /// The pill has been placed once (the first time, at once).
+    private var placed = false
+    /// The strip keeps the pill in sight: the pages moved it last, not a finger on the strip.
+    private var following = true
+    /// Where the strip is to scroll once its row is wide enough: a row that grows (a
+    /// badge, reordering done) is laid out after the pill has moved, and the scroll view
+    /// keeps its offset within the row it has.
+    private var pendingX: CGFloat?
+    private var placing = false
+
+    /// The pill's left edge and width in the row, and the strip's offset.
+    private var pillX = PhoneTrack(0)
+    private var pillWidth = PhoneTrack(0)
+    private var offset = PhoneTrack(0)
+
+    private static let key = "strip."
+    private static let liftKey = "lift."
+    private var serial = 0
+
+    func attach(to paging: PhoneSpacePaging) {
+        // The lifted pill moves with the resting one from the start.
+        _ = glass
+        paging.strip = self
+    }
+
+    /// The representable's inputs: the tabs' new places move the pill (and the strip,
+    /// while it follows the pill and no finger is on it) along SwiftUI's animation of
+    /// them, or on with a move under way.
+    func update(scopes: [PhoneListScope], layout: PhoneSpaceTabs.Layout, width: CGFloat, fill: UIColor,
+                hidden: Bool, reordering: Bool, animation: Animation?) {
+        if pill.backgroundColor != fill { pill.backgroundColor = fill }
+        let timing = animation.map(Self.timing)
+        if hidden != self.hidden {
+            self.hidden = hidden
+            fadePill(timing.map { .curve($0.duration, $0.curve) } ?? .now)
+        }
+        let reorderEnded = self.reordering && !reordering
+        let changed = scopes != self.scopes || width != self.width || !Self.same(layout, self.layout)
+        self.scopes = scopes
+        self.layout = layout
+        self.width = width
+        self.reordering = reordering
+        // Done reordering: the strip goes back to the pill (it stayed put meanwhile).
+        if reorderEnded { following = true }
+        guard changed || reorderEnded || !placed else { return }
+        guard placed else { return place(.jump, scroll: true) }
+        let scroll = following && !reordering && scrollView.map { !$0.isTracking && !$0.isDecelerating } ?? false
+        let now = CACurrentMediaTime()
+        if let timing {
+            place(.retarget(timing.duration, timing.curve), scroll: scroll)
+        } else if let end = [pillX, pillWidth, offset].compactMap({ $0.end(after: now) }).max() {
+            place(.retarget(end - now, PhoneMotion.telegram), scroll: scroll)
+        } else {
+            place(.jump, scroll: scroll)
+        }
+    }
+
+    func setDark(_ dark: Bool) {
+        guard dark != isDark else { return }
+        isDark = dark
+        if #available(iOS 26.0, *), let glass { glass.effect = Self.glassEffect(dark: dark) }
+    }
+
+    // MARK: PhoneStripSurface
+
+    func follow(_ pill: PhoneStripPill, _ move: PhoneStripMove) {
+        pillState = pill
+        following = true
+        switch move {
+        case .jump: place(.jump, scroll: !reordering, fromPages: true)
+        case .track: place(.track, scroll: !reordering, fromPages: true)
+        case .settle(let duration):
+            place(.fresh(duration, PhoneMotion.telegram), scroll: !reordering, fromPages: true)
+        }
+    }
+
+    /// The reorder's auto-scroll: the strip at x, at once.
+    func scroll(to x: CGFloat) {
+        guard let scrollView else { return }
+        stopScroll(scrollView)
+        offset.set(x)
+        setOffset(scrollView, x, stopFling: false)
+    }
+
+    /// A tap took the pill to a tab: it lifts (glass, bigger) for a moment, and drops.
+    func lift() {
+        guard glass != nil else { return }
+        setLifted(true)
+        unlift?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.setLifted(false) }
+        unlift = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + PhoneSpaceTabs.liftHold, execute: work)
+    }
+
+    // MARK: Moving
+
+    private enum Move {
+        /// At once.
+        case jump
+        /// A finger's step: at once, the strip no faster than the pill moves (taken
+        /// mid-settle, the strip isn't yet where the pill wants it, and doesn't jump there).
+        case track
+        /// From where they're drawn, along a new curve (as the pages).
+        case fresh(Double, PhoneCurve)
+        /// The moves under way going on, toward the new place.
+        case retarget(Double, PhoneCurve)
+    }
+
+    /// The pill where `pillState` has it in the tabs' row, and the strip (when `scroll`)
+    /// scrolled to keep it 100 pt in from its ends. From the pages (`fromPages`), a fling
+    /// of the strip stops.
+    private func place(_ move: Move, scroll follows: Bool, fromPages: Bool = false) {
+        guard width > 0, let i = scopes.firstIndex(of: pillState.scope),
+              let slot = PhoneSpaceTabs.pillFrame(layout, slot: i, fraction: pillState.fraction) else { return }
+        let now = CACurrentMediaTime()
+        let shown = PhoneMotion.shownTime(row)
+        let scroll = follows ? scrollView : nil
+        let drawnX = pillX.value(at: shown), drawnWidth = pillWidth.value(at: shown)
+        let drawnOffset = offset.value(at: shown)
+        var x: CGFloat?
+        if let scroll {
+            let content = max(0, layout.contentWidth - width)
+            var to = PhoneSpaceTabs.scrollX(from: drawnOffset, pill: slot.x...(slot.x + slot.width),
+                                            content: layout.contentWidth, width: width)
+            if case .track = move {
+                let step = max(abs(slot.x - drawnX), abs(slot.x + slot.width - drawnX - drawnWidth))
+                to = min(max(to, drawnOffset - step), drawnOffset + step)
             }
-            .onAppear { scroll(PhoneSpaceTabs.Focus(pill: pill, layout: layout, width: width), false) }
-            .accessibilityHidden(true)
+            // Within the row (not where a bounce has it).
+            to = min(max(to, 0), content)
+            let reach = Self.maxOffset(scroll)
+            pendingX = to > reach + 0.5 ? to : nil
+            x = min(to, reach)
+        }
+        placed = true
+        placing = true
+        CATransaction.begin()
+        switch move {
+        case .jump, .track:
+            stopPill()
+            pillX.set(slot.x)
+            pillWidth.set(slot.width)
+            if let scroll, let x {
+                stopScroll(scroll)
+                offset.set(x)
+                setOffset(scroll, x, stopFling: fromPages)
+            }
+        case .fresh(let duration, let curve):
+            stopPill()
+            pillX.set(drawnX)
+            pillWidth.set(drawnWidth)
+            movePill(to: slot, at: now, duration: duration, curve: curve)
+            if let scroll, let x {
+                stopScroll(scroll)
+                offset.set(drawnOffset)
+                moveScroll(scroll, to: x, at: now, duration: duration, curve: curve, stopFling: fromPages)
+            }
+        case .retarget(let duration, let curve):
+            movePill(to: slot, at: now, duration: duration, curve: curve)
+            if let scroll, let x {
+                moveScroll(scroll, to: x, at: now, duration: duration, curve: curve, stopFling: fromPages)
+            }
+        }
+        frames()
+        CATransaction.commit()
+        placing = false
+        contentSized()
+    }
+
+    /// The pill to `slot` along `curve`: an additive move on the resting pill and the lifted one.
+    private func movePill(to slot: (x: CGFloat, width: CGFloat), at now: CFTimeInterval,
+                          duration: Double, curve: PhoneCurve) {
+        let dx = pillX.move(to: slot.x, at: now, duration: duration, curve: curve)
+        let dw = pillWidth.move(to: slot.width, at: now, duration: duration, curve: curve)
+        guard abs(dx) > 0.01 || abs(dw) > 0.01 else { return }
+        for layer in [pill.layer, glass?.layer].compactMap({ $0 }) {
+            additive(layer, "position", NSValue(cgPoint: CGPoint(x: dx + dw / 2, y: 0)),
+                     NSValue(cgPoint: .zero), duration, curve)
+            additive(layer, "bounds.size", NSValue(cgSize: CGSize(width: dw, height: 0)),
+                     NSValue(cgSize: .zero), duration, curve)
+        }
+    }
+
+    /// The strip to `x` along `curve`, and the lifted pill's place with it.
+    private func moveScroll(_ scroll: UIScrollView, to x: CGFloat, at now: CFTimeInterval,
+                            duration: Double, curve: PhoneCurve, stopFling: Bool) {
+        let dx = offset.move(to: x, at: now, duration: duration, curve: curve)
+        setOffset(scroll, x, stopFling: stopFling)
+        guard abs(dx) > 0.01 else { return }
+        for layer in [scroll.layer, liftView.space.layer] {
+            additive(layer, "bounds.origin", NSValue(cgPoint: CGPoint(x: dx, y: 0)),
+                     NSValue(cgPoint: .zero), duration, curve)
+        }
+    }
+
+    /// The pills' frames where they're going (their moves are additive on top).
+    private func frames() {
+        let frame = CGRect(x: pillX.model, y: 0, width: pillWidth.model, height: PhoneSpaceTabs.itemHeight)
+        let lift = lifted ? -PhoneSpaceTabs.liftInset : 0
+        UIView.performWithoutAnimation {
+            pill.frame = frame
+            glass?.frame = frame.insetBy(dx: lift, dy: lift)
+        }
+    }
+
+    private func setOffset(_ scroll: UIScrollView, _ x: CGFloat, stopFling: Bool) {
+        if scroll.contentOffset.x != x || stopFling && scroll.isDecelerating {
+            scroll.setContentOffset(CGPoint(x: x, y: scroll.contentOffset.y), animated: false)
+        }
+        if liftView.space.bounds.origin.x != x {
+            UIView.performWithoutAnimation { liftView.space.bounds.origin.x = x }
+        }
+    }
+
+    /// The row grew: the scroll that waited for it, the strip's move under way going on
+    /// (or a whole settle).
+    private func contentSized() {
+        guard !placing, following, let want = pendingX, let scroll = scrollView else { return }
+        let reach = Self.maxOffset(scroll)
+        let x = min(want, reach)
+        if x >= want - 0.5 { pendingX = nil }
+        guard abs(x - offset.model) > 0.25 else { return }
+        let now = CACurrentMediaTime()
+        let end = [pillX, pillWidth, offset].compactMap { $0.end(after: now) }.max()
+        let duration = end.map { max($0 - now, 0.2) } ?? PhonePagingMotion.settleDuration
+        CATransaction.begin()
+        moveScroll(scroll, to: x, at: now, duration: duration, curve: PhoneMotion.telegram, stopFling: false)
+        CATransaction.commit()
+    }
+
+    /// The strip's offset changed: by us, or by a finger or SwiftUI (keeping it within
+    /// its row), and then it's there, at once. The lifted pill's place goes with it.
+    private func offsetChanged() {
+        guard let scroll = scrollView else { return }
+        let x = scroll.contentOffset.x
+        if abs(x - offset.model) > 0.5 {
+            stopScroll(scroll)
+            offset.set(x)
+        }
+        if liftView.space.bounds.origin.x != x {
+            UIView.performWithoutAnimation { liftView.space.bounds.origin.x = x }
+        }
+    }
+
+    /// A finger came down on the strip: its move stops where it's drawn (the scroll view
+    /// takes it from there, not from where it was going), and it stops following the pill.
+    private func touched() {
+        following = false
+        pendingX = nil
+        guard let scroll = scrollView, offset.end(after: CACurrentMediaTime()) != nil else { return }
+        let x = offset.value(at: CACurrentMediaTime())
+        stopScroll(scroll)
+        offset.set(x)
+        setOffset(scroll, x, stopFling: false)
+    }
+
+    // MARK: Lift and fade
+
+    private enum Fade {
+        case now
+        case curve(Double, PhoneCurve)
+        /// The lift's spring.
+        case spring
+    }
+
+    private func setLifted(_ on: Bool) {
+        guard on != lifted, let glass else { return }
+        lifted = on
+        let grow = 2 * PhoneSpaceTabs.liftInset * (on ? 1 : -1)
+        CATransaction.begin()
+        frames()
+        let spring = Self.spring("bounds.size")
+        spring.isAdditive = true
+        spring.fromValue = NSValue(cgSize: CGSize(width: -grow, height: -grow))
+        spring.toValue = NSValue(cgSize: .zero)
+        serial += 1
+        glass.layer.add(spring, forKey: Self.liftKey + "\(serial)")
+        fade(glass, to: on ? 1 : 0, .spring)
+        fadePill(.spring)
+        CATransaction.commit()
+    }
+
+    /// The resting pill shown or hidden (lifted, or its tab dragged).
+    private func fadePill(_ how: Fade) {
+        fade(pill, to: hidden || lifted ? 0 : 1, how)
+    }
+
+    private func fade(_ view: UIView, to alpha: CGFloat, _ how: Fade) {
+        let from = (view.layer.presentation() ?? view.layer).opacity
+        view.layer.removeAnimation(forKey: Self.liftKey + "opacity")
+        UIView.performWithoutAnimation { view.alpha = alpha }
+        let a: CABasicAnimation
+        switch how {
+        case .now: return
+        case .curve(let duration, let curve):
+            a = CABasicAnimation(keyPath: "opacity")
+            a.duration = duration
+            a.timingFunction = curve.function
+        case .spring:
+            a = Self.spring("opacity")
+        }
+        a.fromValue = from
+        a.toValue = Float(alpha)
+        view.layer.add(a, forKey: Self.liftKey + "opacity")
+    }
+
+    private static func spring(_ keyPath: String) -> CASpringAnimation {
+        let a = CASpringAnimation(perceptualDuration: PhoneSpaceTabs.liftDuration, bounce: 0)
+        a.keyPath = keyPath
+        a.duration = a.settlingDuration
+        a.preferredFrameRateRange = PhoneMotion.frameRate
+        return a
+    }
+
+    @available(iOS 26.0, *)
+    private static func glassEffect(dark: Bool) -> UIGlassEffect {
+        let effect = UIGlassEffect(style: .regular)
+        effect.isInteractive = false
+        effect.tintColor = .white.withAlphaComponent(dark ? 0.025 : 0.1)
+        return effect
+    }
+
+    // MARK: Helpers
+
+    private func additive(_ layer: CALayer, _ keyPath: String, _ from: Any, _ to: Any,
+                          _ duration: Double, _ curve: PhoneCurve) {
+        let a = CABasicAnimation(keyPath: keyPath)
+        a.isAdditive = true
+        a.fromValue = from
+        a.toValue = to
+        a.duration = duration
+        a.timingFunction = curve.function
+        a.preferredFrameRateRange = PhoneMotion.frameRate
+        serial += 1
+        layer.add(a, forKey: Self.key + "\(serial)")
+    }
+
+    /// The pills' moves off (not the lift's).
+    private func stopPill() {
+        for layer in [pill.layer, glass?.layer].compactMap({ $0 }) { Self.remove(layer, Self.key) }
+    }
+
+    /// The strip's moves off (ours, and UIKit's on its bounds), and the lifted pill's place's.
+    private func stopScroll(_ scroll: UIScrollView) {
+        Self.remove(scroll.layer, Self.key, "bounds")
+        Self.remove(liftView.space.layer, Self.key)
+    }
+
+    private static func remove(_ layer: CALayer, _ prefixes: String...) {
+        for key in layer.animationKeys() ?? [] where prefixes.contains(where: key.hasPrefix) {
+            layer.removeAnimation(forKey: key)
+        }
+    }
+
+    private static func maxOffset(_ scroll: UIScrollView) -> CGFloat {
+        let inset = scroll.adjustedContentInset
+        return max(-inset.left, scroll.contentSize.width + inset.right - scroll.bounds.width)
+    }
+
+    /// SwiftUI's animation of the tabs' places, on Core Animation.
+    private static func timing(_ animation: Animation) -> (duration: Double, curve: PhoneCurve) {
+        if animation == PhonePagingMotion.settle { return (PhonePagingMotion.settleDuration, PhoneMotion.telegram) }
+        if animation == PhoneTabReorder.motion { return (PhoneTabReorder.motionDuration, PhoneMotion.easeInOut) }
+        return (PhonePagingMotion.relayoutDuration, PhoneMotion.easeInOut)
+    }
+
+    private static func same(_ a: PhoneSpaceTabs.Layout, _ b: PhoneSpaceTabs.Layout) -> Bool {
+        a.contentWidth == b.contentWidth && a.fits == b.fits && a.slots.count == b.slots.count
+            && zip(a.slots, b.slots).allSatisfy { $0.x == $1.x && $0.width == $1.width }
+    }
+
+    // MARK: Views
+
+    /// Finds the scroll view around the row, and watches it: its row's size, its offset,
+    /// a finger coming down.
+    fileprivate func rowMoved() {
+        guard row.window != nil else { return }
+        var view = row.superview
+        while let v = view, !(v is UIScrollView) { view = v.superview }
+        let found = view as? UIScrollView
+        assert(found != nil, "The strip's row isn't in a scroll view: the strip won't follow the pill")
+        guard let found, found !== scrollView else { return }
+        scrollView = found
+        observations = [
+            found.observe(\.contentSize, options: []) { [weak self] _, _ in
+                MainActor.assumeIsolated { self?.contentSized() }
+            },
+            found.observe(\.contentOffset, options: []) { [weak self] _, _ in
+                MainActor.assumeIsolated { self?.offsetChanged() }
+            },
+        ]
+        let touch = TouchDown { [weak self] in self?.touched() }
+        found.addGestureRecognizer(touch)
+        offset.set(found.contentOffset.x)
+        place(.jump, scroll: !reordering)
+    }
+
+    /// The tabs' row (SwiftUI lays it out as wide as the row).
+    final class Row: UIView {
+        fileprivate weak var motion: PhoneStripMotion?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            motion?.rowMoved()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            // The row grew (its scroll view's content with it, or about to).
+            motion?.contentSized()
+        }
+    }
+
+    /// The lifted pill's place: `space` scrolls with the strip (its bounds' origin is the
+    /// strip's offset), not clipped.
+    final class LiftView: UIView {
+        let space = UIView()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            space.frame = bounds
+            space.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            addSubview(space)
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+    }
+
+    /// Tells when a finger comes down on the strip, and fails: the strip's own scrolling
+    /// and the tabs' taps go on as if it weren't there.
+    private final class TouchDown: UIGestureRecognizer {
+        private let down: () -> Void
+
+        init(_ down: @escaping () -> Void) {
+            self.down = down
+            super.init(target: nil, action: nil)
+            cancelsTouchesInView = false
+            delaysTouchesBegan = false
+            delaysTouchesEnded = false
+        }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            down()
+            state = .failed
+        }
     }
 }

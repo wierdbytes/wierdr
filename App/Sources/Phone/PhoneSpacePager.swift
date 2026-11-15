@@ -12,7 +12,8 @@ enum PhonePagingMotion {
     /// The pages sliding after a tap on a tab.
     static let tapSlideDuration = 0.35
     /// Tabs coming and going: the strip lays itself out again.
-    static let relayout = Animation.easeInOut(duration: 0.2)
+    static let relayout = Animation.easeInOut(duration: relayoutDuration)
+    static let relayoutDuration = 0.2
 
     /// The strips along the screen's sides where a swipe is a row's (its actions), not the pager's.
     static func edgeWidth(_ width: CGFloat) -> CGFloat { min(max(width / 6, 22), 80) }
@@ -29,6 +30,9 @@ protocol PhonePagerSurface: AnyObject {
     /// The pages for `PhoneSpacePaging.pages` in their places at its position, at once (a slide
     /// stops): the ones missing are made, the others let go.
     func place()
+    /// The current page's neighbours made, if missing, the pages going on as they move
+    /// (making a page takes a while: a finger takes them after that, where they are then).
+    func makeNeighbours()
     /// The finger: the pages at `position`, at once.
     func track(_ position: CGFloat)
     /// From where the pages are drawn to `position` along Telegram's curve; `done` when it
@@ -36,13 +40,39 @@ protocol PhonePagerSurface: AnyObject {
     func slide(to position: CGFloat, duration: Double, done: @escaping () -> Void)
 }
 
+/// What moves the strip's pill and scroll (`PhoneStripMotion`): Core Animation too, so they
+/// move with the pages, in the same transaction and along the same curve, whatever the
+/// main thread is doing.
+@MainActor
+protocol PhoneStripSurface: AnyObject {
+    /// The pill to `pill` and the strip scrolled to keep it in sight, from where they're drawn.
+    func follow(_ pill: PhoneStripPill, _ move: PhoneStripMove)
+}
+
+/// Where the strip's pill is: on a tab, and how far toward its neighbour (as
+/// `PhoneSpacePaging.fraction`: a finger moving left, negative, brings the next tab).
+struct PhoneStripPill: Equatable {
+    var scope: PhoneListScope
+    var fraction: CGFloat
+}
+
+enum PhoneStripMove {
+    /// At once (the tabs changed).
+    case jump
+    /// A finger's step: at once, but the strip no faster than the pill.
+    case track
+    /// Along Telegram's curve, in this many seconds.
+    case settle(Double)
+}
+
 /// Which tab of the iPhone's list shows, and how far a swipe or a slide has moved
 /// the pages: shared by the strip (`PhoneSpaceTabs`, its pill) and the pages
 /// (`PhoneSpacePager`). Telegram's folder paging: the pages and the pill follow the
 /// finger, and settle on a tab when it lets go.
 ///
-/// The pages move by Core Animation (`PhonePagerSurface`), so their place isn't
-/// observed: a finger's step changes only the pill here, and the views that draw it.
+/// The pages, the strip's pill and its scroll move by Core Animation
+/// (`PhonePagerSurface`, `PhoneStripSurface`), told here as they move: none of it is
+/// observed, so a finger's step updates no SwiftUI view.
 @MainActor
 @Observable
 final class PhoneSpacePaging {
@@ -50,12 +80,8 @@ final class PhoneSpacePaging {
     private(set) var scopes: [PhoneListScope] = [.all]
     /// The page in place, or the one the pages are settling on.
     private(set) var selected = 0
-    /// The strip's pill: its tab and how far toward the next one (same sign as `fraction`).
-    /// After a swipe it moves with the pages; after a tap on its own, slower.
-    private(set) var pillIndex = 0
-    private(set) var pillFraction: CGFloat = 0
     /// A finger is moving the pages.
-    private(set) var isDragging = false
+    @ObservationIgnored private(set) var isDragging = false
     /// Bumped by a tap on the current tab: its list scrolls to the top.
     private(set) var scrollToTop: [PhoneListScope: Int] = [:]
 
@@ -65,6 +91,13 @@ final class PhoneSpacePaging {
     /// out beside the new one (none of the tabs between show).
     @ObservationIgnored private(set) var leaving: Int?
     @ObservationIgnored weak var surface: PhonePagerSurface?
+    /// The strip (a new one is told where the pill is).
+    @ObservationIgnored weak var strip: PhoneStripSurface? {
+        didSet { strip?.follow(stripPill, .jump) }
+    }
+    /// Where the strip's pill is: after a swipe it moves with the pages; after a tap on
+    /// its own, slower.
+    @ObservationIgnored private(set) var stripPill = PhoneStripPill(scope: .all, fraction: 0)
     /// Where the pages were when the finger took them, in page widths.
     @ObservationIgnored private var dragStart: CGFloat = 0
     /// Counts the slides, so a finished one doesn't end a later one.
@@ -75,11 +108,16 @@ final class PhoneSpacePaging {
 
     var selectedScope: PhoneListScope { scopes[min(selected, scopes.count - 1)] }
 
+    /// The tab to keep when the tabs change: the one last chosen (a swipe or a tap, even
+    /// before the pages are at rest), else the one last shown before launch.
+    var preferredScope: PhoneListScope { chosen ?? savedScope }
+    @ObservationIgnored private var chosen: PhoneListScope?
+
     /// The tab last shown, kept across launches (`phone.tab`: "all" or a space's id). In
     /// UserDefaults, not SwiftUI's `@AppStorage` (a new tab would redraw the whole list),
     /// and written once the pages are at rest: any write redraws every `@AppStorage`
     /// view (the limits under the list).
-    var savedScope: PhoneListScope {
+    private var savedScope: PhoneListScope {
         let id = UserDefaults.standard.string(forKey: Self.savedKey) ?? "all"
         return id == "all" || id.isEmpty ? .all : .space(id)
     }
@@ -101,6 +139,15 @@ final class PhoneSpacePaging {
         var scope: PhoneListScope
         var index: Int
         var place: Int
+    }
+
+    /// The strip's pill to tab `index`, `fraction` of the way to its neighbour. At once
+    /// and where it is already: nothing (the strip follows the tabs' new places itself).
+    private func moveStrip(_ index: Int, fraction: CGFloat, _ move: PhoneStripMove) {
+        let pill = PhoneStripPill(scope: scopes[min(max(index, 0), scopes.count - 1)], fraction: fraction)
+        if case .jump = move, pill == stripPill { return }
+        stripPill = pill
+        strip?.follow(pill, move)
     }
 
     /// The pages that exist: the current one and its neighbours, or during a far tap's
@@ -136,12 +183,11 @@ final class PhoneSpacePaging {
         let leavingScope = leaving.map { old[$0] }
         scopes = new.isEmpty ? [.all] : new
         selected = min(index, scopes.count - 1)
-        pillIndex = selected
-        pillFraction = isDragging ? fraction : 0
         leaving = leavingScope.flatMap { scopes.firstIndex(of: $0) }.flatMap { $0 == selected ? nil : $0 }
-        if scopes.count < 2 { fraction = 0; pillFraction = 0 }
+        if scopes.count < 2 { fraction = 0 }
         slideID += 1
         surface?.place()
+        moveStrip(selected, fraction: isDragging ? fraction : 0, .jump)
         saveTab()
     }
 
@@ -153,10 +199,8 @@ final class PhoneSpacePaging {
             scrollToTop[scopes[index], default: 0] += 1
             return
         }
-        withAnimation(PhonePagingMotion.settle) {
-            pillIndex = index
-            pillFraction = 0
-        }
+        moveStrip(index, fraction: 0, .settle(PhonePagingMotion.settleDuration))
+        chosen = scopes[index]
         slideID += 1
         let id = slideID
         if abs(index - selected) <= 1 && leaving == nil || index == selected {
@@ -193,21 +237,18 @@ final class PhoneSpacePaging {
 
     /// A finger took the pages: they go on from where they are, even mid-slide.
     func dragBegan() {
+        // Its neighbours (made after the last slide, or now if it's still on its way), before
+        // the pages and the pill are taken where they're drawn.
+        surface?.makeNeighbours()
         let at = surface?.drawnPosition ?? position
         slideID += 1
         // A far tap's slide ends here: the page beside the new one is its real neighbour again.
         leaving = nil
         fraction = CGFloat(selected) - at
         dragStart = fraction
-        // Its neighbours (made after the last slide, or now if it's still on its way).
         surface?.place()
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) {
-            isDragging = true
-            if pillIndex != selected { pillIndex = selected }
-            pillFraction = fraction
-        }
+        moveStrip(selected, fraction: fraction, .track)
+        isDragging = true
     }
 
     /// The finger moved `translation` points (right is positive) on pages `width` wide.
@@ -219,12 +260,7 @@ final class PhoneSpacePaging {
         if selected == scopes.count - 1 && x < 0 { x = -PhonePagingMotion.rubberBand(-x) }
         fraction = x / width + dragStart
         surface?.track(position)
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) {
-            if pillIndex != selected { pillIndex = selected }
-            pillFraction = fraction
-        }
+        moveStrip(selected, fraction: fraction, .track)
     }
 
     /// The finger let go: fast, one tab its way (or back, against the swipe); slow,
@@ -240,24 +276,23 @@ final class PhoneSpacePaging {
             }
         }
         target = min(max(target, 0), scopes.count - 1)
+        chosen = scopes[target]
         slideID += 1
         let id = slideID
         // The pages' slide first, sent to the render server before SwiftUI redraws what the
-        // new tab changes (the pill, the header, the strip): no frame waits for that.
+        // new tab changes (the header, the tabs' traits): no frame waits for that.
         surface?.slide(to: CGFloat(target), duration: PhonePagingMotion.settleDuration) { [weak self] in
             guard let self, id == self.slideID else { return }
             // At rest: the new tab's neighbours are made now, not while the pages move.
             self.surface?.place()
             self.saveTab()
         }
+        // The pill and the strip's scroll with them, in the same transaction.
+        moveStrip(target, fraction: 0, .settle(PhonePagingMotion.settleDuration))
         CATransaction.flush()
         fraction = 0
-        withAnimation(PhonePagingMotion.settle) {
-            isDragging = false
-            selected = target
-            pillIndex = target
-            pillFraction = 0
-        }
+        isDragging = false
+        withAnimation(PhonePagingMotion.settle) { selected = target }
     }
 }
 
@@ -331,6 +366,9 @@ final class PhonePagerController: UIViewController, PhonePagerSurface {
     /// The slide under way (its id), nil at rest.
     private var sliding: Int?
     private var slideCount = 0
+    /// The slide's move (the layer's offset, positive to the left, in points), to solve
+    /// where it's drawn (`PhoneMotion.shownTime`).
+    private var slideMove: (id: Int, from: CGFloat, to: CGFloat, begin: CFTimeInterval, duration: Double)?
     private static let slideKey = "slide"
 
     init(paging: PhoneSpacePaging, host: PhoneHostContext) {
@@ -379,7 +417,16 @@ final class PhonePagerController: UIViewController, PhonePagerSurface {
     var drawnPosition: CGFloat {
         let w = view.bounds.width
         guard w > 0 else { return paging.position }
-        return -PhoneMotion.drawnTranslationX(canvas.layer) / w
+        return drawnOffset() / w
+    }
+
+    /// Where the layer is drawn when a change made now shows (mid-slide, solved on its curve).
+    private func drawnOffset() -> CGFloat {
+        if let m = slideMove, m.id == sliding {
+            let t = (PhoneMotion.shownTime(view) - m.begin) / m.duration
+            return m.from + (m.to - m.from) * CGFloat(PhoneMotion.telegram.value(t))
+        }
+        return -canvas.transform.tx
     }
 
     func place() {
@@ -399,22 +446,35 @@ final class PhonePagerController: UIViewController, PhonePagerSurface {
             hosts[scope] = nil
         }
         for p in pages {
-            let host: UIHostingController<PhoneHosted<AnyView>>
-            if let h = hosts[p.scope] {
-                host = h
-            } else {
-                guard let page = makePage?(p.scope) else { continue }
-                host = .moving(PhoneHosted(context: self.host, content: page))
-                addChild(host)
-                canvas.addSubview(host.view)
-                host.didMove(toParent: self)
-                hosts[p.scope] = host
-            }
+            guard let host = hosts[p.scope] ?? makeHost(p.scope) else { continue }
             host.view.frame = CGRect(x: CGFloat(p.place) * size.width, y: 0, width: size.width, height: size.height)
             let current = p.index == paging.selected
             host.view.isUserInteractionEnabled = current
             host.view.accessibilityElementsHidden = !current
         }
+    }
+
+    func makeNeighbours() {
+        let size = view.bounds.size
+        guard size.width > 0 else { return }
+        let i = paging.selected, scopes = paging.scopes
+        for j in [i - 1, i + 1] where scopes.indices.contains(j) && hosts[scopes[j]] == nil {
+            guard let host = makeHost(scopes[j]) else { continue }
+            // Where `place` puts it (a far tap's page beside the new one is let go there).
+            host.view.frame = CGRect(x: CGFloat(j) * size.width, y: 0, width: size.width, height: size.height)
+            host.view.isUserInteractionEnabled = false
+            host.view.accessibilityElementsHidden = true
+        }
+    }
+
+    private func makeHost(_ scope: PhoneListScope) -> UIHostingController<PhoneHosted<AnyView>>? {
+        guard let page = makePage?(scope) else { return nil }
+        let host = UIHostingController.moving(PhoneHosted(context: self.host, content: page))
+        addChild(host)
+        canvas.addSubview(host.view)
+        host.didMove(toParent: self)
+        hosts[scope] = host
+        return host
     }
 
     func track(_ position: CGFloat) {
@@ -427,7 +487,7 @@ final class PhonePagerController: UIViewController, PhonePagerSurface {
 
     func slide(to position: CGFloat, duration: Double, done: @escaping () -> Void) {
         let w = view.bounds.width
-        let from = -PhoneMotion.drawnTranslationX(canvas.layer)
+        let from = drawnOffset()
         let to = position * w
         canvas.layer.removeAnimation(forKey: Self.slideKey)
         canvas.transform = CGAffineTransform(translationX: -to, y: 0)
@@ -455,6 +515,7 @@ final class PhonePagerController: UIViewController, PhonePagerSurface {
             done()
         }
         canvas.layer.add(a, forKey: Self.slideKey)
+        slideMove = (id, from, to, CACurrentMediaTime(), duration)
     }
 
     /// The moving layer: as big as one page, its pages at their places beside it, so it

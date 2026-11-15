@@ -63,7 +63,7 @@ struct PhoneHome: View {
         .onChange(of: tabs.map(\.scope), initial: true) { _, scopes in
             // The pages are only put in their places (a tab dragged over moves them by a page).
             withTransaction(Transaction(animation: nil)) {
-                paging.update(scopes: scopes, keeping: paging.savedScope)
+                paging.update(scopes: scopes, keeping: paging.preferredScope)
             }
         }
         .onAppear { reorder.controller = controller }
