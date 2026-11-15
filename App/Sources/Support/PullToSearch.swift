@@ -1,26 +1,25 @@
 import SwiftUI
 import UIKit
 
-/// Go to by pulling a list down past its top (the iPhone list's pages, the iPad's
-/// sidebar), as Things' Quick Find or Telegram's archive. A finger pulls; a fling's
-/// bounce at the top shows nothing. Its stages, by how far the list is pulled
-/// past its top (`distance`):
-/// - a circle with the magnifier grows in the gap over the first row, as big as
+/// Go to by pulling a list past its end (`edge`): the iPhone list's pages up past their
+/// bottom (they're drawn bottom up, for a thumb), the iPad's sidebar down past its top;
+/// as Things' Quick Find or Telegram's archive. A finger pulls; a fling's bounce at
+/// the end shows nothing. Its stages, by how far the list is pulled past its end
+/// (`distance`):
+/// - a circle with the magnifier grows in the gap past the end row, as big as
 ///   the gap lets it, in the gap's middle, fading in;
 /// - whole, it stretches into the search field's capsule, "Pull to search" in it;
 /// - at `threshold` it arms: a medium haptic, the accent fills it out of the
 ///   magnifier (which bounces, the capsule a little too), "Release to search";
 ///   pulled back under the threshold (less `hysteresis`) it disarms: a light haptic,
 ///   and it empties again;
-/// - let go armed, Go to opens (`phaseChanged` says so) and the field flies to its
-///   place there (`GoToFlight`: it leaves the list at once); with Reduce Motion it
-///   stays whole and fades as the list settles. Let go before, it goes back the way
-///   it came.
+/// - let go armed, Go to opens (`phaseChanged` says so); the field stays whole and
+///   fades as the list settles. Let go before, it goes back the way it came.
 ///
 /// Only `PullToSearchField` reads it: a step of the finger redraws the field, not the list.
 @MainActor @Observable
 final class PullToSearch {
-    /// How far the list is pulled past its top, while a finger pulls it (and as it settles after); else 0.
+    /// How far the list is pulled past its end, while a finger pulls it (and as it settles after); else 0.
     private(set) var distance: CGFloat = 0
     /// Past the threshold, the finger still on: letting go opens Go to.
     private(set) var armed = false
@@ -28,16 +27,13 @@ final class PullToSearch {
     private(set) var arms = 0
     /// Let go armed: Go to opens, the field fades.
     private(set) var committed = false
-    /// Let go armed and taken by Go to's flight (`GoToFlight`): the field leaves the list at once.
-    private(set) var handedOff = false
-
-    /// The field's place over the list (`PullToSearchField`), to know where it's drawn.
-    @ObservationIgnored fileprivate weak var anchor: PullToSearchAnchor.View?
 
     @ObservationIgnored let threshold: CGFloat
+    /// The list's end it's pulled past: `.top` (pulled down), `.bottom` (pulled up).
+    @ObservationIgnored let edge: VerticalEdge
     /// A finger is on the list (its scroll phase is interacting).
     @ObservationIgnored private var dragging = false
-    /// A finger took the list past its top; until it's back at its top.
+    /// A finger took the list past its end; until it's back at its end.
     @ObservationIgnored private var pulling = false
     @ObservationIgnored private let armFeedback = UIImpactFeedbackGenerator(style: .medium)
     @ObservationIgnored private let disarmFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -45,13 +41,22 @@ final class PullToSearch {
     /// Pulled back this much under the threshold, it disarms (no flicker at the line).
     static let hysteresis: CGFloat = 8
 
-    init(threshold: CGFloat) {
+    init(threshold: CGFloat, edge: VerticalEdge = .top) {
         self.threshold = threshold
+        self.edge = edge
     }
 
     /// How far a scroll view is pulled past its top (0 at rest or scrolled down).
     nonisolated static func overscroll(_ g: ScrollGeometry) -> CGFloat {
         max(0, -(g.contentOffset.y + g.contentInsets.top))
+    }
+
+    /// How far a scroll view is pulled past its bottom (0 at rest or scrolled up), given
+    /// its height under its insets (`viewport`) and its top inset, measured by the list: the
+    /// geometry's `containerSize` already goes without the insets (seen on iOS 18.4).
+    nonisolated static func overscrollBottom(_ g: ScrollGeometry, viewport: CGFloat, top: CGFloat) -> CGFloat {
+        let end = max(-top, g.contentSize.height - viewport - top)
+        return max(0, g.contentOffset.y - end)
     }
 
     /// The list moved: `d` is `overscroll` of its geometry.
@@ -89,24 +94,12 @@ final class PullToSearch {
         return true
     }
 
-    /// Where the field is drawn now, let go armed, in its window: where Go to's flight starts.
-    func flightSource() -> GoToFlight.Source? {
-        guard committed, let anchor, let window = anchor.window, let style = anchor.style else { return nil }
-        let rect = PullToSearchField.committedRect(width: anchor.bounds.width, distance: distance, style: style,
-                                                   top: anchor.top, lead: anchor.lead)
-        return GoToFlight.Source(rect: anchor.convert(rect, to: window), window: window, style: style)
-    }
-
-    /// Go to's flight took the field: it leaves the list.
-    func handOff() { handedOff = true }
-
     private func reset() {
         pulling = false
         // Only what changed: at rest and scrolling the list, nothing here is written.
         if distance != 0 { distance = 0 }
         if armed { armed = false }
         if committed { committed = false }
-        if handedOff { handedOff = false }
     }
 }
 
@@ -126,7 +119,7 @@ struct PullToSearchStyle {
     var glass: Bool
     var threshold: CGFloat
 
-    /// Go to's field: 44 pt, 16 pt from the sides, armed 72 pt past the top (a finger's 150 pt or so).
+    /// Go to's field: 44 pt, 16 pt from the sides, armed 72 pt past the end (a finger's 150 pt or so).
     static let phone = PullToSearchStyle(height: 44, cornerRadius: nil, sideInset: 16, iconSize: 18, iconLeading: 14,
                                          spacing: 8, fontSize: 17, system: true, glass: true, threshold: 72)
     /// The sidebar's: a card's surface, 30 pt, the cards' 8-pt inset, armed 56 pt past the top.
@@ -139,14 +132,16 @@ struct PullToSearchStyle {
     }
 }
 
-/// The field a pull brings out (`PullToSearch`), over the list in the gap above its
-/// first row: an overlay on the list, the list's size; it takes no touches.
+/// The field a pull brings out (`PullToSearch`), over the list in the gap past its
+/// end row (over the first row pulled down, under the last pulled up): an overlay on
+/// the list, the list's size; it takes no touches.
 struct PullToSearchField: View {
     var pull: PullToSearch
     var style: PullToSearchStyle
-    /// Where the list's content starts at rest (its top inset), in this view's space.
-    var top: CGFloat
-    /// The content's own room above its first row (its top margin): part of the gap.
+    /// Where the list's content ends at rest, from this view's edge at the pull's end
+    /// (its inset there).
+    var inset: CGFloat
+    /// The content's own room past its end row (its margin there): part of the gap.
     var lead: CGFloat = 0
 
     @Environment(\.theme) private var theme
@@ -169,21 +164,20 @@ struct PullToSearchField: View {
                 let stretch = pull.committed ? 1 : Self.clamp((gap - stretchStart) / max(1, pull.threshold + lead - stretchStart))
                 let width = h + (full - h) * Self.easeOut(stretch)
                 if grow > 0.12 {
+                    let y = pull.edge == .top ? inset + gap / 2 : geo.size.height - inset - gap / 2
                     capsule(width: width, stretch: stretch, textOpacity: Self.clamp((stretch - 0.45) / 0.45))
                         .scaleEffect(grow)
                         .opacity(pull.committed ? 0 : Self.clamp((d - 4) / 24))
-                        // Taken by Go to's flight: gone at once (the flyer is in its place).
-                        .animation(pull.handedOff ? nil : .easeOut(duration: 0.25), value: pull.committed)
-                        .position(x: geo.size.width / 2, y: top + gap / 2)
+                        .animation(.easeOut(duration: 0.25), value: pull.committed)
+                        .position(x: geo.size.width / 2, y: y)
                 }
             }
         }
-        .background(PullToSearchAnchor(pull: pull, style: style, top: top, lead: lead))
         // Only in the gap: not over the header nor the rows as they come back.
-        .mask(alignment: .top) {
+        .mask(alignment: pull.edge == .top ? .top : .bottom) {
             Rectangle()
                 .frame(height: max(0, lead + d))
-                .padding(.top, top)
+                .padding(pull.edge == .top ? .top : .bottom, inset)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -191,14 +185,6 @@ struct PullToSearchField: View {
 
     private var shape: AnyShape {
         if let r = style.cornerRadius { AnyShape(RoundedRectangle(cornerRadius: r, style: .continuous)) } else { AnyShape(Capsule()) }
-    }
-
-    /// The field's frame let go armed (whole, stretched), in the list's space (`width` its width).
-    static func committedRect(width: CGFloat, distance: CGFloat, style: PullToSearchStyle,
-                              top: CGFloat, lead: CGFloat) -> CGRect {
-        let h = style.height
-        let w = max(h, width - 2 * style.sideInset)
-        return CGRect(x: (width - w) / 2, y: top + (lead + distance) / 2 - h / 2, width: w, height: h)
     }
 
     private func capsule(width: CGFloat, stretch: CGFloat, textOpacity: Double) -> some View {
@@ -263,36 +249,11 @@ struct PullToSearchField: View {
     private static func easeOut(_ x: CGFloat) -> CGFloat { 1 - (1 - x) * (1 - x) }
 }
 
-/// The field's place over the list, for `PullToSearch.flightSource`: a view as big as the list.
-private struct PullToSearchAnchor: UIViewRepresentable {
-    var pull: PullToSearch
-    var style: PullToSearchStyle
-    var top: CGFloat
-    var lead: CGFloat
-
-    final class View: UIView {
-        var style: PullToSearchStyle?
-        var top: CGFloat = 0
-        var lead: CGFloat = 0
-    }
-
-    func makeUIView(context: Context) -> View {
-        let view = View()
-        view.isUserInteractionEnabled = false
-        return view
-    }
-
-    func updateUIView(_ view: View, context: Context) {
-        view.style = style
-        view.top = top
-        view.lead = lead
-        pull.anchor = view
-    }
-}
-
 /// Go to for VoiceOver and Voice Control, now that a pull opens it: an element only
 /// they see (it draws nothing and takes no touches), where the search button was.
 struct GoToAccessibilityButton: View {
+    /// What VoiceOver adds: how a finger opens it there.
+    var hint = "Or pull the list down."
     @Environment(WorkspaceController.self) private var controller
 
     var body: some View {
@@ -300,7 +261,7 @@ struct GoToAccessibilityButton: View {
             .frame(width: 1, height: 1)
             .accessibilityElement()
             .accessibilityLabel("Go to")
-            .accessibilityHint("Or pull the list down.")
+            .accessibilityHint(hint)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { controller.showSwitcher = true }
     }

@@ -59,10 +59,10 @@ struct SpacesList: View {
                 pull.scrolled(d)
             }
             .onScrollPhaseChange { old, phase in
-                if pull.phaseChanged(from: old, to: phase) { controller.openGoTo(pulledFrom: pull, theme: theme) }
+                if pull.phaseChanged(from: old, to: phase) { controller.showSwitcher = true }
             }
             .overlay(alignment: .top) {
-                PullToSearchField(pull: pull, style: .sidebar, top: 0, lead: 4)
+                PullToSearchField(pull: pull, style: .sidebar, inset: 0, lead: 4)
             }
             .environment(drag)
             .background(SpaceDropTarget(drag: drag))

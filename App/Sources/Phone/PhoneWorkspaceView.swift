@@ -26,16 +26,26 @@ import WierdrModel
 struct PhoneWorkspaceView: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
+    /// Go to's panel is up or on its way (`PhoneGoTo`).
+    @State private var goTo = false
 
     var body: some View {
         let shown = controller.compactColumn == .detail
         ZStack(alignment: .top) {
-            PhoneNavigation(shown: shown)
+            PhoneNavigation(shown: shown, covered: goTo)
                 // The whole window (the screens' grounds run under the status bar and the home
                 // indicator; their content keeps to the safe area, `PhoneHostContext`), above
-                // the keyboard while it is up.
-                .ignoresSafeArea(.container)
+                // the keyboard while it is up; under Go to, which has the keyboard, they stay.
+                .ignoresSafeArea(goTo ? .all : .container)
             AttentionBanner(showing: shown)
+            if goTo {
+                // Go to, over the screens (and the keyboard's edge).
+                PhoneGoTo(isPresented: controller.showSwitcher) { goTo = false }
+                    .ignoresSafeArea(.container)
+            }
+        }
+        .onChange(of: controller.showSwitcher, initial: true) { _, on in
+            if on { goTo = true }
         }
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         // Behind the keyboard's edge as it comes and goes: the pane screen's ground.
@@ -61,6 +71,8 @@ struct PhoneWorkspaceView: View {
 /// The list and the pane screen in their UIKit container (`PhoneNavController`).
 private struct PhoneNavigation: UIViewControllerRepresentable {
     var shown: Bool
+    /// Go to's panel is over the screens.
+    var covered: Bool
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(AppModel.self) private var app: AppModel?
@@ -73,6 +85,7 @@ private struct PhoneNavigation: UIViewControllerRepresentable {
     func updateUIViewController(_ nav: PhoneNavController, context: Context) {
         nav.host.update(context.environment)
         nav.setShown(shown)
+        nav.setCovered(covered)
     }
 
     static func dismantleUIViewController(_ nav: PhoneNavController, coordinator: ()) {
@@ -103,6 +116,8 @@ final class PhoneNavController: UIViewController {
     private var pane: UIHostingController<PhoneHosted<PhonePaneScreen>>?
     /// A pane is pushed (`compactColumn`); nil before the first update.
     private var shown: Bool?
+    /// Go to's panel is over the screens (`PhoneGoTo`): they take no touches.
+    private var covered = false
     /// Where the screens are headed: the last push, pop or swipe's end.
     private var target: CGFloat = 0
     /// The progress the layers are set to (mid-move, its end).
@@ -185,6 +200,12 @@ final class PhoneNavController: UIViewController {
         navigate(shown)
     }
 
+    func setCovered(_ covered: Bool) {
+        guard covered != self.covered else { return }
+        self.covered = covered
+        updateAccess()
+    }
+
     /// A push or a pop that no finger drives (a row, the back button, a status jump…).
     private func navigate(_ shown: Bool) {
         let goal: CGFloat = shown ? 1 : 0
@@ -219,15 +240,15 @@ final class PhoneNavController: UIViewController {
         updateAccess()
     }
 
-    /// Who takes touches and VoiceOver: the pushed pane screen, else the list.
+    /// Who takes touches and VoiceOver: the pushed pane screen, else the list; none under Go to.
     private func updateAccess() {
         let shown = shown == true
-        list?.view.isUserInteractionEnabled = !shown
-        list?.view.accessibilityElementsHidden = shown
-        card.isUserInteractionEnabled = shown
-        card.accessibilityElementsHidden = !shown
-        card.accessibilityViewIsModal = shown
-        let swipes = shown && pane != nil
+        list?.view.isUserInteractionEnabled = !shown && !covered
+        list?.view.accessibilityElementsHidden = shown || covered
+        card.isUserInteractionEnabled = shown && !covered
+        card.accessibilityElementsHidden = !shown || covered
+        card.accessibilityViewIsModal = shown && !covered
+        let swipes = shown && pane != nil && !covered
         if swipe.pan.isEnabled != swipes { swipe.pan.isEnabled = swipes }
     }
 

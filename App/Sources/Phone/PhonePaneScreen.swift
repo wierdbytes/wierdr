@@ -86,7 +86,7 @@ struct PhonePaneScreen: View {
         // One ground for the bar, the terminal and the field: the glass floats on the terminal's background.
         .background(theme.background.ignoresSafeArea())
         // Under the list, its own banner shows.
-        .overlay(alignment: .top) { if !covered { ConnectionBanner(top: PhonePaneTopBar.collapsedHeight) } }
+        .overlay(alignment: .top) { if !covered { ConnectionBanner(inset: PhonePaneTopBar.collapsedHeight) } }
         // Watching an agent work: the screen stays on (a locked iPhone drops the connection).
         .onChange(of: keepsAwake && !covered, initial: true) { _, on in UIApplication.shared.isIdleTimerDisabled = on }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }

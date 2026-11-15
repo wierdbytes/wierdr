@@ -125,13 +125,23 @@ enum PhoneMotion {
     }
 
     static let translationX = "transform.translation.x"
+    static let translationY = "transform.translation.y"
 
     /// The layer's horizontal translation as drawn now: mid-animation, the presentation's;
     /// else the model's (just set, the presentation is still the last frame's).
     static func drawnTranslationX(_ layer: CALayer) -> CGFloat {
+        drawn(layer, translationX)
+    }
+
+    /// The layer's vertical translation as drawn now (as `drawnTranslationX`).
+    static func drawnTranslationY(_ layer: CALayer) -> CGFloat {
+        drawn(layer, translationY)
+    }
+
+    private static func drawn(_ layer: CALayer, _ keyPath: String) -> CGFloat {
         let animating = !(layer.animationKeys() ?? []).isEmpty
         let shown = animating ? (layer.presentation() ?? layer) : layer
-        return (shown.value(forKeyPath: translationX) as? CGFloat) ?? 0
+        return (shown.value(forKeyPath: keyPath) as? CGFloat) ?? 0
     }
 
     /// Plays `values` (evenly spaced over `duration`) on the layer's `keyPath`; the

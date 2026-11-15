@@ -324,15 +324,16 @@ struct PhoneKidBadge: View {
 
 // MARK: - Sub-agents
 
-/// A sub-agent under its agent, in the agent's block (no separator between
-/// them), indented with the tree's lines: its status mark and title, its age;
-/// under that its model, @effort and its context's ring. 50 pt. A plain terminal an agent
-/// started: its program's icon and name, 36 pt.
+/// A sub-agent over its agent (the lists are drawn bottom up: an agent's block is its
+/// sub-agents, then the agent), in the agent's block (no separator between them),
+/// indented with the tree's lines upside down (`TreeLines.upward`): its status mark
+/// and title, its age; under that its model, @effort and its context's ring. 50 pt.
+/// A plain terminal an agent started: its program's icon and name, 36 pt.
 struct PhoneKidRowContent: View {
     var kid: SubAgent
-    /// The first under its agent: its lines reach up into the agent's row (the
-    /// others' start at their top, so lines of the rows above aren't drawn twice).
-    var first: Bool
+    /// Right over its agent: its lines reach down into the agent's row (the others'
+    /// end at their bottom, so lines of the rows below aren't drawn twice).
+    var adjacent: Bool
     /// A sub-agent's title's letters a search matched (`Fuzzy`), in the accent color.
     var titleMatch: [Int] = []
     @Environment(\.theme) private var theme
@@ -349,15 +350,14 @@ struct PhoneKidRowContent: View {
 
     private var t: TerminalInfo { kid.terminal }
 
-    /// `TreeLines` reaches 4 pt up into the room above its row (the sidebar's gap);
-    /// here rows touch, so all but the first start at their own top.
+    /// `TreeLines` reaches 4 pt into the room past its row (the sidebar's gap); here rows
+    /// touch, so all but the one over the agent end at their own bottom.
     @ViewBuilder
     private func tree(height h: CGFloat, mid: CGFloat) -> some View {
-        if first {
-            TreeLines(lines: kid.lines, height: h, mid: mid)
+        if adjacent {
+            TreeLines(lines: kid.lines, height: h, mid: mid, upward: true)
         } else {
-            TreeLines(lines: kid.lines, height: h - 4, mid: mid - 4)
-                .offset(y: 4)
+            TreeLines(lines: kid.lines, height: h - 4, mid: mid, upward: true)
                 .frame(height: h, alignment: .top)
         }
     }

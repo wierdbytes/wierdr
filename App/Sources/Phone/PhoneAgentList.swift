@@ -16,35 +16,39 @@ enum PhoneListScope: Hashable {
 
 /// One page of the iPhone's list: a vertical ScrollView (+ LazyVStack) of rows
 /// in Telegram's chat-list style (`PhoneListRow`): full width, separators, no cards.
-/// The order is Telegram's (`Workspace.phoneList`): pinned agents on top (the
-/// newest pin first), then the rest by their latest status change; a space's page
-/// then has its terminals and mod panes under a "TERMINALS" header. An agent's
-/// sub-agents are rows under it, one block with it (its badges fold them).
+/// The order is Telegram's (`Workspace.phoneList`), drawn bottom up for a thumb
+/// (`PhoneListLine`): pinned agents at the bottom (the newest pin lowest), over them
+/// the rest by their latest status change, the newest lowest; a space's page has its
+/// terminals and mod panes over its agents, under a "TERMINALS" header. An agent's
+/// sub-agents are rows over it, one block with it (its badges fold them). The page
+/// rests at its bottom, rows short of its height sit there, and a row that grows or
+/// comes keeps the rows under it in place (`defaultScrollAnchor(.bottom)`).
 ///
 /// Nothing is selected here (being on the list means no pane shows): a tap opens
 /// the row's pane (`controller.focus(pane:)`), a sub-agent's row its sub-agent.
 /// Pinning or unpinning moves rows with Telegram's list spring; status changes
 /// reorder without animation.
 ///
-/// Pulled down past its top, it brings out Go to's field over the first row; let go
+/// Pulled up past its bottom, it brings out Go to's field under the last row; let go
 /// past 72 pt, Go to opens (`PullToSearch`).
 struct PhoneAgentList: View {
     var scope: PhoneListScope
-    /// Room the floating header takes over the top of the page (content starts under it, scrolls under it).
+    /// The status bar's room over the page (the rows scroll under it).
     var topInset: CGFloat
-    /// The screen's bottom safe area the page runs into (the last row scrolls up out of it).
-    var bottomInset: CGFloat = 0
+    /// Room the floating header takes over the bottom of the page, with the home
+    /// indicator's (content ends over it, scrolls under it).
+    var bottomInset: CGFloat
     /// The pager pages between several tabs: a row's swipe actions start only in the edge zones
     /// (x < e or x > width - e, e = clamp(width / 6, 22, 80)), the middle belongs to the pager. False: anywhere.
     var edgeSwipesOnly: Bool
-    /// Changes when the current tab is tapped again: scroll to the top, animated.
-    var scrollToTop: Int
+    /// Changes when the current tab is tapped again: scroll to the bottom (the newest), animated.
+    var scrollToNewest: Int
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
     @State private var swipes = PhoneRowSwipes()
-    @State private var pull = PullToSearch(threshold: PullToSearchStyle.phone.threshold)
-    @State private var position = ScrollPosition(edge: .top)
+    @State private var pull = PullToSearch(threshold: PullToSearchStyle.phone.threshold, edge: .bottom)
+    @State private var position = ScrollPosition(edge: .bottom)
     /// The page's height under its insets.
     @State private var viewport: CGFloat = 0
 
@@ -55,12 +59,12 @@ struct PhoneAgentList: View {
             LazyVStack(spacing: 0) {
                 ForEach(Array(lines.enumerated()), id: \.element.id) { i, line in
                     row(line, next: i + 1 < lines.count ? lines[i + 1].id : nil)
-                        .background(alignment: .top) {
-                            // Pulled down past the top, a pinned first row's gray goes on above it.
-                            if i == 0 {
+                        .background(alignment: .bottom) {
+                            // Pulled up past the bottom, a pinned bottom row's gray goes on under it.
+                            if i == lines.count - 1 {
                                 theme.hover.opacity(line.pinned ? 1 : 0)
                                     .frame(height: 1200)
-                                    .offset(y: -1200)
+                                    .offset(y: 1200)
                                     .animation(PhoneListMotion.restyle, value: line.pinned)
                             }
                         }
@@ -69,8 +73,9 @@ struct PhoneAgentList: View {
                 }
             }
             .animation(PhoneListMotion.move, value: pinKey(page))
-            // The page's whole height: a tap under the rows closes an open row too (the rows' own taps go first).
-            .frame(minHeight: viewport, alignment: .top)
+            // The page's whole height, the rows at its bottom: a tap over them closes an open
+            // row too (the rows' own taps go first).
+            .frame(minHeight: viewport, alignment: .bottom)
             .contentShape(Rectangle())
             .onTapGesture { withAnimation(PhoneSwipeMotion.bodyAnimation) { swipes.closeAll() } }
             .overlay {
@@ -78,30 +83,33 @@ struct PhoneAgentList: View {
             }
         }
         .scrollPosition($position)
+        .defaultScrollAnchor(.bottom, for: .initialOffset)
+        .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .contentMargins(.top, topInset, for: .scrollContent)
         .contentMargins(.top, topInset, for: .scrollIndicators)
         .contentMargins(.bottom, bottomInset, for: .scrollContent)
         .contentMargins(.bottom, bottomInset, for: .scrollIndicators)
-        .onScrollGeometryChange(for: CGFloat.self) { g in
-            g.containerSize.height - g.contentInsets.top - g.contentInsets.bottom
-        } action: { _, h in
+        // Its own height less the margins (not the scroll geometry's: its container's size goes without them).
+        .onGeometryChange(for: CGFloat.self) { $0.size.height - topInset - bottomInset } action: { h in
             viewport = max(0, h)
         }
-        .onScrollGeometryChange(for: CGFloat.self, of: PullToSearch.overscroll) { _, d in
+        .onScrollGeometryChange(for: CGFloat.self, of: { [viewport, topInset] g in
+            PullToSearch.overscrollBottom(g, viewport: viewport, top: topInset)
+        }) { _, d in
             pull.scrolled(d)
         }
-        .overlay(alignment: .top) {
-            PullToSearchField(pull: pull, style: .phone, top: topInset)
+        .overlay(alignment: .bottom) {
+            PullToSearchField(pull: pull, style: .phone, inset: bottomInset)
         }
         .background(theme.chrome)
         .environment(swipes)
         .onScrollPhaseChange { old, phase in
             // Scrolling closes an open row (Telegram: as the list's drag begins).
             if phase == .interacting, swipes.openID != nil { swipes.closeAll() }
-            if pull.phaseChanged(from: old, to: phase) { controller.openGoTo(pulledFrom: pull, theme: theme) }
+            if pull.phaseChanged(from: old, to: phase) { controller.showSwitcher = true }
         }
-        .onChange(of: scrollToTop) { _, _ in
-            withAnimation(.smooth(duration: 0.4)) { position.scrollTo(edge: .top) }
+        .onChange(of: scrollToNewest) { _, _ in
+            withAnimation(.smooth(duration: 0.4)) { position.scrollTo(edge: .bottom) }
         }
         .onDisappear { swipes.closeAll() }
     }
@@ -116,13 +124,13 @@ struct PhoneAgentList: View {
         switch line.kind {
         case .agent(let item):
             agentRow(item, line: line, next: next)
-        case .kid(let kid, let parent, let first):
+        case .kid(let kid, let parent, let adjacent):
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
                          trailing: [kidCloseAction(kid)],
                          edgeSwipesOnly: edgeSwipesOnly, tap: { controller.open(kid, from: parent.row.paneID) }) {
                 kidMenu(kid, parent: parent)
             } content: {
-                PhoneKidRowContent(kid: kid, first: first)
+                PhoneKidRowContent(kid: kid, adjacent: adjacent)
             }
         case .header(let title):
             Text(title)
@@ -266,14 +274,23 @@ enum PhoneSwipeColors {
 }
 
 /// A line of the list, with the chrome its place gives it: pinned (its agent's
-/// block is), and the separator under it (none inside an agent's block; full
-/// width under the pinned block, before the terminals' header and at the end).
+/// block is), and the separator under it.
+///
+/// The list is drawn bottom up, for a thumb: `Workspace.phoneList`'s order from the
+/// bottom (the newest pin at the very bottom, then the other pins, then the rest by
+/// their latest status change, the oldest on top), an agent's block upside down (its
+/// sub-agents over it, the tree's lines turned, `TreeLines.upward`). A space's
+/// terminals and mod panes are over its agents, under their "TERMINALS" header (a
+/// header stays over what it names), the oldest on top too. Separators: none inside an
+/// agent's block, inset between blocks, full width over the pinned block and under the
+/// terminals; none under the bottom row.
 struct PhoneListLine: Identifiable {
     typealias Item = InboxItem
 
     enum Kind {
         case agent(Item)
-        case kid(SubAgent, parent: Item, first: Bool)
+        /// `adjacent`: right over its agent.
+        case kid(SubAgent, parent: Item, adjacent: Bool)
         case header(String)
         case pane(Item)
     }
@@ -283,29 +300,40 @@ struct PhoneListLine: Identifiable {
     var pinned = false
     var separator: PhoneRowSeparator = .none
 
+    /// Top to bottom, as drawn.
     static func lines(_ page: PhoneListPage, showsKids: (SidebarRow) -> Bool) -> [PhoneListLine] {
         var out: [PhoneListLine] = []
-        for (i, item) in page.agents.enumerated() {
-            let pinned = item.row.terminal?.pinned == true
-            var block = [PhoneListLine(kind: .agent(item), id: item.id, pinned: pinned)]
-            if showsKids(item.row) {
-                block += item.row.subtree.enumerated().map { k, kid in
-                    PhoneListLine(kind: .kid(kid, parent: item, first: k == 0), id: "kid:\(kid.terminal.address)", pinned: pinned)
-                }
-            }
-            let next = i + 1 < page.agents.count ? page.agents[i + 1] : nil
-            let lastPinned = pinned && next?.row.terminal?.pinned != true
-            let endOfAgents = next == nil
-            block[block.count - 1].separator = lastPinned || endOfAgents ? .full : .inset(PhoneRowMetrics.inset)
-            out += block
-        }
         if !page.others.isEmpty {
             out.append(PhoneListLine(kind: .header("TERMINALS"), id: "header:terminals"))
-            for (i, item) in page.others.enumerated() {
-                let last = i == page.others.count - 1
-                out.append(PhoneListLine(kind: .pane(item), id: item.id,
-                                         separator: last ? .full : .inset(PhoneRowMetrics.paneTextLeading)))
+            for (i, item) in page.others.enumerated().reversed() {
+                // The bottom one: full width over the agents.
+                let separator: PhoneRowSeparator = i > 0 ? .inset(PhoneRowMetrics.paneTextLeading)
+                    : (page.agents.isEmpty ? .none : .full)
+                out.append(PhoneListLine(kind: .pane(item), id: item.id, separator: separator))
             }
+        }
+        for (i, item) in page.agents.enumerated().reversed() {
+            let pinned = item.row.terminal?.pinned == true
+            var block: [PhoneListLine] = []
+            if showsKids(item.row) {
+                let kids = item.row.subtree
+                block += kids.enumerated().reversed().map { k, kid in
+                    PhoneListLine(kind: .kid(kid, parent: item, adjacent: k == 0),
+                                  id: "kid:\(kid.terminal.address)", pinned: pinned)
+                }
+            }
+            // Under the block: the one drawn under it (the one before it in the list's order).
+            let below = i > 0 ? page.agents[i - 1] : nil
+            let separator: PhoneRowSeparator
+            if below == nil {
+                separator = .none
+            } else if !pinned, below?.row.terminal?.pinned == true {
+                separator = .full
+            } else {
+                separator = .inset(PhoneRowMetrics.inset)
+            }
+            block.append(PhoneListLine(kind: .agent(item), id: item.id, pinned: pinned, separator: separator))
+            out += block
         }
         return out
     }

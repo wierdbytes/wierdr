@@ -1,70 +1,103 @@
 import SwiftUI
 import WierdrModel
 
-/// Go to (⌘P, or a list pulled down, `PullToSearch`), in the iPhone list's look: spaces (this
-/// computer's, then each added machine's under a divider with its name), then
-/// agents with their sub-agents under them, as the list has them. Typing filters
-/// them fuzzily (`Fuzzy`): spaces by name, agents and sub-agents by title, the
-/// best first, the matched letters lit. Return goes to the first. A space opens
-/// its tab of the iPhone list (the iPad's sidebar: selects it); an agent, its pane.
+/// Go to (⌘P, or a list pulled past its end, `PullToSearch`), in the iPhone list's look
+/// and, as it, drawn bottom up for a thumb (`GoToResults.lines`): over the field the
+/// spaces (this computer's lowest, each added machine's over them under a divider with
+/// its name), over them the agents, each with its sub-agents over it, as the list has
+/// them. Typing filters them fuzzily (`Fuzzy`): spaces by name, agents and sub-agents
+/// by title, the best lowest, the matched letters lit. Return goes to the first, the
+/// row right over the field. A space opens its tab of the iPhone list (the iPad's
+/// sidebar: selects it); an agent, its pane.
 ///
 /// The field is at the bottom, over the list, in glass as the message field; it
-/// rises with the keyboard. It has the keyboard from the start; scrolling puts
-/// the keyboard away (it slides down, the field with it). The sheet closes as
-/// sheets do (a swipe down, a tap beside it on the iPad) and with Esc; while
-/// the keyboard is up, a swipe down puts the keyboard away instead
-/// (`KeyboardFirstDismissal`). Opened by a pull of a list, its field flies in from
-/// there (`GoToFlight`): the field here hides till the flyer lands on it.
+/// rises with the keyboard. It has the keyboard from the start; the button at its
+/// right puts the keyboard away, and so does scrolling (it slides down, the field with it).
+///
+/// On the iPad it's a sheet: it closes as sheets do (a swipe down, a tap beside it)
+/// and with Esc; while the keyboard is up, a swipe down puts the keyboard away instead
+/// (`KeyboardFirstDismissal`). In the iPhone layout it's a panel over the screens
+/// (`PhoneGoTo`, `panel`): it comes up from the bottom, and its list pulled up past its
+/// bottom takes the panel up with the finger and away; Esc closes it too.
 struct QuickSwitcher: View {
+    /// The iPhone layout's panel (nil: a sheet), which a pull of the list takes up.
+    var panel: PhoneGoToDrag?
+    /// The panel's home indicator room under the field, while the keyboard is down (the
+    /// sheet's is its safe area).
+    var homeInset: CGFloat = 0
+
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.dismiss) private var dismiss
     @Environment(\.theme) private var theme
     @State private var query = ""
     @FocusState private var fieldFocused: Bool
     @State private var swipes = PhoneRowSwipes()
-    @State private var position = ScrollPosition(edge: .top)
+    @State private var position = ScrollPosition(edge: .bottom)
+    /// The list's height under its insets.
+    @State private var viewport: CGFloat = 0
 
     var body: some View {
         let results = GoToResults(controller.workspace, query: query, showsKids: controller.showsKids(of:))
         let lines = results.lines
+        let topHeader = lines.first?.id
         ScrollView(.vertical) {
             LazyVStack(spacing: 0) {
                 ForEach(Array(lines.enumerated()), id: \.element.id) { i, line in
-                    row(line, next: i + 1 < lines.count ? lines[i + 1].id : nil)
+                    row(line, next: i + 1 < lines.count ? lines[i + 1].id : nil, top: line.id == topHeader)
                 }
             }
-            .padding(.top, 4)
+            .padding(.bottom, 4)
+            // Rows short of the list's height sit at its bottom, by the field.
+            .frame(minHeight: viewport, alignment: .bottom)
+            .background {
+                if let panel { PhoneGoToScrollProbe(drag: panel) }
+            }
         }
         .scrollPosition($position)
+        // At rest at its bottom, and the rows by the field stay put as the rows or the
+        // room change (a query, the keyboard). Not `.alignment`: the minimum height does it.
+        .defaultScrollAnchor(.bottom, for: .initialOffset)
+        .defaultScrollAnchor(.bottom, for: .sizeChanges)
+        // The rows' room: the list's visible height (its container's, without its insets).
+        .onScrollGeometryChange(for: CGFloat.self) { $0.containerSize.height } action: { _, h in
+            viewport = max(0, h)
+        }
         // Not `scrollDismissesKeyboard`: its keyboard went at once. Losing focus slides it down.
         .scrollDismissesKeyboard(.never)
         .onScrollPhaseChange { _, phase in
-            if phase == .interacting, fieldFocused { fieldFocused = false }
+            // The panel's drag tells when the list scrolls (not when it takes the panel up).
+            if panel == nil, phase == .interacting, fieldFocused { fieldFocused = false }
         }
         .background(theme.chrome)
         .overlay {
             if lines.isEmpty { ContentUnavailableView.search(text: query) }
         }
         .bottomBar { bar(first: results.first) }
-        // With the keyboard up a swipe down puts it away; with it down, closes the sheet.
-        .background(KeyboardFirstDismissal { fieldFocused = false })
+        .background {
+            // With the keyboard up a swipe down puts it away; with it down, closes the sheet.
+            if panel == nil { KeyboardFirstDismissal { fieldFocused = false } }
+        }
         .environment(swipes)
-        .onChange(of: query) { _, _ in position.scrollTo(edge: .top) }
-        .onAppear { fieldFocused = true }
-        .onDisappear { controller.goToFlight.cancel() }
+        .onChange(of: query) { _, _ in position.scrollTo(edge: .bottom) }
+        .onAppear {
+            fieldFocused = true
+            panel?.scrolled = { fieldFocused = false }
+            panel?.closing = { fieldFocused = false }
+        }
     }
 
     // MARK: Rows
 
+    /// `top`: the topmost line (a header there has less room over it).
     @ViewBuilder
-    private func row(_ line: GoToLine, next: String?) -> some View {
+    private func row(_ line: GoToLine, next: String?, top: Bool) -> some View {
         switch line.kind {
         case .header(let title):
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(theme.muted)
                 .padding(.horizontal, PhoneRowMetrics.inset)
-                .padding(.top, line.id == GoToLine.firstHeaderID ? 12 : 24)
+                .padding(.top, top ? 12 : 24)
                 .padding(.bottom, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
@@ -82,9 +115,9 @@ struct QuickSwitcher: View {
                                          open: hit.showsKids, titleMatch: hit.titleMatch)
                 }
             }
-        case .kid(let kid, let parent, let first, let match):
+        case .kid(let kid, let parent, let adjacent, let match):
             listRow(line, next: next, to: .kid(kid, from: parent.item.row.paneID, parent.item.space)) {
-                PhoneKidRowContent(kid: kid, first: first, titleMatch: match)
+                PhoneKidRowContent(kid: kid, adjacent: adjacent, titleMatch: match)
             }
         }
     }
@@ -102,36 +135,51 @@ struct QuickSwitcher: View {
 
     // MARK: Field
 
+    /// The field in its glass capsule and, while it has the keyboard, a glass circle at
+    /// its right that puts the keyboard away (as the message field's attach button, on
+    /// the other side).
     private func bar(first: GoToTarget?) -> some View {
         ComposerGlassGroup {
             HStack(spacing: 8) {
-                Icon("search", size: 18, color: theme.muted)
-                TextField("Go to", text: $query,
-                          prompt: Text("Spaces, agents").foregroundColor(theme.foreground.opacity(theme.isDark ? 0.48 : 0.40)))
-                    .font(.system(size: 17))
-                    .foregroundStyle(theme.foreground)
-                    .tint(theme.accent)
-                    .focused($fieldFocused)
-                    .submitLabel(.go)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .onSubmit { if let first { go(first) } }
+                HStack(spacing: 8) {
+                    Icon("search", size: 18, color: theme.muted)
+                    TextField("Go to", text: $query,
+                              prompt: Text("Spaces, agents").foregroundColor(theme.foreground.opacity(theme.isDark ? 0.48 : 0.40)))
+                        .font(.system(size: 17))
+                        .foregroundStyle(theme.foreground)
+                        .tint(theme.accent)
+                        .focused($fieldFocused)
+                        .submitLabel(.go)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onSubmit { if let first { go(first) } }
+                }
+                .padding(.leading, 14)
+                .padding(.trailing, 12)
+                .frame(height: 44)
+                .contentShape(Capsule())
+                // A tap on the capsule's margins brings the keyboard too.
+                .onTapGesture { fieldFocused = true }
+                .composerGlass(Capsule(), theme: theme, interactive: false)
+                if fieldFocused {
+                    Button { fieldFocused = false } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(theme.foreground)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(AttachPressStyle())
+                    .composerGlass(Circle(), theme: theme)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    .accessibilityLabel("Hide Keyboard")
+                }
             }
-            .padding(.leading, 14)
-            .padding(.trailing, 12)
-            .frame(height: 44)
-            // Where a pulled list's field lands (`GoToFlight`).
-            .background(GoToFieldAnchor(flight: controller.goToFlight))
-            .contentShape(Capsule())
-            // A tap on the capsule's margins brings the keyboard too.
-            .onTapGesture { fieldFocused = true }
-            .composerGlass(Capsule(), theme: theme, interactive: false)
-            // Hidden while the flyer is on its way here.
-            .opacity(controller.goToFlight.isFlying ? 0 : 1)
+            .animation(.snappy(duration: 0.25), value: fieldFocused)
         }
         .background {
             // Esc closes (no button for it on screen).
-            Button("Close") { dismiss() }
+            Button("Close") { close() }
                 .keyboardShortcut(.cancelAction)
                 .opacity(0)
                 .allowsHitTesting(false)
@@ -139,10 +187,21 @@ struct QuickSwitcher: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
-        .padding(.bottom, 8)
+        // Over the home indicator, the field 28 pt over the screen's bottom (as the list's
+        // header row and the message field); over the keyboard, 8 pt.
+        .padding(.bottom, homeInset > 0 ? 28 : 8)
     }
 
     // MARK: Going
+
+    /// Closes it: the sheet, or the iPhone's panel (it goes up and away, `PhoneGoTo`).
+    private func close() {
+        if panel != nil {
+            controller.showSwitcher = false
+        } else {
+            dismiss()
+        }
+    }
 
     private func go(_ target: GoToTarget) {
         let space: Space
@@ -165,7 +224,7 @@ struct QuickSwitcher: View {
             controller.open(kid, from: rowPane)
         }
         if controller.showsMachines { controller.foldedMachines.remove(space.machine ?? "") }
-        dismiss()
+        close()
     }
 }
 
@@ -207,13 +266,13 @@ struct GoToAgentHit {
 struct GoToLine: Identifiable {
     enum Kind {
         case header(String)
-        case machine(String)
+        /// A machine's spaces under it (nil: this computer's).
+        case machine(String?)
         case space(GoToSpaceHit)
         case agent(GoToAgentHit)
-        case kid(SubAgent, parent: GoToAgentHit, first: Bool, match: [Int])
+        /// `adjacent`: right over its agent.
+        case kid(SubAgent, parent: GoToAgentHit, adjacent: Bool, match: [Int])
     }
-
-    static let firstHeaderID = "header:spaces"
 
     var kind: Kind
     var id: String
@@ -289,42 +348,47 @@ struct GoToResults {
             .map(\.element)
     }
 
-    /// Where Return goes: the first row.
+    /// Where Return goes: the first row (the lowest, right over the field).
     var first: GoToTarget? {
         if let hit = spaces.first?.hits.first { return .space(hit.space) }
         return agents.first?.target
     }
 
+    /// Top to bottom, as drawn: bottom up, for a thumb. Under the "Agents" header the
+    /// agents, the first lowest, each block upside down (its sub-agents over it, the
+    /// tree's lines turned, `TreeLines.upward`); under the "Spaces" header the spaces,
+    /// this computer's lowest and each added machine's over them (with machines there,
+    /// each group under a divider with its machine's name, a header staying over what
+    /// it names), the first lowest. Separators: inset between rows (none inside an
+    /// agent's block), full width under the agents; none under a group or the bottom row.
     var lines: [GoToLine] {
         var out: [GoToLine] = []
-        if !spaces.isEmpty {
-            out.append(GoToLine(kind: .header("Spaces"), id: GoToLine.firstHeaderID))
-            let textLeading = PhoneRowMetrics.inset + GoToSpaceRow.avatar + 12
-            for (g, group) in spaces.enumerated() {
-                if let machine = group.machine {
-                    out.append(GoToLine(kind: .machine(machine), id: "machine:\(machine)"))
-                }
-                for (i, hit) in group.hits.enumerated() {
-                    let lastOfGroup = i == group.hits.count - 1
-                    let last = lastOfGroup && g == spaces.count - 1
-                    // None before a machine's divider (it has its own line).
-                    let separator: PhoneRowSeparator = last ? .full : (lastOfGroup ? .none : .inset(textLeading))
-                    out.append(GoToLine(kind: .space(hit), id: "space:\(hit.space.id)", separator: separator))
-                }
-            }
-        }
         if !agents.isEmpty {
-            out.append(GoToLine(kind: .header("Agents"), id: out.isEmpty ? GoToLine.firstHeaderID : "header:agents"))
-            for (i, hit) in agents.enumerated() {
-                var block = [GoToLine(kind: .agent(hit), id: hit.item.id)]
+            out.append(GoToLine(kind: .header("Agents"), id: "header:agents"))
+            for (i, hit) in agents.enumerated().reversed() {
                 if hit.showsKids {
-                    block += hit.item.row.subtree.enumerated().map { k, kid in
-                        GoToLine(kind: .kid(kid, parent: hit, first: k == 0, match: hit.kidMatches[kid.terminal.address] ?? []),
-                                 id: "kid:\(kid.terminal.address)")
+                    for (k, kid) in hit.item.row.subtree.enumerated().reversed() {
+                        out.append(GoToLine(kind: .kid(kid, parent: hit, adjacent: k == 0,
+                                                       match: hit.kidMatches[kid.terminal.address] ?? []),
+                                            id: "kid:\(kid.terminal.address)"))
                     }
                 }
-                block[block.count - 1].separator = i == agents.count - 1 ? .full : .inset(PhoneRowMetrics.inset)
-                out += block
+                let separator: PhoneRowSeparator = i > 0 ? .inset(PhoneRowMetrics.inset) : (spaces.isEmpty ? .none : .full)
+                out.append(GoToLine(kind: .agent(hit), id: hit.item.id, separator: separator))
+            }
+        }
+        if !spaces.isEmpty {
+            out.append(GoToLine(kind: .header("Spaces"), id: "header:spaces"))
+            let textLeading = PhoneRowMetrics.inset + GoToSpaceRow.avatar + 12
+            let labelled = spaces.count > 1
+            for group in spaces.reversed() {
+                if labelled {
+                    out.append(GoToLine(kind: .machine(group.machine), id: "machine:\(group.machine ?? "")"))
+                }
+                for (i, hit) in group.hits.enumerated().reversed() {
+                    out.append(GoToLine(kind: .space(hit), id: "space:\(hit.space.id)",
+                                        separator: i > 0 ? .inset(textLeading) : .none))
+                }
             }
         }
         return out
@@ -424,16 +488,19 @@ struct GoToStatusBadges: View {
     }
 }
 
-/// The line before an added machine's spaces: its icon and name, then a hairline.
+/// The line over a machine's spaces: its icon and name (this computer's: "This
+/// computer"), then a hairline.
 struct GoToMachineDivider: View {
-    var name: String
+    /// nil: this computer.
+    var name: String?
     @Environment(\.theme) private var theme
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
+        let shown = name ?? "This computer"
         HStack(spacing: 7) {
-            Icon("server", size: 13, color: theme.dim)
-            Text(name)
+            Icon(name == nil ? "monitor" : "server", size: 13, color: theme.dim)
+            Text(shown)
                 .font(.system(size: 13))
                 .foregroundStyle(theme.muted)
                 .lineLimit(1)
@@ -447,7 +514,7 @@ struct GoToMachineDivider: View {
         .padding(.top, 16)
         .padding(.bottom, 6)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("On \(name)")
+        .accessibilityLabel("On \(shown)")
         .accessibilityAddTraits(.isHeader)
     }
 }

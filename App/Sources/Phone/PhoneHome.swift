@@ -1,13 +1,14 @@
 import SwiftUI
 import WierdrModel
 
-/// The iPhone's list, Telegram's chat list: a tab per space after "All"
-/// (`PhoneSpaceTabs`), their pages side by side (`PhoneSpacePager`: a swipe in the
-/// middle of the screen pages between them), and a header floating over the pages
-/// (they scroll under it): settings, the status counts (or the connection's state) and
-/// the subscription limits (`PhoneLimits`), the strip under them with + at its right
-/// (within the right thumb's reach). The pages run to the screen's bottom (their rows
-/// scroll under the home indicator). Go to comes out of a page pulled down past its top
+/// The iPhone's list, Telegram's chat list turned for one hand: a tab per space after
+/// "All" (`PhoneSpaceTabs`), their pages side by side (`PhoneSpacePager`: a swipe in the
+/// middle of the screen pages between them), each drawn bottom up (the newest and pinned
+/// rows lowest, `PhoneAgentList`), and a header floating over the pages' bottom (they
+/// scroll under it), all of it within the thumb's reach: the strip with + at its right,
+/// under it settings, the status counts (or the connection's state) and the
+/// subscription limits (`PhoneLimits`). The pages run to the screen's top (their rows
+/// scroll under the status bar). Go to comes out of a page pulled up past its bottom
 /// (`PhoneAgentList`, `PullToSearch`). No agent is "current" here: the list shows no focus and never scrolls to one.
 ///
 /// The tab shown is remembered (`phone.tab`: "all" or the space's id); when its
@@ -28,32 +29,37 @@ struct PhoneHome: View {
     var body: some View {
         let tabs = self.tabs
         let showsTabs = tabs.count > 1
-        // The header's bottom from the screen's top: the pages' room for it.
-        let headerHeight = safeTop + PhoneHomeHeader.height
+        // The header's top from the screen's bottom: the pages' room for it.
+        let bottomGap = PhoneHomeHeader.bottomGap(safeBottom: safeBottom)
+        let headerHeight = PhoneHomeHeader.height + bottomGap
         // Read here: the pages are made outside SwiftUI's update (`PhoneSpacePager`).
-        let scrollToTop = paging.scrollToTop
-        let bottomInset = safeBottom
-        ZStack(alignment: .top) {
-            PhoneSpacePager(paging: paging, topInset: headerHeight,
-                            isEnabled: showsTabs && controller.compactColumn == .sidebar && !reorder.isActive,
-                            pageInputs: [AnyHashable(headerHeight), AnyHashable(bottomInset), AnyHashable(showsTabs),
-                                         AnyHashable(scrollToTop)]) { scope in
-                PhoneAgentList(scope: scope, topInset: headerHeight, bottomInset: bottomInset, edgeSwipesOnly: showsTabs,
-                               scrollToTop: scrollToTop[scope] ?? 0)
+        let scrollToNewest = paging.scrollToNewest
+        let topInset = safeTop
+        ZStack(alignment: .bottom) {
+            PhoneSpacePager(paging: paging, bottomInset: headerHeight,
+                            isEnabled: showsTabs && controller.compactColumn == .sidebar && !reorder.isActive
+                                && !controller.showSwitcher,
+                            pageInputs: [AnyHashable(headerHeight), AnyHashable(topInset), AnyHashable(showsTabs),
+                                         AnyHashable(scrollToNewest)]) { scope in
+                PhoneAgentList(scope: scope, topInset: topInset, bottomInset: headerHeight, edgeSwipesOnly: showsTabs,
+                               scrollToNewest: scrollToNewest[scope] ?? 0)
             }
             .modifier(PhoneReorderDim(isOn: reorder.isActive))
-            PhoneHeaderEdge(height: headerHeight)
+            PhoneEdgeFade(edge: .top, height: PhoneEdgeFade.statusBar(safeTop))
+                .frame(maxHeight: .infinity, alignment: .top)
+            PhoneEdgeFade(edge: .bottom, height: headerHeight)
             PhoneHomeHeader(tabs: tabs, paging: paging, reorder: reorder, showsTabs: showsTabs)
-                .padding(.top, safeTop)
+                .padding(.bottom, bottomGap)
             if case .failed = controller.workspace.phase {
-                // The reason and Retry, under the header (its title says "Not Connected").
-                ConnectionBanner(top: headerHeight + 8)
+                // The reason and Retry, over the header (its title says "Not Connected").
+                ConnectionBanner(inset: headerHeight + 8, edge: .bottom)
             }
         }
         .ignoresSafeArea(.container, edges: [.top, .bottom])
         .animation(PhonePagingMotion.relayout, value: showsTabs)
         .overlay(alignment: .bottom) {
-            ToastStack().padding(.horizontal, 12).padding(.bottom, 10)
+            // Over the header (this overlay keeps to the safe area).
+            ToastStack().padding(.horizontal, 12).padding(.bottom, headerHeight - safeBottom + 10)
         }
         .background(theme.chrome.ignoresSafeArea())
         .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: {
@@ -98,12 +104,14 @@ struct PhoneHome: View {
     }
 }
 
-/// Telegram's chat-list header over the pages: a 44-pt row 10 pt under the status
-/// bar (settings in a glass circle where Telegram has Edit, the title in the middle,
-/// the limits at the right, 16 pt from the sides; `PhoneHeaderRow`), then 10 pt under it the strip and + in a glass circle as
-/// tall as the strip, 8 pt after it, 3 pt above the header's bottom. Without spaces
-/// only + is there, in the same place. While the tabs are reordered, the row has
-/// Done (where settings is), the title and the limits dimmed, and the strip takes +'s room.
+/// Telegram's chat-list header, moved to the bottom of the screen for the thumb: 3 pt
+/// under its top the strip and + in a glass circle as tall as the strip, 8 pt after it;
+/// 10 pt under them a 44-pt row (settings in a glass circle where Telegram has Edit,
+/// the title in the middle, the limits at the right, 16 pt from the sides;
+/// `PhoneHeaderRow`), its bottom 28 pt over the screen's, as the pane screen's message
+/// field's (`bottomGap`). Without spaces only + is in the strip's row, in the same
+/// place. While the tabs are reordered, the row has Done (where settings is), the
+/// title and the limits dimmed, and the strip takes +'s room.
 private struct PhoneHomeHeader: View {
     var tabs: [PhoneSpaceTab]
     var paging: PhoneSpacePaging
@@ -115,24 +123,27 @@ private struct PhoneHomeHeader: View {
     /// Between the strip and +.
     static let newSpacing: CGFloat = 8
 
-    /// The header's height under the status bar (the strip's row stays without spaces: + is in it).
-    static let height: CGFloat = 10 + rowHeight + 10 + PhoneSpaceTabs.height + 3
+    /// The header's height over its row's bottom (the strip's row stays without spaces: + is in it).
+    static let height: CGFloat = 3 + PhoneSpaceTabs.height + 10 + rowHeight
+
+    /// From the row's bottom to the screen's: Telegram's 28 pt, into the home
+    /// indicator's room (as the message field's); without one, 8 pt.
+    static func bottomGap(safeBottom: CGFloat) -> CGFloat { safeBottom > 0 ? 28 : 8 }
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
         VStack(spacing: 0) {
-            row
-                .frame(height: Self.rowHeight)
-                .padding(.top, 10)
             strip
                 .frame(height: PhoneSpaceTabs.height)
                 .padding(.horizontal, Self.sideInset)
+            row
+                .frame(height: Self.rowHeight)
                 .padding(.top, 10)
         }
-        .padding(.bottom, 3)
-        .frame(maxWidth: .infinity, alignment: .top)
+        .padding(.top, 3)
+        .frame(maxWidth: .infinity, alignment: .bottom)
     }
 
     private var row: some View {
@@ -159,7 +170,7 @@ private struct PhoneHomeHeader: View {
                     .modifier(PhoneReorderDim(isOn: reorder.isActive))
                 if !reorder.isActive {
                     // Go to is a pull of the list; VoiceOver's is here.
-                    GoToAccessibilityButton()
+                    GoToAccessibilityButton(hint: "Or pull the list up.")
                 }
             }
         }
@@ -351,11 +362,18 @@ private struct PhoneStatusCounts: View {
     }
 }
 
-/// Telegram's edge effect behind the header: the list's background at 85 %, solid
-/// to 54 pt above its end, then fading out (Telegram's curve); it runs 14 pt past
-/// the header's bottom. The rows scroll under it.
-private struct PhoneHeaderEdge: View {
-    /// The header's bottom from the screen's top.
+/// Telegram's edge effect behind the list's header at the screen's bottom (and the
+/// status bar at its top, here and over Go to's panel): the list's background at 85 %,
+/// solid to 54 pt before its end, then fading out (Telegram's curve); it runs 14 pt
+/// past the header. The rows scroll under it.
+struct PhoneEdgeFade: View {
+    /// The screen's edge it's at.
+    var edge: VerticalEdge
+
+    /// Under the status bar (`safeTop` its height): the text there mostly covered, the
+    /// fade's end a little under it.
+    static func statusBar(_ safeTop: CGFloat) -> CGFloat { safeTop > 0 ? safeTop + 10 : 0 }
+    /// The header's height from that edge.
     var height: CGFloat
     @Environment(\.theme) private var theme
 
@@ -367,14 +385,14 @@ private struct PhoneHeaderEdge: View {
 
     var body: some View {
         let total = height + 14
-        let edge = min(54, total)
-        let solid = (total - edge) / total
+        let fade = min(54, total)
+        let solid = (total - fade) / total
         Rectangle()
             .fill(theme.chrome.opacity(0.85))
             .mask {
                 LinearGradient(stops: Self.fade.map { at, alpha in
-                    Gradient.Stop(color: .black.opacity(alpha), location: solid + at * edge / total)
-                }, startPoint: .top, endPoint: .bottom)
+                    Gradient.Stop(color: .black.opacity(alpha), location: solid + at * fade / total)
+                }, startPoint: edge == .top ? .top : .bottom, endPoint: edge == .top ? .bottom : .top)
             }
             .frame(height: total)
             .frame(maxWidth: .infinity)

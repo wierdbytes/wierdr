@@ -4,7 +4,7 @@ import WierdrModel
 /// The subscription limits in the iPhone list's header, at its right (the status
 /// counts in the middle): per account its provider's icon, then a ring for each of
 /// its limits (`LimitRing`), all of them. A tap on an account shows its limits as the
-/// sidebar's panel lists them, bar, share and reset, in a popover under it
+/// sidebar's panel lists them, bar, share and reset, in a popover over it (the header is at the screen's bottom)
 /// (`PhoneLimitsPopover`). Nothing without limits. Data: `Workspace.limits`, as
 /// `LimitsPanel`'s (`7d_oi` isn't shown either).
 struct PhoneLimits: View {
@@ -53,7 +53,7 @@ private struct PhoneLimitAccount: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(AttachPressStyle())
-        .popover(isPresented: $showsLimits, arrowEdge: .top) {
+        .popover(isPresented: $showsLimits, arrowEdge: .bottom) {
             PhoneLimitsPopover(id: account.id, multi: multi)
                 .environment(controller)
                 .environment(\.theme, theme)

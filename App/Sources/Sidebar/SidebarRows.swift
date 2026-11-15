@@ -429,10 +429,16 @@ private enum Tree {
 /// The tree's columns in front of a child: `├`/`└` an elbow into its first
 /// line's middle (`mid`); `├` and `│` go on down to the row's end; every line
 /// reaches up into the room above, so siblings join into one line.
+///
+/// `upward`: the tree upside down, for a list drawn bottom up (the iPhone's, Go to),
+/// where a child is over its parent: the elbow comes up from below into `mid` (`┌`),
+/// `├` and `│` go on up to the row's top, and every line reaches down into the room
+/// below instead. `mid` is still from the row's top.
 struct TreeLines: View {
     var lines: [SubAgent.Line]
     var height: CGFloat
     var mid: CGFloat
+    var upward = false
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -449,6 +455,10 @@ struct TreeLines: View {
     }
 
     private func column(_ line: SubAgent.Line) -> Path {
+        upward ? upwardColumn(line) : downwardColumn(line)
+    }
+
+    private func downwardColumn(_ line: SubAgent.Line) -> Path {
         var p = Path()
         let x = Tree.stroke / 2
         let top = -Tree.up
@@ -466,6 +476,29 @@ struct TreeLines: View {
             if line == .tee {
                 p.move(to: CGPoint(x: x, y: mid - Tree.elbowRadius))
                 p.addLine(to: CGPoint(x: x, y: height))
+            }
+        }
+        return p
+    }
+
+    private func upwardColumn(_ line: SubAgent.Line) -> Path {
+        var p = Path()
+        let x = Tree.stroke / 2
+        let bottom = height + Tree.up
+        switch line {
+        case .blank:
+            break
+        case .pipe:
+            p.move(to: CGPoint(x: x, y: 0))
+            p.addLine(to: CGPoint(x: x, y: bottom))
+        case .tee, .elbow:
+            let y = mid - Tree.stroke / 2
+            p.move(to: CGPoint(x: x, y: bottom))
+            p.addArc(tangent1End: CGPoint(x: x, y: y), tangent2End: CGPoint(x: Tree.columnWidth, y: y), radius: Tree.elbowRadius)
+            p.addLine(to: CGPoint(x: Tree.columnWidth, y: y))
+            if line == .tee {
+                p.move(to: CGPoint(x: x, y: mid + Tree.elbowRadius))
+                p.addLine(to: CGPoint(x: x, y: 0))
             }
         }
         return p

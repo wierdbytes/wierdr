@@ -82,8 +82,8 @@ final class PhoneSpacePaging {
     private(set) var selected = 0
     /// A finger is moving the pages.
     @ObservationIgnored private(set) var isDragging = false
-    /// Bumped by a tap on the current tab: its list scrolls to the top.
-    private(set) var scrollToTop: [PhoneListScope: Int] = [:]
+    /// Bumped by a tap on the current tab: its list scrolls to its bottom (the newest).
+    private(set) var scrollToNewest: [PhoneListScope: Int] = [:]
 
     /// How far the pages are off `selected`, in page widths; a finger moving right is positive.
     @ObservationIgnored private(set) var fraction: CGFloat = 0
@@ -192,11 +192,11 @@ final class PhoneSpacePaging {
     }
 
     /// A tap on tab `index`: the pages slide to it (0.35 s), the pill moves (0.45 s).
-    /// On the current tab: its list goes to the top.
+    /// On the current tab: its list goes to its bottom (the newest).
     func select(_ index: Int) {
         guard scopes.indices.contains(index), !isDragging else { return }
         guard index != selected || fraction != 0 else {
-            scrollToTop[scopes[index], default: 0] += 1
+            scrollToNewest[scopes[index], default: 0] += 1
             return
         }
         moveStrip(index, fraction: 0, .settle(PhonePagingMotion.settleDuration))
@@ -309,12 +309,12 @@ final class PhoneSpacePaging {
 /// main thread does. A new tab's neighbour is made once the pages are at rest.
 ///
 /// A horizontal swipe that starts in the middle of the screen (not in the edge zones,
-/// which are the rows' swipe actions; not over the header, `topInset`) moves the
+/// which are the rows' swipe actions; not over the header, `bottomInset`) moves the
 /// pages (`PhonePagerPan`); vertical moves are the pages' own scrolling.
 struct PhoneSpacePager<Page: View>: UIViewControllerRepresentable {
     var paging: PhoneSpacePaging
-    /// The floating header's height over the pages' top: no swipes start there.
-    var topInset: CGFloat
+    /// The floating header's height over the pages' bottom: no swipes start there.
+    var bottomInset: CGFloat
     /// Swipes page (more than one tab, the list on screen).
     var isEnabled: Bool
     /// What the pages are made from besides their tab: the pages there are made again
@@ -336,7 +336,7 @@ struct PhoneSpacePager<Page: View>: UIViewControllerRepresentable {
 
     func updateUIViewController(_ pager: PhonePagerController, context: Context) {
         pager.host.update(context.environment)
-        pager.gesture.topInset = topInset
+        pager.gesture.bottomInset = bottomInset
         let enabled = isEnabled && paging.scopes.count > 1
         // Off while a drag runs: it is cancelled, the pages settle back.
         if pager.gesture.pan.isEnabled != enabled { pager.gesture.pan.isEnabled = enabled }
@@ -617,7 +617,8 @@ final class PhonePagerGesture: NSObject, UIGestureRecognizerDelegate {
     let pan = PhonePagerPan()
     weak var anchor: UIView?
     weak var paging: PhoneSpacePaging?
-    var topInset: CGFloat = 0
+    /// The header's room at the pages' bottom.
+    var bottomInset: CGFloat = 0
     private let boost = PhoneFrameRateBoost()
 
     override init() {
@@ -657,13 +658,13 @@ final class PhonePagerGesture: NSObject, UIGestureRecognizerDelegate {
         }
     }
 
-    /// Only touches that start on the pages, under the header and outside the edge zones.
+    /// Only touches that start on the pages, over the header and outside the edge zones.
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard let anchor, anchor.window != nil else { return false }
         let p = touch.location(in: anchor)
         let bounds = anchor.bounds
         let edge = PhonePagingMotion.edgeWidth(bounds.width)
-        return bounds.contains(p) && p.y >= topInset && p.x >= edge && p.x <= bounds.width - edge
+        return bounds.contains(p) && p.y <= bounds.height - bottomInset && p.x >= edge && p.x <= bounds.width - edge
     }
 
     // Every other pan (the pages' scrolling first) waits for it: it fails within

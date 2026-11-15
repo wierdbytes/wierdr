@@ -39,7 +39,8 @@ struct WorkspaceView: View {
         .environment(\.homeFolder, controller.workspace.home)
         .environment(\.isCompactLayout, phone || sizeClass == .compact)
         .focusedSceneValue(\.workspaceController, controller)
-        .sheet(isPresented: $controller.showSwitcher) {
+        // Go to: a sheet; in the iPhone layout a panel of its own (`PhoneGoTo`).
+        .sheet(isPresented: switcherSheetShown) {
             QuickSwitcher().environment(controller).environment(\.theme, theme)
         }
         .sheet(isPresented: $controller.showSettings) {
@@ -126,6 +127,10 @@ struct WorkspaceView: View {
         return live + "|" + controller.onScreenPanes.compactMap { p in
             p.terminal.flatMap { controller.workspace.terminal($0) }.map { "\($0.address):\($0.turn):\($0.status?.rawValue ?? 0)" }
         }.joined(separator: ",")
+    }
+
+    private var switcherSheetShown: Binding<Bool> {
+        Binding(get: { !usesPhoneLayout && controller.showSwitcher }, set: { controller.showSwitcher = $0 })
     }
 
     private var renameShown: Binding<Bool> {
