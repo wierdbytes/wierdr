@@ -57,14 +57,19 @@ final class PhoneHostContext {
 }
 
 /// The root of a hosted screen (`PhoneHostContext`): the screen in its container's safe
-/// area, with the app's environment.
+/// area (on `edges`), with the app's environment.
 struct PhoneHosted<Content: View>: View {
     let context: PhoneHostContext
     let content: Content
+    var edges: Edge.Set = .all
 
     var body: some View {
+        let i = context.insets
         content
-            .safeAreaPadding(context.insets)
+            .safeAreaPadding(EdgeInsets(top: edges.contains(.top) ? i.top : 0,
+                                        leading: edges.contains(.leading) ? i.leading : 0,
+                                        bottom: edges.contains(.bottom) ? i.bottom : 0,
+                                        trailing: edges.contains(.trailing) ? i.trailing : 0))
             .environment(\.theme, context.theme)
             .environment(\.homeFolder, context.homeFolder)
             .environment(\.isCompactLayout, context.isCompactLayout)
@@ -125,23 +130,13 @@ enum PhoneMotion {
     }
 
     static let translationX = "transform.translation.x"
-    static let translationY = "transform.translation.y"
 
     /// The layer's horizontal translation as drawn now: mid-animation, the presentation's;
     /// else the model's (just set, the presentation is still the last frame's).
     static func drawnTranslationX(_ layer: CALayer) -> CGFloat {
-        drawn(layer, translationX)
-    }
-
-    /// The layer's vertical translation as drawn now (as `drawnTranslationX`).
-    static func drawnTranslationY(_ layer: CALayer) -> CGFloat {
-        drawn(layer, translationY)
-    }
-
-    private static func drawn(_ layer: CALayer, _ keyPath: String) -> CGFloat {
         let animating = !(layer.animationKeys() ?? []).isEmpty
         let shown = animating ? (layer.presentation() ?? layer) : layer
-        return (shown.value(forKeyPath: keyPath) as? CGFloat) ?? 0
+        return (shown.value(forKeyPath: translationX) as? CGFloat) ?? 0
     }
 
     /// Plays `values` (evenly spaced over `duration`) on the layer's `keyPath`; the

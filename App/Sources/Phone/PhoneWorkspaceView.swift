@@ -23,33 +23,32 @@ import WierdrModel
 /// The two screens are UIKit views (each a hosting controller), moved by Core Animation
 /// as Telegram's are: the finger moves layers, the springs play in the render server
 /// at the display's rate, and no frame waits for SwiftUI.
+///
+/// Go to (`showSwitcher`) is a third screen pushed over both the same way, as Telegram's
+/// archive over its chat list (`PhoneNavController.setGoTo`).
 struct PhoneWorkspaceView: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    /// Go to's panel is up or on its way (`PhoneGoTo`).
+    /// Go to's screen is up or on its way out.
     @State private var goTo = false
 
     var body: some View {
         let shown = controller.compactColumn == .detail
         ZStack(alignment: .top) {
-            PhoneNavigation(shown: shown, covered: goTo)
+            PhoneNavigation(shown: shown, goTo: controller.showSwitcher) { goTo = false }
                 // The whole window (the screens' grounds run under the status bar and the home
                 // indicator; their content keeps to the safe area, `PhoneHostContext`), above
-                // the keyboard while it is up; under Go to, which has the keyboard, they stay.
-                .ignoresSafeArea(goTo ? .all : .container)
-            AttentionBanner(showing: shown)
-            if goTo {
-                // Go to, over the screens (and the keyboard's edge).
-                PhoneGoTo(isPresented: controller.showSwitcher) { goTo = false }
-                    .ignoresSafeArea(.container)
-            }
+                // the keyboard while it is up.
+                .ignoresSafeArea(.container)
+            AttentionBanner(showing: shown && !goTo)
         }
         .onChange(of: controller.showSwitcher, initial: true) { _, on in
             if on { goTo = true }
         }
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
-        // Behind the keyboard's edge as it comes and goes: the pane screen's ground.
-        .background(theme.background.ignoresSafeArea())
+        // Behind the keyboard's edge as it comes and goes: the pane screen's ground, Go to's
+        // while it's up.
+        .background((goTo ? theme.chrome : theme.background).ignoresSafeArea())
         .onChange(of: controller.workspace.spaces) { old, new in
             // The pane on screen was closed (here, on the desktop, or its program
             // exited): back to the list rather than some other pane showing.
@@ -68,11 +67,13 @@ struct PhoneWorkspaceView: View {
     }
 }
 
-/// The list and the pane screen in their UIKit container (`PhoneNavController`).
+/// The list, the pane screen and Go to in their UIKit container (`PhoneNavController`).
 private struct PhoneNavigation: UIViewControllerRepresentable {
     var shown: Bool
-    /// Go to's panel is over the screens.
-    var covered: Bool
+    /// Go to is up (`showSwitcher`).
+    var goTo: Bool
+    /// Go to's screen went off the screen (its pop ended).
+    var goToGone: () -> Void
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(AppModel.self) private var app: AppModel?
@@ -84,8 +85,10 @@ private struct PhoneNavigation: UIViewControllerRepresentable {
 
     func updateUIViewController(_ nav: PhoneNavController, context: Context) {
         nav.host.update(context.environment)
+        nav.onGoToGone = goToGone
+        // First: a pane chosen in Go to is put under it at once, then Go to goes.
         nav.setShown(shown)
-        nav.setCovered(covered)
+        nav.setGoTo(goTo)
     }
 
     static func dismantleUIViewController(_ nav: PhoneNavController, coordinator: ()) {
@@ -105,10 +108,19 @@ private struct PhoneNavigation: UIViewControllerRepresentable {
 /// and Telegram's faint shadow (black 4 %, radius 12, 3 pt up). Both screens fill the
 /// window (their grounds run under the status bar and the home indicator) and lay out
 /// in its safe area, which this container hands down (`PhoneHostContext`).
+///
+/// Go to is pushed over both the same way, at its own progress (`goTarget`): its
+/// screen (`goCard`) at x = (1 − g)·W, the two under it (`stage`, as they are) at
+/// −0.3·W·g, a dim of their own; the same springs, and the same swipe right pops it
+/// (`swipe` takes Go to while it's there).
 final class PhoneNavController: UIViewController {
     let host: PhoneHostContext
     let swipe = PhoneBackSwipe()
+    /// Go to's screen went off the screen (its pop ended).
+    var onGoToGone: () -> Void = {}
 
+    /// The list and the pane screen, moved together under Go to.
+    private let stage = UIView()
     private var list: UIHostingController<PhoneHosted<PhoneHome>>!
     private let dim = UIView()
     private let card = PhoneCardView()
@@ -116,8 +128,18 @@ final class PhoneNavController: UIViewController {
     private var pane: UIHostingController<PhoneHosted<PhonePaneScreen>>?
     /// A pane is pushed (`compactColumn`); nil before the first update.
     private var shown: Bool?
-    /// Go to's panel is over the screens (`PhoneGoTo`): they take no touches.
-    private var covered = false
+    /// Go to's screen: pushed, or on its way in or out.
+    private var goTo: UIHostingController<PhoneHosted<PhoneGoToRoot>>?
+    private let goDim = UIView()
+    private let goCard = PhoneCardView()
+    /// Go to is up (`showSwitcher`).
+    private var goPresented = false
+    /// Where Go to is headed, 1 pushed, 0 popped.
+    private var goTarget: CGFloat = 0
+    private var goMove: PhoneSpringMove?
+    private var goMoveID = 0
+    /// The swipe under way takes Go to (not the pane screen).
+    private var swipingGoTo = false
     /// Where the screens are headed: the last push, pop or swipe's end.
     private var target: CGFloat = 0
     /// The progress the layers are set to (mid-move, its end).
@@ -132,6 +154,7 @@ final class PhoneNavController: UIViewController {
     /// A swipe let go: response 0.3 s, damping 0.85, from the finger's speed.
     static let release = PhoneSpring(duration: 0.3, bounce: 0.15)
     private static let moveKey = "nav"
+    private static let goKey = "goTo"
 
     private var controller: WorkspaceController { host.controller }
 
@@ -151,23 +174,43 @@ final class PhoneNavController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.addSubview(stage)
         list = .moving(PhoneHosted(context: host, content: PhoneHome()))
         addChild(list)
-        view.addSubview(list.view)
+        stage.addSubview(list.view)
         list.didMove(toParent: self)
-        dim.backgroundColor = .black
-        dim.alpha = 0
-        dim.isUserInteractionEnabled = false
-        dim.isAccessibilityElement = false
-        view.addSubview(dim)
+        for d in [dim, goDim] {
+            d.backgroundColor = .black
+            d.alpha = 0
+            d.isUserInteractionEnabled = false
+            d.isAccessibilityElement = false
+        }
+        stage.addSubview(dim)
         card.onEscape = { [weak self] in self?.controller.showSidebar() }
-        view.addSubview(card)
-        swipe.onBegin = { [weak self] in self?.beginSwipe() ?? 1 }
-        swipe.onDrag = { [weak self] p in self?.drag(to: p) }
+        stage.addSubview(card)
+        view.addSubview(goDim)
+        goCard.onEscape = { [weak self] in self?.controller.showSwitcher = false }
+        goCard.isHidden = true
+        view.addSubview(goCard)
+        swipe.onBegin = { [weak self] in
+            guard let self else { return 1 }
+            self.swipingGoTo = self.goTo != nil
+            return self.swipingGoTo ? self.beginGoSwipe() : self.beginSwipe()
+        }
+        swipe.onDrag = { [weak self] p in
+            guard let self else { return }
+            if self.swipingGoTo { self.dragGo(to: p) } else { self.drag(to: p) }
+        }
         swipe.onEnd = { [weak self] finish, velocity, cancelled in
-            self?.endSwipe(finish, velocity: velocity, cancelled: cancelled)
+            guard let self else { return }
+            if self.swipingGoTo {
+                self.endGoSwipe(finish, velocity: velocity, cancelled: cancelled)
+            } else {
+                self.endSwipe(finish, velocity: velocity, cancelled: cancelled)
+            }
         }
         apply(progress)
+        applyGo(goTarget)
         updateAccess()
     }
 
@@ -175,17 +218,21 @@ final class PhoneNavController: UIViewController {
         let bounds = view.bounds
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         // Bounds and center, not frames: the layers carry the move's translation.
-        list.view.bounds = CGRect(origin: .zero, size: bounds.size)
-        list.view.center = center
-        card.bounds = CGRect(origin: .zero, size: bounds.size)
-        card.center = center
+        for v in [stage, list.view!, card, goCard] {
+            v.bounds = CGRect(origin: .zero, size: bounds.size)
+            v.center = center
+        }
         dim.frame = bounds
+        goDim.frame = bounds
         guard bounds.width != width else { return }
-        // A new width (first layout, rotation): at the move's end, at once.
+        // A new width (first layout, rotation): at the moves' ends, at once.
         width = bounds.width
         stopMove()
         apply(target)
         moveEnded()
+        stopGoMove()
+        applyGo(goTarget)
+        goMoveEnded()
     }
 
     // MARK: Showing
@@ -200,12 +247,6 @@ final class PhoneNavController: UIViewController {
         navigate(shown)
     }
 
-    func setCovered(_ covered: Bool) {
-        guard covered != self.covered else { return }
-        self.covered = covered
-        updateAccess()
-    }
-
     /// A push or a pop that no finger drives (a row, the back button, a status jump…).
     private func navigate(_ shown: Bool) {
         let goal: CGFloat = shown ? 1 : 0
@@ -214,6 +255,12 @@ final class PhoneNavController: UIViewController {
         guard goal != target else { return }
         target = goal
         if shown { mountPane() }
+        if goTo != nil, goPresented {
+            // Chosen in Go to: at once under it, and Go to's pop shows it.
+            stopMove()
+            apply(goal)
+            return DispatchQueue.main.async { [weak self] in self?.moveEnded() }
+        }
         let velocity = move?.velocity(at: CACurrentMediaTime()) ?? 0
         animate(to: goal, spring: Self.push, velocity: velocity)
     }
@@ -240,15 +287,19 @@ final class PhoneNavController: UIViewController {
         updateAccess()
     }
 
-    /// Who takes touches and VoiceOver: the pushed pane screen, else the list; none under Go to.
+    /// Who takes touches and VoiceOver: Go to, else the pushed pane screen, else the list.
     private func updateAccess() {
         let shown = shown == true
+        let covered = goTo != nil
         list?.view.isUserInteractionEnabled = !shown && !covered
         list?.view.accessibilityElementsHidden = shown || covered
         card.isUserInteractionEnabled = shown && !covered
         card.accessibilityElementsHidden = !shown || covered
         card.accessibilityViewIsModal = shown && !covered
-        let swipes = shown && pane != nil && !covered
+        goCard.isUserInteractionEnabled = covered
+        goCard.accessibilityElementsHidden = !covered
+        goCard.accessibilityViewIsModal = covered
+        let swipes = (shown && pane != nil) || covered
         if swipe.pan.isEnabled != swipes { swipe.pan.isEnabled = swipes }
     }
 
@@ -352,6 +403,137 @@ final class PhoneNavController: UIViewController {
         // The pop is on its way to the render server before the app redraws for the list.
         CATransaction.flush()
         controller.showSidebar()
+    }
+
+    // MARK: Go to
+
+    /// The controller's word: Go to up or not. Up, its screen is pushed from the right;
+    /// down, it pops (and leaves the hierarchy at the end, `onGoToGone`).
+    func setGoTo(_ presented: Bool) {
+        guard presented != goPresented else { return }
+        goPresented = presented
+        if presented {
+            mountGoTo()
+        } else {
+            // The keyboard goes with it (at once, as a swipe's start puts it away).
+            UIView.performWithoutAnimation {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+        }
+        let goal: CGFloat = presented ? 1 : 0
+        guard goal != goTarget else { return }
+        animateGo(to: goal, spring: Self.push, velocity: goMove?.velocity(at: CACurrentMediaTime()) ?? 0)
+    }
+
+    private func mountGoTo() {
+        guard goTo == nil else { return }
+        // The bottom's safe area goes to the field's bar (`PhoneGoToRoot`).
+        let goTo = UIHostingController.moving(PhoneHosted(context: host, content: PhoneGoToRoot(context: host),
+                                                          edges: [.top, .leading, .trailing]))
+        goTo.view.backgroundColor = UIColor(host.theme.chrome)
+        addChild(goTo)
+        goTo.view.frame = goCard.content.bounds
+        goTo.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        goCard.content.addSubview(goTo.view)
+        goTo.didMove(toParent: self)
+        self.goTo = goTo
+        goCard.isHidden = false
+        updateAccess()
+    }
+
+    private func unmountGoTo() {
+        guard let goTo else { return }
+        goTo.willMove(toParent: nil)
+        goTo.view.removeFromSuperview()
+        goTo.removeFromParent()
+        self.goTo = nil
+        goCard.isHidden = true
+        updateAccess()
+        onGoToGone()
+    }
+
+    /// Go to at `g`, at once: its screen at (1 − g)·W, the screens under it at −0.3·W·g.
+    private func applyGo(_ g: CGFloat) {
+        let g = min(max(g, 0), 1)
+        goCard.transform = CGAffineTransform(translationX: Self.cardX(g, width), y: 0)
+        stage.transform = CGAffineTransform(translationX: -0.3 * width * g, y: 0)
+        goDim.alpha = 0.1 * g
+        goCard.isRounded = g > 0.0005 && g < 0.9995
+    }
+
+    private var drawnGoProgress: CGFloat {
+        guard width > 0 else { return goTarget }
+        return 1 - PhoneMotion.drawnTranslationX(goCard.layer) / width
+    }
+
+    private func stopGoMove() {
+        goMoveID += 1
+        goMove = nil
+        for layer in [goCard.layer, stage.layer, goDim.layer] { layer.removeAnimation(forKey: Self.goKey) }
+    }
+
+    /// As `animate`, for Go to's screen and the stage under it.
+    private func animateGo(to goal: CGFloat, spring: PhoneSpring, velocity: Double) {
+        let from = drawnGoProgress
+        stopGoMove()
+        goTarget = goal
+        applyGo(goal)
+        let id = goMoveID
+        guard width > 0, abs(from - goal) * width > 0.25 || abs(velocity) > 0.01 else {
+            return DispatchQueue.main.async { [weak self] in
+                guard let self, self.goMoveID == id else { return }
+                self.goMoveEnded()
+            }
+        }
+        let (duration, values) = spring.samples(from: Double(from), to: Double(goal), velocity: velocity)
+        goMove = PhoneSpringMove(spring: spring, start: CACurrentMediaTime(), duration: duration,
+                                 from: Double(from), to: Double(goal), velocity: velocity)
+        goCard.isRounded = true
+        let w = width
+        let end = PhoneAnimationEnd { [weak self] finished in
+            guard finished, let self, self.goMoveID == id else { return }
+            self.goMoveEnded()
+        }
+        PhoneMotion.keyframes(goCard.layer, PhoneMotion.translationX, values.map { Self.cardX(CGFloat($0), w) },
+                              duration: duration, key: Self.goKey, delegate: end)
+        PhoneMotion.keyframes(stage.layer, PhoneMotion.translationX, values.map { -0.3 * w * CGFloat($0) },
+                              duration: duration, key: Self.goKey)
+        PhoneMotion.keyframes(goDim.layer, "opacity", values.map { 0.1 * CGFloat($0) }, duration: duration, key: Self.goKey)
+    }
+
+    /// Popped and not up: Go to's screen goes.
+    private func goMoveEnded() {
+        goMove = nil
+        goCard.isRounded = false
+        if goTarget == 0, !goPresented { unmountGoTo() }
+    }
+
+    /// The swipe back took Go to's screen: from where it's drawn; the keyboard goes.
+    private func beginGoSwipe() -> CGFloat {
+        UIView.performWithoutAnimation {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        let g = min(max(drawnGoProgress, 0), 1)
+        stopGoMove()
+        applyGo(g)
+        goCard.isRounded = true
+        return g
+    }
+
+    private func dragGo(to g: CGFloat) {
+        applyGo(g)
+        goCard.isRounded = true
+    }
+
+    /// As `endSwipe`, for Go to: popped, Go to is down (`showSwitcher`).
+    private func endGoSwipe(_ finish: Bool, velocity: CGFloat, cancelled: Bool) {
+        let goal: CGFloat = finish ? 0 : 1
+        if finish { goPresented = false }
+        let speed = cancelled ? 0 : Double(-velocity / max(1, width))
+        animateGo(to: goal, spring: cancelled ? Self.push : Self.release, velocity: speed)
+        guard finish else { return }
+        CATransaction.flush()
+        controller.showSwitcher = false
     }
 
     /// Lays the screens out with its size, hands its safe area down, puts the swipe on the window.

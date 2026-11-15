@@ -16,7 +16,7 @@ final class WorkspaceController {
     var compactColumn: NavigationSplitViewColumn = .sidebar
     /// The sidebar slid over the panel while it's hidden (`SidebarOverlay`).
     var sidebarOverlay = false
-    /// Go to (`QuickSwitcher`): a sheet, in the iPhone layout a panel over the screens (`PhoneGoTo`).
+    /// Go to (`QuickSwitcher`): a sheet; in the iPhone layout a screen pushed over the others (`PhoneGoToRoot`).
     var showSwitcher = false
     var showSettings = false
     /// The iPhone list's tab to show: a space's id (Go to sets it, `PhoneHome` takes it).

@@ -13,18 +13,21 @@ import WierdrModel
 /// The field is at the bottom, over the list, in glass as the message field; it
 /// rises with the keyboard. It has the keyboard from the start; the button at its
 /// right puts the keyboard away, and so does scrolling (it slides down, the field with it).
+/// The button is there from the start, with the keyboard, not brought in as the field
+/// takes it (`keyboardButton`): its own spring under the keyboard's rise and the screen's
+/// push made it move by fits.
 ///
 /// On the iPad it's a sheet: it closes as sheets do (a swipe down, a tap beside it)
 /// and with Esc; while the keyboard is up, a swipe down puts the keyboard away instead
-/// (`KeyboardFirstDismissal`). In the iPhone layout it's a panel over the screens
-/// (`PhoneGoTo`, `panel`): it comes up from the bottom, and its list pulled up past its
-/// bottom takes the panel up with the finger and away; Esc closes it too.
+/// (`KeyboardFirstDismissal`). In the iPhone layout it's a screen pushed over the others
+/// (`inPanel`, `PhoneGoToRoot`): a swipe right anywhere on it pops it, as a pane
+/// screen's; Esc closes it too.
 struct QuickSwitcher: View {
-    /// The iPhone layout's panel (nil: a sheet), which a pull of the list takes up.
-    var panel: PhoneGoToDrag?
-    /// The panel's home indicator room under the field, while the keyboard is down (the
-    /// sheet's is its safe area).
-    var homeInset: CGFloat = 0
+    /// The iPhone layout's screen (false: a sheet).
+    var inPanel = false
+    /// From the field's bottom to its safe area's (`PhoneGoToRoot` sets the screen's, whose
+    /// safe area's bottom comes here instead).
+    var barBottom: CGFloat = 8
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.dismiss) private var dismiss
@@ -35,6 +38,9 @@ struct QuickSwitcher: View {
     @State private var position = ScrollPosition(edge: .bottom)
     /// The list's height under its insets.
     @State private var viewport: CGFloat = 0
+    /// The button that puts the keyboard away shows: from the start (the keyboard comes
+    /// with Go to), then as the field has the keyboard.
+    @State private var keyboardButton = true
 
     var body: some View {
         let results = GoToResults(controller.workspace, query: query, showsKids: controller.showsKids(of:))
@@ -49,9 +55,6 @@ struct QuickSwitcher: View {
             .padding(.bottom, 4)
             // Rows short of the list's height sit at its bottom, by the field.
             .frame(minHeight: viewport, alignment: .bottom)
-            .background {
-                if let panel { PhoneGoToScrollProbe(drag: panel) }
-            }
         }
         .scrollPosition($position)
         // At rest at its bottom, and the rows by the field stay put as the rows or the
@@ -65,8 +68,7 @@ struct QuickSwitcher: View {
         // Not `scrollDismissesKeyboard`: its keyboard went at once. Losing focus slides it down.
         .scrollDismissesKeyboard(.never)
         .onScrollPhaseChange { _, phase in
-            // The panel's drag tells when the list scrolls (not when it takes the panel up).
-            if panel == nil, phase == .interacting, fieldFocused { fieldFocused = false }
+            if phase == .interacting, fieldFocused { fieldFocused = false }
         }
         .background(theme.chrome)
         .overlay {
@@ -75,15 +77,12 @@ struct QuickSwitcher: View {
         .bottomBar { bar(first: results.first) }
         .background {
             // With the keyboard up a swipe down puts it away; with it down, closes the sheet.
-            if panel == nil { KeyboardFirstDismissal { fieldFocused = false } }
+            if !inPanel { KeyboardFirstDismissal { fieldFocused = false } }
         }
         .environment(swipes)
         .onChange(of: query) { _, _ in position.scrollTo(edge: .bottom) }
-        .onAppear {
-            fieldFocused = true
-            panel?.scrolled = { fieldFocused = false }
-            panel?.closing = { fieldFocused = false }
-        }
+        .onChange(of: fieldFocused) { _, focused in keyboardButton = focused }
+        .onAppear { fieldFocused = true }
     }
 
     // MARK: Rows
@@ -161,7 +160,7 @@ struct QuickSwitcher: View {
                 // A tap on the capsule's margins brings the keyboard too.
                 .onTapGesture { fieldFocused = true }
                 .composerGlass(Capsule(), theme: theme, interactive: false)
-                if fieldFocused {
+                if keyboardButton {
                     Button { fieldFocused = false } label: {
                         Image(systemName: "keyboard.chevron.compact.down")
                             .font(.system(size: 17, weight: .medium))
@@ -175,7 +174,7 @@ struct QuickSwitcher: View {
                     .accessibilityLabel("Hide Keyboard")
                 }
             }
-            .animation(.snappy(duration: 0.25), value: fieldFocused)
+            .animation(.snappy(duration: 0.25), value: keyboardButton)
         }
         .background {
             // Esc closes (no button for it on screen).
@@ -187,16 +186,14 @@ struct QuickSwitcher: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
-        // Over the home indicator, the field 28 pt over the screen's bottom (as the list's
-        // header row and the message field); over the keyboard, 8 pt.
-        .padding(.bottom, homeInset > 0 ? 28 : 8)
+        .padding(.bottom, barBottom)
     }
 
     // MARK: Going
 
-    /// Closes it: the sheet, or the iPhone's panel (it goes up and away, `PhoneGoTo`).
+    /// Closes it: the sheet, or the iPhone's screen (it pops, `PhoneNavController.setGoTo`).
     private func close() {
-        if panel != nil {
+        if inPanel {
             controller.showSwitcher = false
         } else {
             dismiss()
