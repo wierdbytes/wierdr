@@ -278,6 +278,11 @@ import Testing
         #expect(ws.isNested("k4") && !ws.isNested("k7") && !ws.isNested("a"))
         // b working, a idle (not counted by the summary, but here), k1 working, k3 blocked, k4 done → idle.
         #expect(ws.agentCounts(in: "sp") == [.working: 2, .idle: 2, .blocked: 1])
+        // a and b; k1, k3 and k4 (kept); s, s2 and k2 (a's plain terminal). k7 is no one's.
+        #expect(rows.tally == SpaceTally(agents: 2, subAgents: 3, terminals: 3))
+        // pi's in-process sub-agents add to the count, as the row's badge has them.
+        ws.terminals["b"]?.meta = AgentMeta(subagents: 2)
+        #expect(ws.sidebarRows(for: ws.spaces[0]).tally == SpaceTally(agents: 2, subAgents: 5, terminals: 3))
         // Kept next to a's tab, past its kin's tab (t3).
         let target = ws.keepTarget(for: "k1")
         #expect(target?.spaceID == "sp" && target?.after == "t3" && target?.parent == "a")

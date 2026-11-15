@@ -411,6 +411,43 @@ extension Sequence where Element == SidebarRow {
     }
 }
 
+/// What a space holds, as its rows show it (the Go to panel's line under a space).
+public struct SpaceTally: Hashable, Sendable {
+    /// Its agents with a pane (rows of their own).
+    public var agents: Int
+    /// Their sub-agents: those with a terminal (under them in the list) and those
+    /// pi runs in-process (`AgentMeta.subagents`), as the rows' badges count them.
+    public var subAgents: Int
+    /// Its plain terminals and those its agents started.
+    public var terminals: Int
+
+    public init(agents: Int = 0, subAgents: Int = 0, terminals: Int = 0) {
+        self.agents = agents; self.subAgents = subAgents; self.terminals = terminals
+    }
+}
+
+extension Sequence where Element == SidebarRow {
+    /// How many agents, sub-agents and terminals these rows show, each terminal once.
+    public var tally: SpaceTally {
+        var agents: Set<String> = [], kids: Set<String> = [], terminals: Set<String> = []
+        var inner = 0
+        for row in self {
+            switch row.kind {
+            case .agent:
+                if let t = row.terminal, agents.insert(t.address).inserted { inner += t.meta?.subagents ?? 0 }
+                for kid in row.subtree {
+                    if kid.isAgent { kids.insert(kid.terminal.address) } else { terminals.insert(kid.terminal.address) }
+                }
+            case .terminal:
+                terminals.insert(row.terminal?.address ?? row.paneID)
+            case .mod:
+                break
+            }
+        }
+        return SpaceTally(agents: agents.count, subAgents: kids.count + inner, terminals: terminals.count)
+    }
+}
+
 extension Sequence where Element == CountedAgent {
     /// How many have each status.
     public var byStatus: [AgentStatus: Int] {

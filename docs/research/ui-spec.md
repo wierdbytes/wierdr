@@ -120,7 +120,9 @@ to **370** (`layouts/.state` + screenshot); everything inside is width-flexible.
 - Right: two icon buttons, each 26×26, radius 6, icon 15×15, color `muted`;
   hover: bg `hover`, icon `foreground`.
   1. `search.svg` → opens the **picker** (Herdr's ⌘P quick switcher: type to filter
-     spaces/tabs, Enter goes, spaces needing you first).
+     spaces/tabs, Enter goes, spaces needing you first). Wierdr's is "Go to"
+     (`QuickSwitcher`): spaces and agents in the iPhone list's look, fuzzy filtered, the
+     field at the bottom (docs/FEATURES.md §2).
   2. `sidebar.svg` → collapses the sidebar to a 44/76 px "rail" (or back to its width).
 - The whole block is a window-drag area on desktop (drop).
 

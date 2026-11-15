@@ -38,6 +38,7 @@
 		57035D2E92266855712F81FF /* WierdrModel in Frameworks */ = {isa = PBXBuildFile; productRef = FAD500E79D2A09A7B26072EE /* WierdrModel */; };
 		5BD604DAF4EF2A94EE0366F5 /* PhoneWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65E66B1D03C119D0686AC190 /* PhoneWorkspaceView.swift */; };
 		5DE17110AF38FD23F49BD1A1 /* Host.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF024919F7CC3D81C9D998B7 /* Host.swift */; };
+		5F6BB648C5B2875AA3C9F66E /* KeyboardFirstDismissal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5823D0557BDD5B47A25FCE33 /* KeyboardFirstDismissal.swift */; };
 		5FDBC03A3DEB37359A821DEB /* PaneTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AF2BC817415DFF36FE83826 /* PaneTreeView.swift */; };
 		60DFCEE352A3DD2104A9AE02 /* LiveServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 647C64E311441E658D84CAD7 /* LiveServices.swift */; };
 		622613C1FB10D809676F9DEB /* HostKeyAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0163470CB1971C7092B25002 /* HostKeyAlert.swift */; };
@@ -150,6 +151,7 @@
 		44D0D83266FC227D2F050C23 /* WorkspaceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceCommands.swift; sourceTree = "<group>"; };
 		4FAB055678CBEED35D324983 /* SpacesList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesList.swift; sourceTree = "<group>"; };
 		52EDFAC9EB0534459E6950A3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		5823D0557BDD5B47A25FCE33 /* KeyboardFirstDismissal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardFirstDismissal.swift; sourceTree = "<group>"; };
 		60C13DE55007AF44DEA645DC /* programs.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = programs.json; sourceTree = "<group>"; };
 		6121572F0A25B0E607C6BD7C /* PhoneTabReorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneTabReorder.swift; sourceTree = "<group>"; };
 		6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarResizeHandle.swift; sourceTree = "<group>"; };
@@ -323,6 +325,7 @@
 				0666454A0F3654CFD8BB3434 /* Device.swift */,
 				12EDAF530116B45FFE732B07 /* Format.swift */,
 				B54E74013AE71827D89D4EE3 /* ImageForAgent.swift */,
+				5823D0557BDD5B47A25FCE33 /* KeyboardFirstDismissal.swift */,
 				B80B3C068CD2BFADEDBF7680 /* ModelAliases.swift */,
 				ABD1D033D2D7C97DEF34DCD0 /* Previews.swift */,
 			);
@@ -635,6 +638,7 @@
 				87A14C8CC3053545CC2E8FCF /* ImageForAgent.swift in Sources */,
 				66527F0DB6CF7D2C27CADBD5 /* KeyPanelLayer.swift in Sources */,
 				BC5F03E81D285DF5CBC65E43 /* KeyboardCover.swift in Sources */,
+				5F6BB648C5B2875AA3C9F66E /* KeyboardFirstDismissal.swift in Sources */,
 				3369452A0EEE814CFC410FF6 /* LimitsPanel.swift in Sources */,
 				D025F02BB8E45BEADA711A3A /* LiveActivities.swift in Sources */,
 				FFF085F26F93DD76B88BEA24 /* LiveActivityDemo.swift in Sources */,
@@ -759,7 +763,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 54;
+				CURRENT_PROJECT_VERSION = 55;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -845,7 +849,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 54;
+				CURRENT_PROJECT_VERSION = 55;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

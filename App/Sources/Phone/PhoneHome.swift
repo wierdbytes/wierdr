@@ -67,6 +67,13 @@ struct PhoneHome: View {
             }
         }
         .onAppear { reorder.controller = controller }
+        // Go to chose a space: its tab, as a tap on it in the strip.
+        .onChange(of: controller.listTabRequest, initial: true) { _, id in
+            guard let id else { return }
+            controller.listTabRequest = nil
+            reorder.done()
+            if let i = paging.scopes.firstIndex(of: .space(id)) { paging.select(i) }
+        }
         // A pane pushed over the list ends reordering, as Done; so do fewer than two spaces.
         .onChange(of: controller.compactColumn) { _, column in
             if column == .detail { reorder.done() }

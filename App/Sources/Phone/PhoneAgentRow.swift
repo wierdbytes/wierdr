@@ -36,6 +36,8 @@ struct PhoneAgentRowContent: View {
     var subtree: [SubAgent]
     /// Its sub-agents show under it.
     var open: Bool
+    /// The title's letters a search matched (`Fuzzy`), drawn in the accent color.
+    var titleMatch: [Int] = []
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
@@ -75,7 +77,7 @@ struct PhoneAgentRowContent: View {
 
     private func titleLine(now: Date) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(Format.agentTitle(terminal, tab: tab))
+            MatchText.text(Format.agentTitle(terminal, tab: tab), matched: titleMatch, color: theme.accent)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)
@@ -331,6 +333,8 @@ struct PhoneKidRowContent: View {
     /// The first under its agent: its lines reach up into the agent's row (the
     /// others' start at their top, so lines of the rows above aren't drawn twice).
     var first: Bool
+    /// A sub-agent's title's letters a search matched (`Fuzzy`), in the accent color.
+    var titleMatch: [Int] = []
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -373,7 +377,7 @@ struct PhoneKidRowContent: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
                     StatusMark(status: status).frame(width: 14)
-                    Text(Format.kidTitle(t))
+                    MatchText.text(Format.kidTitle(t), matched: titleMatch, color: theme.accent)
                         .font(.system(size: 15))
                         .foregroundStyle(theme.foreground)
                         .lineLimit(1)

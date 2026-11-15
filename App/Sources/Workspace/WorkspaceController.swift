@@ -18,6 +18,8 @@ final class WorkspaceController {
     var sidebarOverlay = false
     var showSwitcher = false
     var showSettings = false
+    /// The iPhone list's tab to show: a space's id (Go to sets it, `PhoneHome` takes it).
+    var listTabRequest: String?
 
     // MARK: Layout (set by `WorkspaceView`)
     /// The iPhone layout: one pane on screen at a time (the focused one).
