@@ -288,4 +288,35 @@ import Testing
         #expect(ws.sidebarRows(for: ws.spaces[0])[0].subtree.map(\.terminal.address) == ["k1", "k2", "k4"])
         #expect(ws.agentCounts(in: "sp")[.blocked] == nil)
     }
+
+    /// The counts are the rows' (`countedAgents`), whoever asks: an ended agent in a
+    /// pane keeps its live sub-agents under it (a kept one is no row of its own), a
+    /// terminal in two panes counts once, a done agent stays done.
+    @MainActor @Test func countsAreTheRows() {
+        func t(_ a: String, _ s: AgentStatus?, parent: String? = nil, live: Bool = true) -> TerminalInfo {
+            TerminalInfo(address: a, isLive: live, status: s, state: s.map { _ in "x" }, parent: parent)
+        }
+        let terms: [TerminalInfo] = [
+            t("e", .idle, live: false), t("k", .done, parent: "e"), t("k2", .blocked, parent: "e"),
+            t("d", .done), t("w", .working, parent: "d"),
+        ]
+        func pane(_ id: String, _ a: String) -> PaneNode { PaneNode(id: id, kind: .terminal(a)) }
+        let tabs = [
+            Tab(id: "t1", spaceID: "sp", name: "", index: 0, root: PaneNode(id: "t1", kind: .row([pane("pe", "e")]))),
+            Tab(id: "t2", spaceID: "sp", name: "", index: 1, root: PaneNode(id: "t2", kind: .row([pane("pk", "k")]))),
+            Tab(id: "t3", spaceID: "sp", name: "", index: 2, root: PaneNode(id: "t3", kind: .row([pane("pd", "d"), pane("pd2", "d")]))),
+        ]
+        let ws = Workspace()
+        ws.spaces = [Space(id: "sp", machine: nil, name: "", displayName: "x", folder: "", tabs: tabs)]
+        ws.terminals = Dictionary(uniqueKeysWithValues: terms.map { ($0.address, $0) })
+        let rows = ws.sidebarRows(for: ws.spaces[0])
+        #expect(rows.map(\.paneID) == ["pe", "pd", "pd2"], "k shows under e only")
+        #expect(rows[0].subtree.map(\.terminal.address) == ["k", "k2"])
+        let counts: [AgentStatus: Int] = [.idle: 2, .blocked: 1, .done: 1, .working: 1]
+        #expect(ws.agentCounts(in: "sp") == counts)
+        #expect(rows.countedAgents.byStatus == counts)
+        #expect(ws.inbox.flatMap(\.items).map(\.row).countedAgents.byStatus == counts)
+        let k2 = rows.countedAgents.first { $0.status == .blocked }
+        #expect(k2?.terminal.address == "k2" && k2?.kid != nil && k2?.rowPane == "pe")
+    }
 }

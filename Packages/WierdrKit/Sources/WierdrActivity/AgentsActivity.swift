@@ -20,8 +20,8 @@ public struct AgentsActivityAttributes: Codable, Hashable, Sendable {
     public init(host: String) { self.host = host }
 
     public struct ContentState: Codable, Hashable, Sendable {
-        /// Agents by status, as the iPhone's agents list groups them (an agent counts
-        /// where its most urgent sub-agent would put it).
+        /// Agents by status, each sub-agent an agent of its own (as it reads under
+        /// its parent: never done), as the space tabs count them.
         public var blocked: Int
         public var done: Int
         public var working: Int

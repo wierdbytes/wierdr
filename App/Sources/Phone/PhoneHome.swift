@@ -243,34 +243,24 @@ private struct PhoneHomeTitle: View {
 }
 
 /// The agents' counts by status in the header's middle (needs you, done, working, idle;
-/// only those with any): each a round badge filled with its status's color, as the pane's
-/// back button has. A tap opens the first agent with that status in the list's order
-/// (the "All" tab's: an agent, then its kept sub-agents).
+/// only those with any; every sub-agent counts, as it reads under its parent): each a
+/// round badge filled with its status's color, as the pane's back button has. A tap
+/// opens the first agent with that status in the list's order (the "All" tab's: an
+/// agent, then its sub-agents; one without a pane shows as a tap on its row does).
 private struct PhoneStatusCounts: View {
     struct Entry: Equatable {
         var status: AgentStatus
         var count: Int
-        /// The first agent's pane with this status.
-        var pane: String
+        /// The first agent with this status.
+        var first: CountedAgent
 
         /// Every status with agents, most urgent first.
         @MainActor static func all(in workspace: Workspace) -> [Entry] {
-            var counts: [AgentStatus: Int] = [:]
-            var first: [AgentStatus: String] = [:]
-            for item in workspace.phoneList(space: nil).agents {
-                var panes: [(String, TerminalInfo)] = item.row.terminal.map { [(item.row.paneID, $0)] } ?? []
-                panes += item.row.subtree.compactMap { kid in
-                    kid.paneID.flatMap { p in kid.isAgent ? (p, kid.terminal) : nil }
-                }
-                for (pane, t) in panes {
-                    guard let s = t.status else { continue }
-                    counts[s, default: 0] += 1
-                    if first[s] == nil { first[s] = pane }
-                }
-            }
+            let agents = workspace.phoneList(space: nil).agents.map(\.row).countedAgents
+            let counts = agents.byStatus
             return [AgentStatus.blocked, .done, .working, .idle].compactMap { s in
-                guard let n = counts[s], n > 0, let pane = first[s] else { return nil }
-                return Entry(status: s, count: n, pane: pane)
+                guard let n = counts[s], let first = agents.first(where: { $0.status == s }) else { return nil }
+                return Entry(status: s, count: n, first: first)
             }
         }
     }
@@ -283,7 +273,7 @@ private struct PhoneStatusCounts: View {
     var body: some View {
         HStack(spacing: 2) {
             ForEach(entries, id: \.status) { entry in
-                Button { controller.focus(pane: entry.pane) } label: {
+                Button { open(entry.first) } label: {
                     Text("\(entry.count)")
                         .font(.system(size: 14, weight: .semibold))
                         .monospacedDigit()
@@ -305,6 +295,15 @@ private struct PhoneStatusCounts: View {
         .animation(.snappy(duration: 0.3), value: entries.map(\.count))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Agents")
+    }
+
+    /// An agent's pane; a sub-agent as a tap on its row shows it (`open`).
+    private func open(_ agent: CountedAgent) {
+        if let kid = agent.kid {
+            controller.open(kid, from: agent.rowPane)
+        } else {
+            controller.focus(pane: agent.rowPane)
+        }
     }
 }
 

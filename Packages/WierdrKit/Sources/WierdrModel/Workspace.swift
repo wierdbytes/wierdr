@@ -144,19 +144,6 @@ public final class Workspace {
         return (space.id, space.tabs[after].id, home.address)
     }
 
-    /// Agent counts by status over all agents shown in panes.
-    public var statusCounts: [AgentStatus: Int] {
-        var counts: [AgentStatus: Int] = [:]
-        for space in spaces {
-            for tab in space.tabs {
-                for pane in tab.panes {
-                    if let t = terminal(pane.terminal), let s = t.status { counts[s, default: 0] += 1 }
-                }
-            }
-        }
-        return counts
-    }
-
     // MARK: Commands (implemented by the live backend; preview/no-op otherwise)
 
     /// Backend that performs commands against herdr-core. `nil` in previews.

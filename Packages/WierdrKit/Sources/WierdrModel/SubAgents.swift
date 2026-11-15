@@ -8,8 +8,9 @@ import Foundation
 ///   it, depth first, each followed by its own: sub-agents (they report a
 ///   status) and plain terminals. Kept ones (someone gave them a pane) still
 ///   show there, not as rows of their own tab.
-/// - A sub-agent counts in the space of the topmost agent it shows under,
-///   with its status as it reads there (`kidStatus`: never done).
+/// - The counts count the rows (`countedAgents`): each agent, and a sub-agent
+///   in the space of the topmost agent it shows under, with its status as it
+///   reads there (`kidStatus`: never done).
 struct SubAgentIndex {
     struct Place: Hashable, Sendable {
         var space: String
@@ -49,13 +50,14 @@ struct SubAgentIndex {
             }
         }
         self.children = children
-        countsBySpace = counts()
+        countsBySpace = Self.counts(spaces: spaces, index: self)
     }
 
-    /// An agent of the list: a live agent shown in a pane.
+    /// An agent of the list: an agent shown in a pane (`SidebarOrder` gives it a
+    /// row; an ended one too, its live children still show under it).
     func isListed(_ address: String) -> Bool {
         guard placed[address] != nil, let t = terminals[address] else { return false }
-        return t.isLive && t.isAgent
+        return t.isAgent
     }
 
     /// The live terminals `address` started, and theirs, depth first, each with
@@ -95,16 +97,17 @@ struct SubAgentIndex {
         return root(of: address) != nil
     }
 
-    /// Each space's agents by status: an agent with a pane where its pane is,
-    /// a sub-agent (kept or not) where the agent it shows under is, as it reads
-    /// there (never done). Space ids → counts.
-    private func counts() -> [String: [AgentStatus: Int]] {
+    /// Each space's agents by status, as its rows count them (`countedAgents`): an
+    /// agent with a pane where its pane is, a sub-agent (kept or not) where the
+    /// agent it shows under is, as it reads there (never done); each once.
+    /// Space ids → counts.
+    private static func counts(spaces: [Space], index: SubAgentIndex) -> [String: [AgentStatus: Int]] {
         var out: [String: [AgentStatus: Int]] = [:]
-        for t in terminals.values where t.isLive && t.isAgent {
-            if let top = root(of: t.address), let space = placed[top]?.space {
-                if let s = t.kidStatus { out[space, default: [:]][s, default: 0] += 1 }
-            } else if isListed(t.address), let space = placed[t.address]?.space, let s = t.status {
-                out[space, default: [:]][s, default: 0] += 1
+        var seen: Set<String> = []
+        for space in spaces {
+            for a in SidebarOrder.rows(for: space, index: index).countedAgents
+            where seen.insert(a.terminal.address).inserted {
+                out[space.id, default: [:]][a.status, default: 0] += 1
             }
         }
         return out

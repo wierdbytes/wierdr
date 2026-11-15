@@ -53,8 +53,9 @@ struct StatusMark: View {
     var body: some View {
         switch status {
         case .working:
-            Spinner(size: 12, color: tint ?? theme.working)
-                .padding(.horizontal, 1)
+            Circle().fill(tint ?? theme.working)
+                .frame(width: 7, height: 7)
+                .padding(.horizontal, 3)
         case .blocked:
             if style == .full {
                 Text("Needs you")
@@ -79,26 +80,6 @@ struct StatusMark: View {
         case nil:
             Color.clear.frame(width: 7, height: 7).padding(.horizontal, 3)
         }
-    }
-}
-
-/// Herdr's `spinner.svg` drawn natively: a 24%-opacity ring and a quarter arc
-/// (stroke 3.2 and radius 9.4 in a 24-pt box). Static, like the desktop.
-struct Spinner: View {
-    var size: CGFloat
-    var color: Color
-
-    var body: some View {
-        let k = size / 24
-        ZStack {
-            Circle().stroke(color.opacity(0.24), lineWidth: 3.2 * k)
-            Circle().trim(from: 0, to: 0.25)
-                .stroke(color, style: StrokeStyle(lineWidth: 3.2 * k, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-        }
-        .frame(width: 18.8 * k, height: 18.8 * k)
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
     }
 }
 

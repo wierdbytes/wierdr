@@ -25,7 +25,7 @@ enum PhoneRowMetrics {
 /// 2. its model (cut first when room runs out), @effort and its context's ring;
 /// 3. its sub-agents and terminals (tap: fold or unfold them), its space's name on a
 ///    gray chip as theirs (on "All"; cut when room runs out); on the right, Telegram's
-///    unread badge: needs you (red), done (green), working (the spinner), nothing
+///    unread badge: needs you (red), done (green), working (yellow), nothing
 ///    while idle; the pin glyph there when it's pinned and has no badge.
 struct PhoneAgentRowContent: View {
     var terminal: TerminalInfo
@@ -228,8 +228,8 @@ enum PhoneRowText {
     }
 }
 
-/// The bottom-right badge, where Telegram has the unread count: needs you and done
-/// solid circles (a chat marked unread), working the spinner, idle nothing; the
+/// The bottom-right badge, where Telegram has the unread count: needs you, done
+/// and working solid circles (a chat marked unread), idle nothing; the
 /// pin glyph instead when pinned without one (an unread badge hides the pin).
 struct PhoneStatusBadge: View {
     var status: AgentStatus?
@@ -245,7 +245,7 @@ struct PhoneStatusBadge: View {
             case .done:
                 Circle().fill(theme.done).frame(width: d, height: d)
             case .working:
-                Spinner(size: d, color: theme.working)
+                Circle().fill(theme.working).frame(width: d, height: d)
             case .idle, nil:
                 if pinned {
                     Icon("ui.tg-pin", size: d, color: theme.dim)

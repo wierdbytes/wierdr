@@ -107,7 +107,7 @@ final class WorkspaceController {
         }
     }
 
-    /// All rows in sidebar order, ignoring folds (for "next agent with status").
+    /// All rows in sidebar order, ignoring folds (what the counts count).
     var allRows: [SidebarRow] { workspace.spaces.flatMap { workspace.sidebarRows(for: $0) } }
 
     // MARK: - Focus & selection
@@ -160,34 +160,6 @@ final class WorkspaceController {
         let n = panes.count
         let next = current.map { (($0 + offset) % n + n) % n } ?? (offset > 0 ? 0 : n - 1)
         focus(pane: panes[next], reveal: false)
-    }
-
-    /// Agents with a pane in sidebar order: each row's, then its kept sub-agents'.
-    private var agentPanes: [(pane: String, terminal: TerminalInfo)] {
-        allRows.flatMap { row -> [(pane: String, terminal: TerminalInfo)] in
-            guard row.kind == .agent, let t = row.terminal else { return [] }
-            return [(row.paneID, t)] + row.subtree.compactMap { kid in
-                kid.paneID.flatMap { p in kid.isAgent ? (p, kid.terminal) : nil }
-            }
-        }
-    }
-
-    /// Status bar: focus the next agent with `status` after the focused one (sidebar order, wrapping).
-    func focusNext(status: AgentStatus) {
-        let rows = agentPanes
-        guard !rows.isEmpty else { return }
-        let start = focusedPane.flatMap { p in rows.firstIndex { $0.pane == p.id } } ?? -1
-        for k in 1...rows.count {
-            let row = rows[(start + k + rows.count) % rows.count]
-            if row.terminal.status == status {
-                if let space = workspace.location(ofPane: row.pane)?.space {
-                    if showsMachines { foldedMachines.remove(space.machine ?? "") }
-                    closedSpaces.remove(space.id)
-                }
-                focus(pane: row.pane)
-                return
-            }
-        }
     }
 
     // MARK: - Sub-agents
@@ -439,11 +411,9 @@ final class WorkspaceController {
 
     /// The most urgent status among the agents other than the one at `address` (the one on
     /// screen; needs you, done, working; never idle) and how many have it; `nil`: all idle.
+    /// Every sub-agent counts, as it reads under its parent (`kidStatus`).
     func attention(excluding address: String?) -> (status: AgentStatus, count: Int)? {
-        var counts: [AgentStatus: Int] = [:]
-        for row in agentPanes where row.terminal.address != address {
-            if let s = row.terminal.status, s != .idle { counts[s, default: 0] += 1 }
-        }
+        let counts = allRows.countedAgents.filter { $0.terminal.address != address && $0.status != .idle }.byStatus
         return counts.keys.max().map { ($0, counts[$0] ?? 0) }
     }
 

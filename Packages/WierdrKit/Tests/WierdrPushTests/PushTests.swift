@@ -263,6 +263,24 @@ private let channels = [lane.key: "CHAN=="]
         #expect(ActivitySummary.line(s) == "1 needs you · 1 working")
         #expect(s.top == .blocked)
     }
+
+    @Test func subAgentsCountAsAgents() {
+        let space = Space(id: "sp1", machine: nil, name: "", displayName: "wierdr", folder: "/x", tabs: [])
+        func term(_ a: String, _ s: AgentStatus?) -> TerminalInfo {
+            TerminalInfo(address: a, program: .shell, status: s, parent: a == "t1" ? nil : "t1")
+        }
+        // An idle agent with a working, a done (reads idle) and a blocked sub-agent and a plain terminal.
+        let kids = [term("t2", .working), term("t3", .done), term("t4", .blocked), term("t5", nil)]
+            .map { SubAgent(terminal: $0, lines: [.tee]) }
+        let row = SidebarRow(kind: .agent, paneID: "p1", tabID: "tb1", terminal: term("t1", .idle),
+                             subtree: kids, urgency: .blocked)
+        let inbox = [InboxGroup(status: .blocked, items: [InboxItem(row: row, space: space)])]
+        let s = ActivitySummary.state(of: inbox, tab: { _ in nil }, now: Date(timeIntervalSince1970: 5))
+        let counts: [Int] = [s.blocked, s.done, s.working, s.idle]
+        #expect(counts == [1, 0, 1, 2])
+        #expect(s.agents.map(\.id) == ["t1"], "the parent's row only")
+        #expect(s.agents[0].status == .blocked)
+    }
 }
 
 @Suite struct SharedTypeTests {

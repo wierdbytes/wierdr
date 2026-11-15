@@ -374,6 +374,52 @@ public struct SidebarRow: Identifiable, Hashable, Sendable {
     public var paneIDs: [String] { [paneID] + subtree.compactMap(\.paneID) }
 }
 
+// MARK: - Agent counts
+
+/// One agent as the counts count it: a row's agent or one of its sub-agents,
+/// each an agent of its own (a sub-agent with its status as it reads under the
+/// row, `kidStatus`: never done).
+public struct CountedAgent: Hashable, Sendable {
+    public var terminal: TerminalInfo
+    public var status: AgentStatus
+    /// The sub-agent, nil for the row's own agent.
+    public var kid: SubAgent?
+    /// The pane of the row it shows in.
+    public var rowPane: String
+
+    public init(terminal: TerminalInfo, status: AgentStatus, kid: SubAgent? = nil, rowPane: String) {
+        self.terminal = terminal; self.status = status; self.kid = kid; self.rowPane = rowPane
+    }
+}
+
+extension Sequence where Element == SidebarRow {
+    /// The agents these rows count, in their order: each agent row's agent, then its
+    /// sub-agents. A terminal counts once (one in two panes has two rows).
+    public var countedAgents: [CountedAgent] {
+        var out: [CountedAgent] = []
+        var seen: Set<String> = []
+        for row in self where row.kind == .agent {
+            if let t = row.terminal, let s = t.status, seen.insert(t.address).inserted {
+                out.append(CountedAgent(terminal: t, status: s, rowPane: row.paneID))
+            }
+            for kid in row.subtree {
+                guard let s = kid.terminal.kidStatus, seen.insert(kid.terminal.address).inserted else { continue }
+                out.append(CountedAgent(terminal: kid.terminal, status: s, kid: kid, rowPane: row.paneID))
+            }
+        }
+        return out
+    }
+}
+
+extension Sequence where Element == CountedAgent {
+    /// How many have each status.
+    public var byStatus: [AgentStatus: Int] {
+        var out: [AgentStatus: Int] = [:]
+        for a in self { out[a.status, default: 0] += 1 }
+        return out
+    }
+}
+
 // MARK: - Commands
 
 public enum SplitDirection: String, Sendable { case right, down }

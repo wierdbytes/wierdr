@@ -122,7 +122,7 @@ struct TabPill: View {
     @ViewBuilder
     private var statusMark: some View {
         switch tab.status {
-        case .working: Spinner(size: 12, color: theme.working)
+        case .working: Circle().fill(theme.working).frame(width: 6, height: 6)
         case .blocked: Circle().fill(theme.blocked).frame(width: 6, height: 6)
         case .done: Circle().fill(theme.done).frame(width: 6, height: 6)
         default: EmptyView()

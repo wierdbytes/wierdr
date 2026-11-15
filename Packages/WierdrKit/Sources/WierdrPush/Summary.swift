@@ -2,8 +2,9 @@ import Foundation
 import WierdrActivity
 import WierdrModel
 
-/// What the agents Live Activity shows of a workspace: the iPhone's agents list
-/// (`Workspace.inbox`) in counts, and its most urgent agents (no idle ones).
+/// What the agents Live Activity shows of a workspace: its agents by status, each
+/// sub-agent an agent of its own (as the space tabs count them), and the most
+/// urgent agents of the iPhone's agents list (`Workspace.inbox`; no idle ones).
 public enum ActivitySummary {
     public typealias State = AgentsActivityAttributes.ContentState
 
@@ -23,13 +24,12 @@ public enum ActivitySummary {
     /// The same from an inbox (tests): `tab` finds a tab by id for the row titles.
     public static func state(of inbox: [InboxGroup], tab: (String) -> Tab?, now: Date) -> State {
         var s = State(at: now.timeIntervalSince1970.rounded())
+        let counts = inbox.flatMap(\.items).map(\.row).countedAgents.byStatus
+        s.blocked = counts[.blocked] ?? 0
+        s.done = counts[.done] ?? 0
+        s.working = counts[.working] ?? 0
+        s.idle = counts[.idle] ?? 0
         for group in inbox {
-            switch group.status {
-            case .blocked: s.blocked = group.items.count
-            case .done: s.done = group.items.count
-            case .working: s.working = group.items.count
-            case .idle: s.idle = group.items.count
-            }
             guard group.status != .idle else { continue }
             for item in group.items where s.agents.count < maxAgents {
                 guard let t = item.row.terminal else { continue }

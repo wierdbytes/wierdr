@@ -160,7 +160,7 @@ private struct AgentLine: View {
     }
 }
 
-/// Counts by status: `! 1  ● 2  ◔ 3`.
+/// Counts by status: `● 1  ● 2  ● 3` (needs you, done, working: dots in their colors).
 private struct Counts: View {
     var state: AgentsActivityAttributes.ContentState
     var size: CGFloat
@@ -182,8 +182,7 @@ private struct Counts: View {
     }
 }
 
-/// The app's status marks: a filled dot (needs you, done), Herdr's spinner (a ring with
-/// a quarter arc), an empty ring.
+/// The app's status marks: a filled dot (needs you, done, working), an empty ring (idle).
 private struct StatusMark: View {
     var status: AgentStatusWord
     var size: CGFloat
@@ -191,19 +190,9 @@ private struct StatusMark: View {
     var body: some View {
         let color = Palette.color(status)
         switch status {
-        case .blocked, .done:
+        case .blocked, .done, .working:
             Circle().fill(color).frame(width: size * 0.6, height: size * 0.6)
                 .frame(width: size, height: size)
-        case .working:
-            let k = size / 24
-            ZStack {
-                Circle().stroke(color.opacity(0.28), lineWidth: 3.2 * k)
-                Circle().trim(from: 0, to: 0.25)
-                    .stroke(color, style: StrokeStyle(lineWidth: 3.2 * k, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-            .frame(width: 18.8 * k, height: 18.8 * k)
-            .frame(width: size, height: size)
         case .idle:
             Circle().strokeBorder(color, lineWidth: 1.5).frame(width: size * 0.6, height: size * 0.6)
                 .frame(width: size, height: size)
