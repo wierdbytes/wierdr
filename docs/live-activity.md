@@ -169,3 +169,7 @@ wierdr-push reset              # закончить идущую активно�
   priority 5, плюс `NSSupportsLiveActivitiesFrequentUpdates`.
 - Каждый start вибрирует (alert обязателен): после 2 ч простоя, после 7 ч 45 мин
   непрерывной работы и на устройстве, где активность пропала (это при открытии Wierdr).
+- Виджет Live Activity на iPhone не видит связку ключей: даже общая группа отвечает
+  `errSecNotAvailable` (-25291), и на заблокированном, и на разблокированном телефоне, а
+  `identifierForVendor` там `nil`. В симуляторе связка доступна, так что проверять нужно на
+  устройстве (проверено 2026‑11‑16, iOS 27.2.1; [research/push-relay.md](research/push-relay.md)).
