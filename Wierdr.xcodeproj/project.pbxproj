@@ -65,6 +65,7 @@
 		A5A665F63667AD58A3437D8E /* HostSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B9899D1F0993F0A4EEFB4B /* HostSession.swift */; };
 		A8A992B35F53658971A79996 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F884493E41282F237E5D6C75 /* Assets.xcassets */; };
 		AF982C4C42B0466BC0894351 /* PhoneListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CAC83BAAFE0CB19F2F6FBF /* PhoneListRow.swift */; };
+		B326FE920950C00CBFBA3688 /* RowMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84FD27B70E7742ECA8155B28 /* RowMenu.swift */; };
 		B5B1FD18194956E82415185A /* AgentsLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */; };
 		B643253F51979CBEAB68A2E0 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */; };
 		B751337140111B90B64EA832 /* PhoneHosting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84DDDCE899CB1DEAE132F06 /* PhoneHosting.swift */; };
@@ -164,6 +165,7 @@
 		73B8BBCCDAF57164EE74D110 /* DemoTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoTerminalView.swift; sourceTree = "<group>"; };
 		762695928246040140DE0AE1 /* PullToSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PullToSearch.swift; sourceTree = "<group>"; };
 		8089262433D04F1C14D569AE /* OFL-Geist.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OFL-Geist.txt"; sourceTree = "<group>"; };
+		84FD27B70E7742ECA8155B28 /* RowMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowMenu.swift; sourceTree = "<group>"; };
 		8635A004239A05A30EA934E3 /* PhonePaneMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhonePaneMenu.swift; sourceTree = "<group>"; };
 		8A94262DB139809864F08002 /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		8B3EB0A0AFF104DECDC52251 /* LiveActivityDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityDemo.swift; sourceTree = "<group>"; };
@@ -246,6 +248,7 @@
 			children = (
 				11D65FB4D80A6D047E94868F /* LimitsPanel.swift */,
 				BBDB08858052E955C8F9E69B /* QuickSwitcher.swift */,
+				84FD27B70E7742ECA8155B28 /* RowMenu.swift */,
 				D01DB30E5E16F116C4D66507 /* SidebarHeader.swift */,
 				6BBD742BB5614E0A3EFA587E /* SidebarOverlay.swift */,
 				6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */,
@@ -658,6 +661,7 @@
 				9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */,
 				F355AA2AB188BF28FD81CBC8 /* PullToSearch.swift in Sources */,
 				CC6CA5DD5FA692EB2E3DF779 /* QuickSwitcher.swift in Sources */,
+				B326FE920950C00CBFBA3688 /* RowMenu.swift in Sources */,
 				7CC2C3A024443CF62DBEE2E2 /* SettingsView.swift in Sources */,
 				E2019B79A2F0067DC6F63E40 /* SidebarHeader.swift in Sources */,
 				0E1CCC69D66751AABAD36B2A /* SidebarOverlay.swift in Sources */,
@@ -763,7 +767,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 70;
+				CURRENT_PROJECT_VERSION = 71;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -849,7 +853,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 70;
+				CURRENT_PROJECT_VERSION = 71;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

@@ -43,6 +43,8 @@ struct SpaceHeader: View {
                 // Not in the lifted card's picture (`ImageRenderer` draws a UIKit view as a placeholder).
                 if let drag { SpaceMarker(space: space.id, role: .header, markers: drag.markers) }
             }
+            // Lifted by its menu: the menu's picture stands in for it.
+            .opacity(drag?.menuLifted == "space:\(space.id)" ? 0 : 1)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Space \(space.displayName)")
             .accessibilityValue(Format.summary(controller.workspace.agentCounts(in: space.id)))

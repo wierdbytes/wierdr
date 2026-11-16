@@ -126,8 +126,6 @@ struct QuickSwitcher: View {
                                         @ViewBuilder content: @escaping () -> Content) -> some View {
         PhoneListRow(id: line.id, pinned: false, separator: line.separator, nextID: next,
                      edgeSwipesOnly: false, tap: { go(target) }) {
-            EmptyView()
-        } content: {
             content()
         }
     }

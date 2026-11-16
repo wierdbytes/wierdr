@@ -29,8 +29,9 @@ enum PhoneListMotion {
 ///   rounded plate of the highlight's color and uncovers round buttons; past the
 ///   full-swipe point it jumps on (a haptic) and letting go runs the outer one;
 /// - its separator, which fades while it or the row under it is lit;
-/// - tap (closes an open row instead), long-press menu.
-struct PhoneListRow<Content: View, Menu: View>: View {
+/// - tap (closes an open row instead), long-press menu: in the sidebar's upside-down
+///   list UIKit's, the list's own (`RowMenuMarker`), elsewhere SwiftUI's.
+struct PhoneListRow<Content: View>: View {
     var id: String
     var pinned: Bool
     var separator: PhoneRowSeparator
@@ -43,15 +44,16 @@ struct PhoneListRow<Content: View, Menu: View>: View {
     var trailing: [PhoneSwipeAction] = []
     var edgeSwipesOnly: Bool
     var tap: () -> Void
-    @ViewBuilder var menu: () -> Menu
+    var menu: () -> PhoneMenu = { [] }
     @ViewBuilder var content: () -> Content
 
     @Environment(PhoneRowSwipes.self) private var swipes
     @Environment(\.theme) private var theme
     /// What's under the row: the list's chrome, a card's surface.
     @Environment(\.rowGround) private var ground
-    /// In the sidebar's upside-down list (`SpacesList`): the menu gets its own picture.
+    /// In the sidebar's upside-down list (`SpacesList`): the menu is the list's (UIKit's).
     @Environment(\.invertedList) private var inverted
+    @Environment(SpaceDrag.self) private var drag: SpaceDrag?
     @Environment(\.displayScale) private var displayScale
     @State private var size: CGSize = .zero
     @State private var reveal = Reveal()
@@ -100,11 +102,19 @@ struct PhoneListRow<Content: View, Menu: View>: View {
         let px = 1 / max(1, displayScale)
         let separatorHidden = pressed || selected || swipes.litID == id || reveal.plate > 0.01
             || (nextID != nil && swipes.litID == nextID)
+        let listMenu = inverted ? drag : nil
+        // VoiceOver: the list's menu isn't the row's, its items are actions (but the swipes' again).
+        let menuActions = listMenu == nil ? [] : menu().joined().filter { item in
+            !(leading + trailing).contains { $0.title == item.title }
+        }
         content()
             // VoiceOver: the swipe actions as the row's actions.
             .accessibilityActions {
                 ForEach(leading + trailing) { action in
                     Button(action.title) { action.run() }
+                }
+                ForEach(menuActions) { item in
+                    Button(item.title) { item.run() }
                 }
             }
             .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
@@ -142,7 +152,14 @@ struct PhoneListRow<Content: View, Menu: View>: View {
             .contentShape(Rectangle())
             .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
             .onTapGesture { tapped() }
-            .modifier(PhoneRowMenu(inverted: inverted, menu: menu) { rowPicture })
+            .background {
+                if let listMenu {
+                    RowMenuMarker(id: id, markers: listMenu.rowMarkers, menu: menu) { rowPicture(size: $0) }
+                }
+            }
+            .modifier(PhoneRowMenu(enabled: listMenu == nil, menu: menu))
+            // Lifted by the list's menu: its picture stands in for it.
+            .opacity(listMenu?.menuLifted == "row:\(id)" ? 0 : 1)
             .gesture(PhoneRowPan(
                 edgeOnly: edgeSwipesOnly, width: size.width, isOpen: isOpen,
                 canBegin: { direction in
@@ -167,8 +184,8 @@ struct PhoneListRow<Content: View, Menu: View>: View {
 
     // MARK: Drawing
 
-    /// The row as the menu's preview shows it (the sidebar's list: its own picture).
-    private var rowPicture: some View {
+    /// The row as the list's menu lifts it (`RowMenuMarker`).
+    private func rowPicture(size: CGSize) -> some View {
         content()
             .frame(width: size.width, height: size.height, alignment: .leading)
             .background {
@@ -384,21 +401,17 @@ extension EnvironmentValues {
     }
 }
 
-/// A row's long-press menu: with the system's picture of the row, or (in an upside-down
-/// list, whose transform the system's picture doesn't take: it came out as a line) with
-/// the row drawn afresh as the preview.
-private struct PhoneRowMenu<Menu: View, Picture: View>: ViewModifier {
-    var inverted: Bool
-    @ViewBuilder var menu: () -> Menu
-    @ViewBuilder var picture: () -> Picture
-    /// The preview is hosted on its own, without the row's environment: it gets it all.
-    @Environment(\.self) private var environment
+/// A row's long-press menu as SwiftUI's (none when empty, or when the list draws it).
+private struct PhoneRowMenu: ViewModifier {
+    var enabled: Bool
+    var menu: () -> PhoneMenu
 
     func body(content: Content) -> some View {
-        if inverted {
-            content.contextMenu { menu() } preview: { picture().environment(\.self, environment) }
+        let items = enabled ? menu() : []
+        if items.contains(where: { !$0.isEmpty }) {
+            content.contextMenu { PhoneMenuButtons(menu: items) }
         } else {
-            content.contextMenu { menu() }
+            content
         }
     }
 }

@@ -99,9 +99,8 @@ struct SpaceCardLine: View {
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
                          selected: !controller.singlePane && controller.isRinged(kid),
                          trailing: [kidCloseAction(kid)],
-                         edgeSwipesOnly: false, tap: { controller.open(kid, from: parent.row.paneID) }) {
-                kidMenu(kid, parent: parent)
-            } content: {
+                         edgeSwipesOnly: false, tap: { controller.open(kid, from: parent.row.paneID) },
+                         menu: { kidMenu(kid, parent: parent) }) {
                 PhoneKidRowContent(kid: kid, adjacent: adjacent)
             }
         case .header(let title):
@@ -117,9 +116,8 @@ struct SpaceCardLine: View {
             PhoneListRow(id: line.id, pinned: false, separator: line.separator, nextID: next,
                          selected: isSelected(item.row),
                          trailing: [closeAction(item.row.paneID)],
-                         edgeSwipesOnly: false, tap: { controller.focus(pane: item.row.paneID) }) {
-                paneMenu(item.row)
-            } content: {
+                         edgeSwipesOnly: false, tap: { controller.focus(pane: item.row.paneID) },
+                         menu: { paneMenu(item.row) }) {
                 PhonePaneRowContent(row: item.row)
             }
         }
@@ -137,9 +135,8 @@ struct SpaceCardLine: View {
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
                          selected: isSelected(item.row),
                          leading: leadingActions(t), trailing: [closeAction(item.row.paneID)],
-                         edgeSwipesOnly: false, tap: { controller.focus(pane: item.row.paneID) }) {
-                paneMenu(item.row)
-            } content: {
+                         edgeSwipesOnly: false, tap: { controller.focus(pane: item.row.paneID) },
+                         menu: { paneMenu(item.row) }) {
                 PhoneAgentRowContent(terminal: t, tab: controller.workspace.tab(item.row.tabID), space: item.space,
                                      showsSpace: false, subtree: item.row.subtree,
                                      open: controller.showsKids(of: item.row))
@@ -191,39 +188,43 @@ struct SpaceCardLine: View {
     // MARK: Menus
 
     /// An agent's or a terminal's long-press menu.
-    @ViewBuilder
-    private func paneMenu(_ row: SidebarRow) -> some View {
+    private func paneMenu(_ row: SidebarRow) -> PhoneMenu {
+        var agent: [PhoneMenuItem] = []
         if let t = row.terminal, t.isAgent {
-            Button { controller.setPinned(t.address, !t.pinned) } label: {
-                Label(t.pinned ? "Unpin" : "Pin", image: t.pinned ? "ui.pin-off" : "ui.pin")
-            }
+            agent.append(PhoneMenuItem(title: t.pinned ? "Unpin" : "Pin", icon: .asset(t.pinned ? "ui.pin-off" : "ui.pin")) {
+                controller.setPinned(t.address, !t.pinned)
+            })
             switch t.status {
             case .idle:
-                Button { controller.markUnread(t.address) } label: { Label("Mark Unread", systemImage: "circle.fill") }
+                agent.append(PhoneMenuItem(title: "Mark Unread", icon: .system("circle.fill")) { controller.markUnread(t.address) })
             case .done:
-                Button { controller.markRead(t.address) } label: { Label("Mark Idle", systemImage: "circle") }
+                agent.append(PhoneMenuItem(title: "Mark Idle", icon: .system("circle")) { controller.markRead(t.address) })
             default:
-                EmptyView()
+                break
             }
-            Divider()
         }
-        Button { controller.focus(pane: row.paneID); controller.split(.right, pane: row.paneID) } label: {
-            Label("Split Right", image: "ui.split-right")
-        }
-        Button(role: .destructive) { controller.closePane(row.paneID) } label: { Label("Close Pane", image: "ui.x") }
+        let pane = [
+            PhoneMenuItem(title: "Split Right", icon: .asset("ui.split-right")) {
+                controller.focus(pane: row.paneID)
+                controller.split(.right, pane: row.paneID)
+            },
+            PhoneMenuItem(title: "Close Pane", icon: .asset("ui.x"), destructive: true) { controller.closePane(row.paneID) },
+        ]
+        return [agent, pane]
     }
 
     /// A sub-agent's: show it or keep it as a tab; a kept one, go to its tab; Close.
-    @ViewBuilder
-    private func kidMenu(_ kid: SubAgent, parent: PhoneListLine.Item) -> some View {
+    private func kidMenu(_ kid: SubAgent, parent: PhoneListLine.Item) -> PhoneMenu {
+        let open: [PhoneMenuItem]
         if let pane = kid.paneID {
-            Button { controller.focus(pane: pane) } label: { Label("Go to Its Tab", image: "ui.terminal") }
+            open = [PhoneMenuItem(title: "Go to Its Tab", icon: .asset("ui.terminal")) { controller.focus(pane: pane) }]
         } else {
-            Button { controller.open(kid, from: parent.row.paneID) } label: { Label("Show", image: "ui.terminal") }
-            Button { controller.keep(kid.terminal.address) } label: { Label("Keep as Tab", image: "ui.plus") }
+            open = [
+                PhoneMenuItem(title: "Show", icon: .asset("ui.terminal")) { controller.open(kid, from: parent.row.paneID) },
+                PhoneMenuItem(title: "Keep as Tab", icon: .asset("ui.plus")) { controller.keep(kid.terminal.address) },
+            ]
         }
-        Divider()
-        Button(role: .destructive) { controller.close(kid) } label: { Label("Close", image: "ui.x") }
+        return [open, [PhoneMenuItem(title: "Close", icon: .asset("ui.x"), destructive: true) { controller.close(kid) }]]
     }
 }
 

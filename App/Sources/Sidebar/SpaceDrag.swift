@@ -30,6 +30,10 @@ final class SpaceDrag {
 
     /// The space being dragged over the list: its card shows as the slot.
     private(set) var dragged: String?
+    /// What the list's menu has lifted (its identifier: `space:` or `row:` and the id):
+    /// hidden in the list meanwhile, as UIKit hides a view it lifts itself; else the row
+    /// showed through its picture, scaled, as a doubled text.
+    var menuLifted: String?
     /// Its machine's spaces as the list shows them meanwhile, it at its slot. After
     /// a drop, until the workspace has them in this order (or gives up, `settleAfter`).
     private(set) var lane: Lane?
@@ -40,6 +44,8 @@ final class SpaceDrag {
     @ObservationIgnored var compact = false
     /// Every card's and header's marker (weakly).
     @ObservationIgnored let markers = NSHashTable<SpaceMarker.Marker>.weakObjects()
+    /// Every row's marker (weakly), for the rows' menus (`RowMenuMarker`).
+    @ObservationIgnored let rowMarkers = NSHashTable<RowMenuMarkerView>.weakObjects()
     /// Where the finger holds the card, from its top left corner, and the card's
     /// height with the gap after it (the room its slot takes).
     @ObservationIgnored var grab = CGPoint(x: 0, y: 22)
@@ -231,6 +237,20 @@ final class SpaceDrag {
         }
         return nil
     }
+
+    // MARK: Rows
+
+    /// The row at `p` (in `view`) that has a menu.
+    func row(at p: CGPoint, in view: UIView) -> RowMenuMarkerView? {
+        rowMarkers.allObjects.first { m in
+            m.id != nil && m.window != nil && m.convert(m.bounds, to: view).contains(p)
+        }
+    }
+
+    /// Row `id`'s marker, while it's in the window.
+    func row(_ id: String) -> RowMenuMarkerView? {
+        rowMarkers.allObjects.first { $0.id == id && $0.window != nil }
+    }
 }
 
 // MARK: - Markers
@@ -324,6 +344,8 @@ final class TouchCounter: UIGestureRecognizer {
     private(set) var count = 0
     /// Where the last touch came down (in the view's coordinates).
     private(set) var downAt: CGPoint = .zero
+    /// A touch came down there.
+    var began: ((CGPoint) -> Void)?
 
     override init(target: Any?, action: Selector?) {
         super.init(target: target, action: action)
@@ -338,7 +360,10 @@ final class TouchCounter: UIGestureRecognizer {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         count += 1
-        if let touch = touches.first, let view { downAt = touch.location(in: view) }
+        if let touch = touches.first, let view {
+            downAt = touch.location(in: view)
+            began?(downAt)
+        }
         state = .failed
     }
 
@@ -389,9 +414,10 @@ final class SpaceDragContext: NSObject {
     init(space: String) { self.space = space }
 }
 
-/// The list's drag and drop, and the headers' menu. On the list's scroll view: the
-/// headers' context menu interaction (`SpaceHeaderMenu`; SwiftUI's own, with the preview
-/// the upside-down list needs, wouldn't let a drag start from it) and a drag interaction
+/// The list's drag and drop, and the headers' and rows' menus. On the list's scroll view:
+/// the context menu interaction (`SpaceHeaderMenu`, the rows' `RowMenuMarker`; SwiftUI's
+/// own draws its pictures upside down in the flipped list, and with a preview of its own
+/// wouldn't let a drag start from it) and a drag interaction
 /// (so a header held shows its menu, and moved on, the card lifts: UIKit plays the two
 /// together on one view), which starts a drag only for a touch that came down on a card's
 /// header; a drop interaction, which reports
@@ -405,7 +431,7 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
     private lazy var dragInteraction = UIDragInteraction(delegate: self)
     private lazy var dropInteraction = UIDropInteraction(delegate: self)
     /// The headers' menu (`SpaceHeaderMenu`): on the list with the drag, so UIKit plays
-    /// the two together (held, the menu; moved on, the card lifts).
+    /// the two together (held, the menu; moved on, the card lifts). The rows' menus too.
     private lazy var menuInteraction = UIContextMenuInteraction(delegate: self)
 
     /// The dragged card, drawn over the window (the system's own preview is
@@ -428,6 +454,7 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
         detach()
         self.list = list
         list.addGestureRecognizer(touches)
+        touches.began = { [weak self] p in self?.touchDown(at: p) }
         list.addInteraction(dropInteraction)
         list.addInteraction(menuInteraction)
         list.addInteraction(dragInteraction)
@@ -443,33 +470,75 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
         list = nil
     }
 
-    // MARK: The headers' menu
+    /// A touch came down on the list.
+    private func touchDown(at p: CGPoint) {
+        // A lift whose end UIKit didn't report (none is open now that the list is touched).
+        if !menuOpen { drag.menuLifted = nil }
+    }
 
-    /// A header held (or right-clicked): its space's menu. Elsewhere, nothing: the rows'
-    /// menus are SwiftUI's.
+    /// The list's menu is up (from its display to the end of its dismissal).
+    private var menuOpen = false
+
+    // MARK: The headers' and rows' menus
+
+    /// A header held (or right-clicked): its space's menu; a row: its own (`RowMenuMarker`).
+    /// The menus' identifiers: `space:` or `row:` and the id.
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
                                 configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
-        guard let list, let id = drag.header(at: location, in: list)?.space, let controller = drag.controller,
-              controller.workspace.space(id) != nil else { return nil }
-        return UIContextMenuConfiguration(identifier: id as NSString, previewProvider: nil) { _ in
-            SpaceHeaderMenu.menu(space: id, controller: controller)
+        guard let list, let controller = drag.controller else { return nil }
+        if let id = drag.header(at: location, in: list)?.space {
+            guard controller.workspace.space(id) != nil else { return nil }
+            return UIContextMenuConfiguration(identifier: "space:\(id)" as NSString, previewProvider: nil) { _ in
+                SpaceHeaderMenu.menu(space: id, controller: controller)
+            }
+        }
+        guard let row = drag.row(at: location, in: list), let id = row.id else { return nil }
+        let menu = row.menu()
+        guard menu.contains(where: { !$0.isEmpty }) else { return nil }
+        return UIContextMenuConfiguration(identifier: "row:\(id)" as NSString, previewProvider: nil) { _ in
+            PhoneMenuBuilder.uiMenu(menu)
         }
     }
 
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
                                 highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        headerPreview(identifier as? String)
+        let preview = menuPreview(identifier as? String)
+        // Lifted: the picture stands in for it.
+        if preview != nil { drag.menuLifted = identifier as? String }
+        return preview
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration,
+                                animator: (any UIContextMenuInteractionAnimating)?) {
+        menuOpen = true
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration,
+                                animator: (any UIContextMenuInteractionAnimating)?) {
+        let done = { [weak self] in
+            guard let self else { return }
+            self.menuOpen = false
+            self.drag.menuLifted = nil
+        }
+        if let animator { animator.addCompletion(done) } else { done() }
     }
 
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
                                 dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        headerPreview(identifier as? String)
+        menuPreview(identifier as? String)
+    }
+
+    private func menuPreview(_ identifier: String?) -> UITargetedPreview? {
+        guard let identifier else { return nil }
+        if identifier.hasPrefix("space:") { return headerPreview(String(identifier.dropFirst(6))) }
+        if identifier.hasPrefix("row:") { return rowPreview(String(identifier.dropFirst(4))) }
+        return nil
     }
 
     /// The header drawn afresh where it is (the list is upside down: a picture of the
     /// header itself would be too).
-    private func headerPreview(_ id: String?) -> UITargetedPreview? {
-        guard let id, let list, let window = list.window, let controller = drag.controller,
+    private func headerPreview(_ id: String) -> UITargetedPreview? {
+        guard let list, let window = list.window, let controller = drag.controller,
               let space = controller.workspace.space(id),
               let frame = drag.headerFrame(id, in: window) else { return nil }
         let closed = controller.closedSpaces.contains(id)
@@ -480,7 +549,20 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
             .environment(controller)
             .environment(\.theme, drag.theme)
             .environment(\.rowGround, drag.theme.surface)
-        let renderer = ImageRenderer(content: bar)
+        return uprightPreview(bar, frame: frame, in: list)
+    }
+
+    /// The row drawn afresh where it is, as the header is.
+    private func rowPreview(_ id: String) -> UITargetedPreview? {
+        guard let list, let window = list.window, let row = drag.row(id) else { return nil }
+        let frame = row.convert(row.bounds, to: window)
+        return uprightPreview(row.picture(frame.size), frame: frame, in: list)
+    }
+
+    /// `content` as a picture at `frame` (the window's), placed in the list turned back upright.
+    private func uprightPreview(_ content: some View, frame: CGRect, in list: UIScrollView) -> UITargetedPreview? {
+        guard let window = list.window, frame.width > 0, frame.height > 0 else { return nil }
+        let renderer = ImageRenderer(content: content)
         renderer.scale = window.traitCollection.displayScale
         guard let image = renderer.uiImage else { return nil }
         let view = UIImageView(image: image)
@@ -488,12 +570,24 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
         let parameters = UIPreviewParameters()
         parameters.backgroundColor = .clear
         parameters.visiblePath = UIBezierPath(roundedRect: view.bounds, cornerRadius: SpaceCard.radius)
-        // In the list, turned back upright (the list is drawn upside down).
-        let center = list.convert(CGPoint(x: frame.midX, y: frame.midY), from: window)
-        let upsideDown = list.convert(CGPoint(x: 0, y: 1), to: window).y < list.convert(CGPoint.zero, to: window).y
+        // Over the list, in the nearest view that isn't upside down: in the list (turned
+        // upright), the menu shrinking back into it as it went was upside down; in the
+        // window, the lifted picture stayed under the menu's dimming.
+        let container = uprightView(over: list, in: window)
         return UITargetedPreview(view: view, parameters: parameters,
-                                 target: UIPreviewTarget(container: list, center: center,
-                                                         transform: upsideDown ? CGAffineTransform(scaleX: 1, y: -1) : .identity))
+                                 target: UIPreviewTarget(container: container,
+                                                         center: container.convert(CGPoint(x: frame.midX, y: frame.midY), from: window)))
+    }
+
+    /// `list`, or the nearest view over it that isn't upside down.
+    private func uprightView(over list: UIView, in window: UIWindow) -> UIView {
+        var view = list
+        while isUpsideDown(view, in: window), let parent = view.superview { view = parent }
+        return view
+    }
+
+    private func isUpsideDown(_ view: UIView, in window: UIWindow) -> Bool {
+        view.convert(CGPoint(x: 0, y: 1), to: window).y < view.convert(CGPoint.zero, to: window).y
     }
 
     /// The space a drag carries.
