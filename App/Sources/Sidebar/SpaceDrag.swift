@@ -99,10 +99,16 @@ final class SpaceDrag {
         }
     }
 
-    /// The finger moved (or the list scrolled under it): the slot goes where the
-    /// card would land, the slot whose top is nearest the card's top, counted as if
-    /// the card weren't in the list (desktop's `dragLayout`). The cards are drawn bottom
-    /// up: the lane's last space is the top one.
+    /// The finger moved (or the list scrolled under it; called every frame while the drag
+    /// is over the list): the slot goes where the card would land, the slot whose top is
+    /// nearest the card's top, counted as if the card weren't in the list (desktop's
+    /// `dragLayout`). The cards are drawn bottom up: the lane's last space is the top one.
+    ///
+    /// Only a list at rest is measured. While the cards part (`part`), SwiftUI moves their
+    /// views frame by frame, so they're between their old places and their new ones: a
+    /// slot that has just moved would be measured as belonging back where it was, and with
+    /// the card's middle near another's it jumped to and fro. Once they're in place (every
+    /// card right under the one over it in the lane's order), the next frame decides.
     func update(at p: CGPoint, in list: UIView) {
         guard let id = dragged, let lane else { return }
         let drawn = Array(lane.ids.reversed())  // top to bottom
@@ -110,9 +116,11 @@ final class SpaceDrag {
         let others = drawn.filter { $0 != id }
         guard !others.isEmpty else { return }
         let frames = cardFrames(in: list)
-        // The list hasn't laid out the last move yet: wait for it.
-        let shown = drawn.filter { frames[$0] != nil }
-        guard shown == shown.sorted(by: { frames[$0]!.minY < frames[$1]!.minY }) else { return }
+        // The list hasn't laid out the last move yet, or its cards are still on their way: wait.
+        for (a, b) in zip(drawn, drawn.dropFirst()) {
+            guard let over = frames[a], let under = frames[b] else { continue }
+            if abs(under.minY - over.maxY - SpacesList.gap) > 1 { return }
+        }
         if let card = frames[id], card.height + SpacesList.gap > height { height = card.height + SpacesList.gap }
         let top = p.y - grab.y
         // Slot k is over others[k] (k == count: under the last). Cards off screen
@@ -578,6 +586,9 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
         let p = session.location(in: window)
         card.frame.origin = CGPoint(x: p.x - drag.grab.x, y: p.y - drag.grab.y)
         autoscroll()
+        // The finger may hold still while the cards part: once they're in place, the slot
+        // is decided again (`SpaceDrag.update`).
+        if dropping { drag.update(at: p, in: window) }
     }
 
     /// Near the list's visible top or bottom (its insets: the status bar's, the
@@ -596,7 +607,6 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
         let y = min(max(list.contentOffset.y + step, minY), maxY)
         guard abs(y - list.contentOffset.y) > 0.1 else { return }
         list.contentOffset.y = y
-        if let window = list.window { drag.update(at: session.location(in: window), in: window) }
     }
 
     /// The drag is over the list.
