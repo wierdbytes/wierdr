@@ -1,85 +1,50 @@
 import SwiftUI
 import WierdrModel
 
-/// The sidebar (ui-spec §1–4): brand bar, spaces list, subscription limits, footer.
+/// The sidebar, one for the iPhone (the list screen under the pane screen) and the iPad
+/// (the split view's column and the overlay over a hidden one), turned for one hand:
+/// the space cards drawn bottom up (`SpacesList`: the first space lowest, each card's
+/// agents in the iPhone's rows, the newest and pinned lowest), and the header floating
+/// over the list's bottom (`SidebarHeader`: the limits, settings, the agents' counts and
+/// +). The list runs to the screen's top (its rows scroll under the status bar) and under
+/// the header. Go to comes out of the list pulled up past its bottom (`PullToSearch`).
+///
+/// In the iPhone layout the connection's banner and the toasts show over the header too
+/// (the iPad's panel has its own).
 struct SidebarView: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
+    @Environment(\.isCompactLayout) private var compact
+    @State private var safeTop: CGFloat = 0
+    @State private var safeBottom: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            BrandBar()
-            SpacesList()
-            LimitsPanel()
-            SidebarFooter()
+        let bottomGap = SidebarHeader.bottomGap(safeBottom: safeBottom)
+        let headerHeight = SidebarHeader.height(topRow: SidebarHeader.hasTopRow(controller, compact: compact)) + bottomGap
+        ZStack(alignment: .bottom) {
+            SpacesList(topInset: safeTop, bottomInset: headerHeight)
+            PhoneEdgeFade(edge: .top, height: PhoneEdgeFade.statusBar(safeTop))
+                .frame(maxHeight: .infinity, alignment: .top)
+            PhoneEdgeFade(edge: .bottom, height: headerHeight)
+            SidebarHeader()
+                .padding(.bottom, bottomGap)
+            if controller.singlePane, case .failed = controller.workspace.phase {
+                // The reason and Retry, over the header (its title says "Not Connected").
+                ConnectionBanner(inset: headerHeight + 8, edge: .bottom)
+            }
+        }
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
+        .animation(.easeInOut(duration: 0.25), value: headerHeight)
+        .overlay(alignment: .bottom) {
+            if controller.singlePane {
+                // Over the header (this overlay keeps to the safe area).
+                ToastStack().padding(.horizontal, 12).padding(.bottom, headerHeight - safeBottom + 10)
+            }
         }
         .background(theme.chrome.ignoresSafeArea())
-    }
-}
-
-/// Brand bar (§2): logo, "Wierdr", sidebar toggle. 46 pt. Go to (Herdr's search
-/// button here) comes out of the spaces list pulled down past its top (`SpacesList`).
-struct BrandBar: View {
-    @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
-    @Environment(\.isCompactLayout) private var isCompact
-
-    var body: some View {
-        HStack(spacing: 4) {
-            HStack(spacing: 8) {
-                Image("BrandMark")
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 20, height: 20)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                Text("Wierdr")
-                    .font(.ui(13.5, .semibold))
-                    .foregroundStyle(theme.foreground)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            // Go to is a pull of the list; VoiceOver's is here.
-            GoToAccessibilityButton()
-            if !isCompact {
-                // On iPhone the panel is pushed over the sidebar instead.
-                ChromeIconButton(icon: "sidebar", label: "Hide Sidebar") { controller.toggleSidebar() }
-            }
+        .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: {
+            safeTop = $0.top
+            safeBottom = $0.bottom
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 10)
-        .frame(height: 46)
-        .clearsWindowControls()
-    }
-}
-
-/// Footer (§3): Settings. 41 pt.
-struct SidebarFooter: View {
-    @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
-    @State private var hovering = false
-
-    var body: some View {
-        Button { controller.showSettings = true } label: {
-            HStack(spacing: 9) {
-                Icon("settings", size: 14, color: hovering ? theme.foreground : theme.muted)
-                Text("Settings")
-                    .font(.ui(13))
-                    .foregroundStyle(hovering ? theme.foreground : theme.muted)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 28)
-            .background(hovering ? theme.hover : .clear, in: RoundedRectangle(cornerRadius: 8))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(PressStyle())
-        .onHover { hovering = $0 }
-        .hoverEffect(.highlight)
-        .padding(.horizontal, 8)
-        .padding(.top, 4)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity)
-        .overlay(alignment: .top) { Hairline() }
     }
 }

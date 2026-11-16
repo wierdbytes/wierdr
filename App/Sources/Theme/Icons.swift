@@ -83,29 +83,6 @@ struct StatusMark: View {
     }
 }
 
-/// Status summary marks (§4.6): blocked, done, working with counts (idle not counted).
-struct StatusSummary: View {
-    var counts: [AgentStatus: Int]
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach([AgentStatus.blocked, .done, .working], id: \.self) { status in
-                if let n = counts[status], n > 0 {
-                    HStack(spacing: 4) {
-                        StatusMark(status: status)
-                        Text("\(n)")
-                            .font(.ui(11))
-                            .foregroundStyle(status == .blocked ? theme.blocked : theme.muted)
-                    }
-                }
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Format.summary(counts))
-    }
-}
-
 /// The space avatar: 18×18 rounded square with the initial.
 struct SpaceAvatar: View {
     var space: Space

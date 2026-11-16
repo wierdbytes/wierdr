@@ -212,18 +212,9 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
             (g.view as? UIScrollView)?.panGestureRecognizer === g
         }
 
-        /// A row's swipe (its actions): a pan in the list that isn't its scrolling.
+        /// A row's swipe (its actions, `PhoneRowPan`).
         private func isRowSwipe(_ g: UIGestureRecognizer) -> Bool {
-            g is UIPanGestureRecognizer && !isScrollPan(g) && isInList(g)
-        }
-
-        private func isInList(_ g: UIGestureRecognizer) -> Bool {
-            var view = g.view
-            while let v = view {
-                if v is UICollectionView { return true }
-                view = v.superview
-            }
-            return false
+            g is PhoneRowPanRecognizer
         }
     }
 }

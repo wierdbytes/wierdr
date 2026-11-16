@@ -7,8 +7,8 @@ import WierdrModel
 /// its name), over them the agents, each with its sub-agents over it, as the list has
 /// them. Typing filters them fuzzily (`Fuzzy`): spaces by name, agents and sub-agents
 /// by title, the best lowest, the matched letters lit. Return goes to the first, the
-/// row right over the field. A space opens its tab of the iPhone list (the iPad's
-/// sidebar: selects it); an agent, its pane.
+/// row right over the field. A space: in the iPhone layout the sidebar, its card
+/// unfolded and in view; on the iPad it's selected; an agent, its pane.
 ///
 /// The field is at the bottom, over the list, in glass as the message field; it
 /// rises with the keyboard. It has the keyboard from the start; the button at its
@@ -206,9 +206,9 @@ struct QuickSwitcher: View {
         case .space(let s):
             space = s
             if controller.singlePane {
-                // The iPhone layout: the list, on the space's tab (a pane screen over it goes).
+                // The iPhone layout: the sidebar, its card unfolded and in view (a pane screen over it goes).
                 controller.showSidebar()
-                controller.listTabRequest = s.id
+                controller.revealSpace = s.id
             } else {
                 controller.select(space: s)
                 controller.showPanel()

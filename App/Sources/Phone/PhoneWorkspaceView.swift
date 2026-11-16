@@ -3,7 +3,7 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 import WierdrModel
 
-/// The iPhone layout, Telegram's navigation: the list of agents (`PhoneHome`) is the
+/// The iPhone layout, Telegram's navigation: the sidebar (`SidebarView`, the space cards) is the
 /// root screen, and a pane (`PhonePaneScreen`) is pushed over it from the right, as
 /// a chat over Telegram's chat list. On the list no pane is shown, so none is selected.
 ///
@@ -121,7 +121,7 @@ final class PhoneNavController: UIViewController {
     /// Go to's screen went off the screen (its pop ended).
     var onGoToGone: () -> Void = {}
 
-    private var list: UIHostingController<PhoneHosted<PhoneHome>>!
+    private var list: UIHostingController<PhoneHosted<SidebarView>>!
     private let dim = UIView()
     private let card = PhoneCardView()
     /// The pane screen: pushed, or on its way in or out.
@@ -188,7 +188,7 @@ final class PhoneNavController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        list = .moving(PhoneHosted(context: host, content: PhoneHome()))
+        list = .moving(PhoneHosted(context: host, content: SidebarView()))
         addChild(list)
         view.addSubview(list.view)
         list.didMove(toParent: self)

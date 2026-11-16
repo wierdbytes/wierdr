@@ -19,8 +19,8 @@ final class WorkspaceController {
     /// Go to (`QuickSwitcher`): a sheet; in the iPhone layout a screen pushed over the others (`PhoneGoToRoot`).
     var showSwitcher = false
     var showSettings = false
-    /// The iPhone list's tab to show: a space's id (Go to sets it, `PhoneHome` takes it).
-    var listTabRequest: String?
+    /// The space whose card to bring into view, unfolded: its id (Go to sets it in the iPhone layout, `SpacesList` takes it).
+    var revealSpace: String?
 
     // MARK: Layout (set by `WorkspaceView`)
     /// The iPhone layout: one pane on screen at a time (the focused one).
@@ -101,12 +101,20 @@ final class WorkspaceController {
     /// Machine headers are shown only when there is at least one added machine.
     var showsMachines: Bool { workspace.machines.contains { !$0.isLocal } }
 
-    /// The rows the sidebar shows, in its order (for ⌘]/⌘[).
+    /// The rows the sidebar shows, top to bottom as it draws them (for ⌘]/⌘[): the cards
+    /// bottom up (an added machine's over this computer's, the first space lowest), a
+    /// card's terminals over its agents, the newest and pinned agents lowest
+    /// (`SpacesList`, `PhoneListLine`).
     var visibleRows: [SidebarRow] {
-        workspace.spaces.flatMap { space -> [SidebarRow] in
-            if showsMachines && foldedMachines.contains(space.machine ?? "") { return [] }
-            if closedSpaces.contains(space.id) { return [] }
-            return workspace.sidebarRows(for: space)
+        let machines = showsMachines ? workspace.machines.map(\.name) : [nil]
+        return machines.reversed().flatMap { machine -> [SidebarRow] in
+            if showsMachines && foldedMachines.contains(machine ?? "") { return [] }
+            let spaces = showsMachines ? workspace.spaces(on: machine) : workspace.spaces
+            return spaces.reversed().flatMap { space -> [SidebarRow] in
+                if closedSpaces.contains(space.id) { return [] }
+                let page = workspace.phoneList(space: space.id)
+                return (page.others.reversed() + page.agents.reversed()).map(\.row)
+            }
         }
     }
 
@@ -374,18 +382,6 @@ final class WorkspaceController {
                 failed()
                 throw error
             }
-        }
-    }
-
-    /// Spaces reordered on the iPhone's strip: the moves one after another, each
-    /// after the last one's write. False when one failed (a toast says why; the rest aren't made).
-    func moveSpaces(_ moves: [SpaceMove]) async -> Bool {
-        do {
-            for m in moves { try await workspace.moveSpace(m.space, before: m.before) }
-            return true
-        } catch {
-            report("Move space", error)
-            return false
         }
     }
 

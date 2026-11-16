@@ -1,133 +1,103 @@
 import SwiftUI
 import WierdrModel
 
-/// What a page of the iPhone's list shows.
-enum PhoneListScope: Hashable {
-    case all               // every agent
-    case space(String)     // a space's agents, then its terminals (Space.id)
+/// A space's card in the sidebar: its header (`SpaceHeader`: avatar, name, git, the
+/// agents' summary while it's folded, the chevron) and, unless folded, its rows in the
+/// iPhone's chat-row style (`PhoneListRow`), drawn bottom up as the iPhone's list was
+/// (`PhoneListLine.lines` on the space's `Workspace.phoneList`): its pinned agents
+/// lowest (the newest pin at the bottom), over them the rest by their latest status
+/// change, the oldest on top; an agent's sub-agents over it (`TreeLines.upward`); the
+/// space's terminals and desktop panels over its agents. The header stays over what it
+/// names.
+///
+/// One view in the list (its lazy stack's item), so a fold or a pin animates inside it
+/// and a drag lifts it whole (`SpaceDrag`): dragged, it is its own slot, a dashed outline
+/// as tall as itself.
+struct SpaceCard: View {
+    var space: Space
 
-    var spaceID: String? {
-        switch self {
-        case .all: return nil
-        case .space(let id): return id
-        }
+    @Environment(WorkspaceController.self) private var controller
+    @Environment(SpaceDrag.self) private var drag: SpaceDrag?
+    @Environment(\.theme) private var theme
+
+    static let radius: CGFloat = 12
+
+    var body: some View {
+        let page = controller.workspace.phoneList(space: space.id)
+        let closed = controller.closedSpaces.contains(space.id)
+        let bodyShown = !closed && !page.isEmpty
+        let slot = drag?.dragged == space.id
+        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        SpaceCardContent(space: space, page: page, closed: closed, bodyShown: bodyShown)
+            .environment(\.rowGround, theme.surface)
+            .background(theme.surface)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(theme.border, lineWidth: 1).allowsHitTesting(false))
+            .opacity(slot ? 0 : 1)
+            .background {
+                if slot {
+                    shape.fill(theme.accent.opacity(0.05))
+                        .overlay(shape.strokeBorder(theme.accent.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                }
+            }
+            .background {
+                if let drag { SpaceMarker(space: space.id, role: .card, markers: drag.markers) }
+            }
     }
 }
 
-/// One page of the iPhone's list: a vertical ScrollView (+ LazyVStack) of rows
-/// in Telegram's chat-list style (`PhoneListRow`): full width, separators, no cards.
-/// The order is Telegram's (`Workspace.phoneList`), drawn bottom up for a thumb
-/// (`PhoneListLine`): pinned agents at the bottom (the newest pin lowest), over them
-/// the rest by their latest status change, the newest lowest; a space's page has its
-/// terminals and mod panes over its agents, under a "TERMINALS" header. An agent's
-/// sub-agents are rows over it, one block with it (its badges fold them). The page
-/// rests at its bottom, rows short of its height sit there, and a row that grows or
-/// comes keeps the rows under it in place (`defaultScrollAnchor(.bottom)`).
-///
-/// Nothing is selected here (being on the list means no pane shows): a tap opens
-/// the row's pane (`controller.focus(pane:)`), a sub-agent's row its sub-agent.
-/// Pinning or unpinning moves rows with Telegram's list spring; status changes
-/// reorder without animation.
-///
-/// Pulled up past its bottom, it brings out Go to's field under the last row; let go
-/// past 72 pt, Go to opens (`PullToSearch`).
-struct PhoneAgentList: View {
-    var scope: PhoneListScope
-    /// The status bar's room over the page (the rows scroll under it).
-    var topInset: CGFloat
-    /// Room the floating header takes over the bottom of the page, with the home
-    /// indicator's (content ends over it, scrolls under it).
-    var bottomInset: CGFloat
-    /// The pager pages between several tabs: a row's swipe actions start only in the edge zones
-    /// (x < e or x > width - e, e = clamp(width / 6, 22, 80)), the middle belongs to the pager. False: anywhere.
-    var edgeSwipesOnly: Bool
-    /// Changes when the current tab is tapped again: scroll to the bottom (the newest), animated.
-    var scrollToNewest: Int
+/// What a card shows, without its surface: its header and rows. Also the lifted card's
+/// picture (`SpaceDragPreview`).
+struct SpaceCardContent: View {
+    var space: Space
+    var page: PhoneListPage
+    var closed: Bool
+    var bodyShown: Bool
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    @State private var swipes = PhoneRowSwipes()
-    @State private var pull = PullToSearch(threshold: PullToSearchStyle.phone.threshold, edge: .bottom)
-    @State private var position = ScrollPosition(edge: .bottom)
-    /// The page's height under its insets.
-    @State private var viewport: CGFloat = 0
 
     var body: some View {
-        let page = controller.workspace.phoneList(space: scope.spaceID)
-        let lines = PhoneListLine.lines(page, showsKids: controller.showsKids(of:))
-        ScrollView(.vertical) {
-            LazyVStack(spacing: 0) {
+        VStack(spacing: 0) {
+            SpaceHeader(space: space, hasRows: !page.isEmpty, closed: closed, bodyShown: bodyShown)
+            if bodyShown {
+                let lines = PhoneListLine.lines(page, showsKids: controller.showsKids(of:), terminalsHeader: false)
                 ForEach(Array(lines.enumerated()), id: \.element.id) { i, line in
-                    row(line, next: i + 1 < lines.count ? lines[i + 1].id : nil)
-                        .background(alignment: .bottom) {
-                            // Pulled up past the bottom, a pinned bottom row's gray goes on under it.
-                            if i == lines.count - 1 {
-                                theme.hover.opacity(line.pinned ? 1 : 0)
-                                    .frame(height: 1200)
-                                    .offset(y: 1200)
-                                    .animation(PhoneListMotion.restyle, value: line.pinned)
-                            }
-                        }
-                        // A row being pinned slides up over the rows it passes.
+                    SpaceCardLine(line: line, next: i + 1 < lines.count ? lines[i + 1].id : nil)
+                        // A row being pinned slides down over the rows it passes.
                         .zIndex(line.pinned ? 1 : 0)
+                        .transition(.opacity)
                 }
             }
-            .animation(PhoneListMotion.move, value: pinKey(page))
-            // The page's whole height, the rows at its bottom: a tap over them closes an open
-            // row too (the rows' own taps go first).
-            .frame(minHeight: viewport, alignment: .bottom)
-            .contentShape(Rectangle())
-            .onTapGesture { withAnimation(PhoneSwipeMotion.bodyAnimation) { swipes.closeAll() } }
-            .overlay {
-                if page.isEmpty { empty }
-            }
         }
-        .scrollPosition($position)
-        .defaultScrollAnchor(.bottom, for: .initialOffset)
-        .defaultScrollAnchor(.bottom, for: .sizeChanges)
-        .contentMargins(.top, topInset, for: .scrollContent)
-        .contentMargins(.top, topInset, for: .scrollIndicators)
-        .contentMargins(.bottom, bottomInset, for: .scrollContent)
-        .contentMargins(.bottom, bottomInset, for: .scrollIndicators)
-        // Its own height less the margins (not the scroll geometry's: its container's size goes without them).
-        .onGeometryChange(for: CGFloat.self) { $0.size.height - topInset - bottomInset } action: { h in
-            viewport = max(0, h)
-        }
-        .onScrollGeometryChange(for: CGFloat.self, of: { [viewport, topInset] g in
-            PullToSearch.overscrollBottom(g, viewport: viewport, top: topInset)
-        }) { _, d in
-            pull.scrolled(d)
-        }
-        .overlay(alignment: .bottom) {
-            PullToSearchField(pull: pull, style: .phone, inset: bottomInset)
-        }
-        .background(theme.chrome)
-        .environment(swipes)
-        .onScrollPhaseChange { old, phase in
-            // Scrolling closes an open row (Telegram: as the list's drag begins).
-            if phase == .interacting, swipes.openID != nil { swipes.closeAll() }
-            if pull.phaseChanged(from: old, to: phase) { controller.showSwitcher = true }
-        }
-        .onChange(of: scrollToNewest) { _, _ in
-            withAnimation(.smooth(duration: 0.4)) { position.scrollTo(edge: .bottom) }
-        }
-        .onDisappear { swipes.closeAll() }
+        .animation(PhoneListMotion.move, value: pinKey)
     }
 
     /// Changes when pins come, go or reorder (they move with the list's spring).
-    private func pinKey(_ page: PhoneListPage) -> [String] {
+    private var pinKey: [String] {
         page.agents.filter { $0.row.terminal?.pinned == true }.map(\.id)
     }
+}
 
-    @ViewBuilder
-    private func row(_ line: PhoneListLine, next: String?) -> some View {
+/// One line of a card: an agent, a sub-agent over it, or a terminal (`PhoneListLine`),
+/// in Telegram's row (`PhoneListRow`: swipes, press, menu). On the iPad the row of the
+/// pane in front (or the sub-agent shown) is selected.
+struct SpaceCardLine: View {
+    var line: PhoneListLine
+    var next: String?
+
+    @Environment(WorkspaceController.self) private var controller
+    @Environment(\.theme) private var theme
+
+    var body: some View {
         switch line.kind {
         case .agent(let item):
-            agentRow(item, line: line, next: next)
+            agentRow(item)
         case .kid(let kid, let parent, let adjacent):
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
+                         selected: !controller.singlePane && controller.isRinged(kid),
                          trailing: [kidCloseAction(kid)],
-                         edgeSwipesOnly: edgeSwipesOnly, tap: { controller.open(kid, from: parent.row.paneID) }) {
+                         edgeSwipesOnly: false, tap: { controller.open(kid, from: parent.row.paneID) }) {
                 kidMenu(kid, parent: parent)
             } content: {
                 PhoneKidRowContent(kid: kid, adjacent: adjacent)
@@ -137,14 +107,15 @@ struct PhoneAgentList: View {
                 .font(.system(size: 13))
                 .foregroundStyle(theme.muted)
                 .padding(.horizontal, PhoneRowMetrics.inset)
-                .padding(.top, 24)
+                .padding(.top, 14)
                 .padding(.bottom, 7)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
         case .pane(let item):
             PhoneListRow(id: line.id, pinned: false, separator: line.separator, nextID: next,
+                         selected: isSelected(item.row),
                          trailing: [closeAction(item.row.paneID)],
-                         edgeSwipesOnly: edgeSwipesOnly, tap: { controller.focus(pane: item.row.paneID) }) {
+                         edgeSwipesOnly: false, tap: { controller.focus(pane: item.row.paneID) }) {
                 paneMenu(item.row)
             } content: {
                 PhonePaneRowContent(row: item.row)
@@ -152,16 +123,23 @@ struct PhoneAgentList: View {
         }
     }
 
+    /// The pane in front on the iPad (the iPhone's list has nothing selected: being on
+    /// it means no pane shows).
+    private func isSelected(_ row: SidebarRow) -> Bool {
+        !controller.singlePane && controller.ringedPane == row.paneID
+    }
+
     @ViewBuilder
-    private func agentRow(_ item: PhoneListLine.Item, line: PhoneListLine, next: String?) -> some View {
+    private func agentRow(_ item: PhoneListLine.Item) -> some View {
         if let t = item.row.terminal {
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
+                         selected: isSelected(item.row),
                          leading: leadingActions(t), trailing: [closeAction(item.row.paneID)],
-                         edgeSwipesOnly: edgeSwipesOnly, tap: { controller.focus(pane: item.row.paneID) }) {
+                         edgeSwipesOnly: false, tap: { controller.focus(pane: item.row.paneID) }) {
                 paneMenu(item.row)
             } content: {
                 PhoneAgentRowContent(terminal: t, tab: controller.workspace.tab(item.row.tabID), space: item.space,
-                                     showsSpace: scope == .all, subtree: item.row.subtree,
+                                     showsSpace: false, subtree: item.row.subtree,
                                      open: controller.showsKids(of: item.row))
             }
         }
@@ -210,7 +188,7 @@ struct PhoneAgentList: View {
 
     // MARK: Menus
 
-    /// An agent's or a terminal's long-press menu (`SidebarRowView`'s).
+    /// An agent's or a terminal's long-press menu.
     @ViewBuilder
     private func paneMenu(_ row: SidebarRow) -> some View {
         if let t = row.terminal, t.isAgent {
@@ -245,24 +223,6 @@ struct PhoneAgentList: View {
         Divider()
         Button(role: .destructive) { controller.close(kid) } label: { Label("Close", image: "ui.x") }
     }
-
-    // MARK: Empty
-
-    private var empty: some View {
-        VStack(spacing: 8) {
-            Text(scope == .all ? "No agents running" : "No agents or terminals in this space")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(theme.foreground)
-                .multilineTextAlignment(.center)
-            if scope == .all {
-                Text("Start one with + below.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(theme.muted)
-            }
-        }
-        .padding(.horizontal, 32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 /// The swipe buttons' fills: Telegram's (day/night) for unread, pin, inactive and destructive.
@@ -273,16 +233,16 @@ enum PhoneSwipeColors {
     static func destructive(_ theme: Theme) -> Color { Color(hex: theme.isDark ? "#c70c0c" : "#ff3824") }
 }
 
-/// A line of the list, with the chrome its place gives it: pinned (its agent's
-/// block is), and the separator under it.
+/// A line of a card, with the chrome its place gives it: pinned (its agent's block
+/// is), and the separator under it.
 ///
-/// The list is drawn bottom up, for a thumb: `Workspace.phoneList`'s order from the
-/// bottom (the newest pin at the very bottom, then the other pins, then the rest by
-/// their latest status change, the oldest on top), an agent's block upside down (its
-/// sub-agents over it, the tree's lines turned, `TreeLines.upward`). A space's
-/// terminals and mod panes are over its agents, under their "TERMINALS" header (a
-/// header stays over what it names), the oldest on top too. Separators: none inside an
-/// agent's block, inset between blocks, full width over the pinned block and under the
+/// Drawn bottom up, for a thumb: `Workspace.phoneList`'s order from the bottom (the
+/// newest pin at the very bottom, then the other pins, then the rest by their latest
+/// status change, the oldest on top), an agent's block upside down (its sub-agents over
+/// it, the tree's lines turned, `TreeLines.upward`). A space's terminals and mod panes
+/// are over its agents (under their "TERMINALS" header when there is one: a header
+/// stays over what it names), the oldest on top too. Separators: none inside an agent's
+/// block, inset between blocks, full width over the pinned block and under the
 /// terminals; none under the bottom row.
 struct PhoneListLine: Identifiable {
     typealias Item = InboxItem
@@ -301,10 +261,12 @@ struct PhoneListLine: Identifiable {
     var separator: PhoneRowSeparator = .none
 
     /// Top to bottom, as drawn.
-    static func lines(_ page: PhoneListPage, showsKids: (SidebarRow) -> Bool) -> [PhoneListLine] {
+    static func lines(_ page: PhoneListPage, showsKids: (SidebarRow) -> Bool, terminalsHeader: Bool = true) -> [PhoneListLine] {
         var out: [PhoneListLine] = []
         if !page.others.isEmpty {
-            out.append(PhoneListLine(kind: .header("TERMINALS"), id: "header:terminals"))
+            if terminalsHeader {
+                out.append(PhoneListLine(kind: .header("TERMINALS"), id: "header:terminals"))
+            }
             for (i, item) in page.others.enumerated().reversed() {
                 // The bottom one: full width over the agents.
                 let separator: PhoneRowSeparator = i > 0 ? .inset(PhoneRowMetrics.paneTextLeading)

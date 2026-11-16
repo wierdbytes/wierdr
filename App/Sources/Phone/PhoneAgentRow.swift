@@ -24,14 +24,14 @@ enum PhoneRowMetrics {
 ///    it has been in its state;
 /// 2. its model (cut first when room runs out), @effort and its context's ring;
 /// 3. its sub-agents and terminals (tap: fold or unfold them), its space's name on a
-///    gray chip as theirs (on "All"; cut when room runs out); on the right, Telegram's
+///    gray chip as theirs (in Go to; cut when room runs out); on the right, Telegram's
 ///    unread badge: needs you (red), done (green), working (yellow), nothing
 ///    while idle; the pin glyph there when it's pinned and has no badge.
 struct PhoneAgentRowContent: View {
     var terminal: TerminalInfo
     var tab: Tab?
     var space: Space
-    /// "All": the space's name leads line 3 (a space's tab is the space).
+    /// The space's name leads line 3 (Go to, where rows of all spaces mix; a card names its space).
     var showsSpace: Bool
     var subtree: [SubAgent]
     /// Its sub-agents show under it.
@@ -48,7 +48,7 @@ struct PhoneAgentRowContent: View {
         }
     }
 
-    /// Second ticks only while something visibly changes each second (`AgentRow`'s rule).
+    /// Second ticks only while something visibly changes each second (its age).
     private var tickInterval: TimeInterval {
         let now = Date()
         let young = terminal.statusChangedAt.map { now.timeIntervalSince($0) < 3600 } ?? false
@@ -216,7 +216,7 @@ struct PhoneSpaceTag: View {
 
 /// Text of the rows.
 enum PhoneRowText {
-    /// `@effort` in its color; `max` in a per-letter gradient (`AgentRow`'s).
+    /// `@effort` in its color; `max` in a per-letter gradient.
     static func effort(_ effort: String, theme: Theme) -> Text {
         if effort.lowercased() == "max" {
             let colors = theme.maxEffortGradient
@@ -439,7 +439,7 @@ struct PhoneKidRowContent: View {
 
 // MARK: - Terminals and panels
 
-/// A plain terminal of a space's tab: its program's icon, the process's name and
+/// A plain terminal of a space: its program's icon, the process's name and
 /// under it the folder (60 pt); a desktop panel (mod pane): its name.
 struct PhonePaneRowContent: View {
     var row: SidebarRow

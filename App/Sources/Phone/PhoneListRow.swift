@@ -36,6 +36,8 @@ struct PhoneListRow<Content: View, Menu: View>: View {
     var separator: PhoneRowSeparator
     /// The row under it (its separator hides while that one is lit).
     var nextID: String?
+    /// The iPad's selection: the pane in front (the iPhone's list has none).
+    var selected = false
     /// Outermost first (the full swipe's).
     var leading: [PhoneSwipeAction] = []
     var trailing: [PhoneSwipeAction] = []
@@ -46,6 +48,8 @@ struct PhoneListRow<Content: View, Menu: View>: View {
 
     @Environment(PhoneRowSwipes.self) private var swipes
     @Environment(\.theme) private var theme
+    /// What's under the row: the list's chrome, a card's surface.
+    @Environment(\.rowGround) private var ground
     @Environment(\.displayScale) private var displayScale
     @State private var size: CGSize = .zero
     @State private var reveal = Reveal()
@@ -92,7 +96,7 @@ struct PhoneListRow<Content: View, Menu: View>: View {
 
     var body: some View {
         let px = 1 / max(1, displayScale)
-        let separatorHidden = pressed || swipes.litID == id || reveal.plate > 0.01
+        let separatorHidden = pressed || selected || swipes.litID == id || reveal.plate > 0.01
             || (nextID != nil && swipes.litID == nextID)
         content()
             // VoiceOver: the swipe actions as the row's actions.
@@ -101,7 +105,7 @@ struct PhoneListRow<Content: View, Menu: View>: View {
                     Button(action.title) { action.run() }
                 }
             }
-            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background { plate }
             .offset(x: reveal.offset)
@@ -116,9 +120,15 @@ struct PhoneListRow<Content: View, Menu: View>: View {
             .background {
                 // Opaque: a row moving past others (a pin, an unpin) covers them instead of mixing with them.
                 ZStack {
-                    theme.chrome
+                    ground ?? theme.chrome
                     theme.hover.opacity(pinned ? 1 : 0)
                         .animation(PhoneListMotion.restyle, value: pinned)
+                    if selected {
+                        theme.selected
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(theme.accent, lineWidth: 1)
+                            .padding(3)
+                    }
                 }
             }
             .overlay(alignment: .bottom) {
@@ -346,5 +356,16 @@ struct PhoneListRow<Content: View, Menu: View>: View {
     private func run(_ action: PhoneSwipeAction) {
         settle(open: false)
         DispatchQueue.main.async { action.run() }
+    }
+}
+
+private struct RowGroundKey: EnvironmentKey { static let defaultValue: Color? = nil }
+
+extension EnvironmentValues {
+    /// What the list's rows lie on (`PhoneListRow`'s opaque ground): nil, the list's
+    /// chrome; a card's surface in the sidebar's cards.
+    var rowGround: Color? {
+        get { self[RowGroundKey.self] }
+        set { self[RowGroundKey.self] = newValue }
     }
 }

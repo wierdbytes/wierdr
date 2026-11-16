@@ -5,10 +5,10 @@ import WierdrModel
 
 // MARK: - Hosted screens
 
-/// What a screen the iPhone moves by Core Animation (the list, the pane screen, the
-/// list's pages) needs from the app's environment. Each such screen is a SwiftUI view
-/// in its own `UIHostingController` under a UIKit container (`PhoneNavController`,
-/// `PhonePagerController`), and SwiftUI doesn't carry its environment into those, so
+/// What a screen the iPhone moves by Core Animation (the list, the pane screen, Go to)
+/// needs from the app's environment. Each such screen is a SwiftUI view in its own
+/// `UIHostingController` under a UIKit container (`PhoneNavController`), and SwiftUI
+/// doesn't carry its environment into those, so
 /// it is copied over here; the system's own values (color scheme, size classes, text
 /// size, scene phase) come with the UIKit traits.
 ///
@@ -115,20 +115,6 @@ enum PhoneMotion {
     /// `CADisableMinimumFrameDurationOnPhone`, else iPhones cap it at 60 Hz).
     static let frameRate = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
 
-    /// Telegram's "spring" curve, a cubic bezier (its folder paging).
-    static let telegramCurve = CAMediaTimingFunction(controlPoints: 0.38, 0.7, 0.125, 1.0)
-    static let telegram = PhoneCurve(0.38, 0.7, 0.125, 1.0)
-    /// SwiftUI's and Core Animation's ease in-out.
-    static let easeInOut = PhoneCurve(0.42, 0, 0.58, 1)
-
-    /// When a change made now is first drawn: a frame from now (the frames already on
-    /// their way show the moves going on). A move taken over is taken where it's drawn
-    /// then, so it doesn't step back.
-    static func shownTime(_ view: UIView?) -> CFTimeInterval {
-        let fps = view?.window?.windowScene?.screen.maximumFramesPerSecond ?? 60
-        return CACurrentMediaTime() + 1 / Double(max(fps, 1))
-    }
-
     static let translationX = "transform.translation.x"
 
     /// The layer's horizontal translation as drawn now: mid-animation, the presentation's;
@@ -154,8 +140,8 @@ enum PhoneMotion {
     }
 }
 
-/// Asks the display for its top rate while a finger moves a screen (the pages, the pane
-/// screen): ProMotion otherwise keeps a finger's custom drag at 60 Hz (a scroll view asks
+/// Asks the display for its top rate while a finger moves a screen (the pane screen, Go
+/// to): ProMotion otherwise keeps a finger's custom drag at 60 Hz (a scroll view asks
 /// for itself), and touches come at the display's rate. A display link that does nothing
 /// but ask.
 @MainActor
@@ -257,92 +243,5 @@ struct PhoneSpringMove {
         let t = now - start
         guard t >= 0, t < duration else { return 0 }
         return spring.state(at: t, x0: from - to, v0: velocity).v
-    }
-}
-
-/// A cubic bezier timing curve, as `CAMediaTimingFunction` has it, solved here: where a
-/// move along it is drawn at a given time, without asking the render server (its
-/// presentation layer is the last frame's, behind what's on its way to the screen).
-struct PhoneCurve {
-    let function: CAMediaTimingFunction
-    private let cx, bx, ax, cy, by, ay: Double
-
-    init(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double) {
-        function = CAMediaTimingFunction(controlPoints: Float(x1), Float(y1), Float(x2), Float(y2))
-        cx = 3 * x1; bx = 3 * (x2 - x1) - cx; ax = 1 - cx - bx
-        cy = 3 * y1; by = 3 * (y2 - y1) - cy; ay = 1 - cy - by
-    }
-
-    /// The curve's progress at `x` (the time's fraction, 0...1).
-    func value(_ x: Double) -> Double {
-        if x <= 0 { return 0 }
-        if x >= 1 { return 1 }
-        let t = solve(x)
-        return ((ay * t + by) * t + cy) * t
-    }
-
-    /// The bezier's parameter where its x is `x`: Newton's method, else bisection.
-    private func solve(_ x: Double) -> Double {
-        var t = x
-        for _ in 0..<8 {
-            let d = ((ax * t + bx) * t + cx) * t - x
-            if abs(d) < 1e-6 { return t }
-            let slope = (3 * ax * t + 2 * bx) * t + cx
-            if abs(slope) < 1e-6 { break }
-            t -= d / slope
-        }
-        var lo = 0.0, hi = 1.0
-        t = x
-        while hi - lo > 1e-6 {
-            let v = ((ax * t + bx) * t + cx) * t
-            if abs(v - x) < 1e-6 { break }
-            if v < x { lo = t } else { hi = t }
-            t = (lo + hi) / 2
-        }
-        return t
-    }
-}
-
-/// A value Core Animation moves (`PhoneStripMotion`): where it's going (the model) and
-/// the moves still on their way, each an additive animation from `delta` to 0 along its
-/// curve. A move retargeted adds one, so the value keeps its pace; where it's drawn at a
-/// time is solved here.
-struct PhoneTrack {
-    struct Move {
-        var delta: CGFloat
-        var begin: CFTimeInterval
-        var duration: Double
-        var curve: PhoneCurve
-    }
-
-    var model: CGFloat
-    private(set) var moves: [Move] = []
-
-    init(_ model: CGFloat) { self.model = model }
-
-    func value(at time: CFTimeInterval) -> CGFloat {
-        moves.reduce(model) { v, m in
-            v + m.delta * CGFloat(1 - m.curve.value((time - m.begin) / m.duration))
-        }
-    }
-
-    /// When the last move under way ends (nil: at rest).
-    func end(after time: CFTimeInterval) -> CFTimeInterval? {
-        moves.map { $0.begin + $0.duration }.filter { $0 > time }.max()
-    }
-
-    /// To `value`, the moves under way going on: the new one from the old model.
-    mutating func move(to value: CGFloat, at time: CFTimeInterval, duration: Double, curve: PhoneCurve) -> CGFloat {
-        moves.removeAll { $0.begin + $0.duration <= time }
-        let delta = model - value
-        model = value
-        if abs(delta) > 0.01 { moves.append(Move(delta: delta, begin: time, duration: duration, curve: curve)) }
-        return delta
-    }
-
-    /// At `value` at once, the moves stopped.
-    mutating func set(_ value: CGFloat) {
-        model = value
-        moves = []
     }
 }

@@ -10,7 +10,7 @@ import WierdrModel
 /// while the terminal has the keyboard itself. Taps on the terminal are
 /// clicks for the program, with a keyboard up too; a double tap brings the
 /// terminal's keyboard or hides the one that is up.
-/// It is pushed over the list (`PhoneHome`, `PhoneWorkspaceView`); popped (`covered`),
+/// It is pushed over the list (`SidebarView`, `PhoneWorkspaceView`); popped (`covered`),
 /// the panel and the keyboards go and the swipes rest. A sub-agent opened from the
 /// list (`controller.peek`) shows here in its parent's place, as any agent
 /// would; its menu keeps it as a tab or goes back to the parent.

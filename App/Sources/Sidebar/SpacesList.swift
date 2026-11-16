@@ -1,71 +1,85 @@
 import SwiftUI
 import WierdrModel
 
-/// The spaces list (§4): machine headers, space cards and their rows.
+/// The sidebar's list (iPhone and iPad): the space cards (`SpaceCard`), drawn bottom up
+/// for a thumb: this computer's spaces lowest, the first space at the bottom, each added
+/// machine's group over them under its header (`MachineHeader`, with fold and +); a card's
+/// rows bottom up too (the newest and pinned lowest). A vertical `ScrollView` over a lazy
+/// stack, a card an item of it, resting at its bottom: cards short of its height sit there,
+/// and a card that grows or comes keeps the ones under it in place
+/// (`defaultScrollAnchor(.bottom)` for the initial offset and size changes).
 ///
-/// A native `List` (swipe actions, context menus, scroll-to, keyboard focus)
-/// whose rows draw the pieces of each card: the card itself is the rows'
-/// `listRowBackground` (`CardSlice`), so swiping a row slides its content over
-/// a card that stays put. Cards are dragged by their header to reorder them
-/// among their machine's (`SpaceDrag`). Pulled down past its top, it brings out a
-/// search field over the first card; let go past 56 pt, Go to opens (`PullToSearch`).
+/// Cards fold (their chevron; the iPhone's header tap), and are dragged by their header to
+/// reorder them among their machine's (`SpaceDrag`, held then moved, as the menu comes).
+/// Pulled up past its bottom, it brings out Go to's field under the last card; let go
+/// past 72 pt, Go to opens (`PullToSearch`).
 struct SpacesList: View {
+    /// The status bar's room over the list (the cards scroll under it).
+    var topInset: CGFloat
+    /// The header's room over the list's bottom, with the home indicator's (content ends
+    /// over it, scrolls under it).
+    var bottomInset: CGFloat
+
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
     @Environment(\.isCompactLayout) private var compact
     @State private var drag = SpaceDrag()
-    @State private var pull = PullToSearch(threshold: PullToSearchStyle.sidebar.threshold)
+    @State private var swipes = PhoneRowSwipes()
+    @State private var pull = PullToSearch(threshold: PullToSearchStyle.phone.threshold, edge: .bottom)
+    @State private var position = ScrollPosition(edge: .bottom)
+    /// The list's height under its insets.
+    @State private var viewport: CGFloat = 0
+
+    /// Between cards, and from the list's sides.
+    static let gap: CGFloat = 8
+    static let side: CGFloat = 8
 
     var body: some View {
-        let ws = controller.workspace
-        let showsMachines = controller.showsMachines
+        let blocks = SpacesListBlock.blocks(controller: controller, drag: drag)
         ScrollViewReader { proxy in
-            List {
-                if showsMachines {
-                    ForEach(ws.machines) { machine in
-                        let folded = controller.foldedMachines.contains(machine.id)
-                        MachineHeader(machine: machine, folded: folded)
-                            .sidebarRow(id: "machine:\(machine.id)", background: Color.clear)
-                        if !folded {
-                            let spaces = ws.spaces(on: machine.name)
-                            if case .loading = machine.state {
-                                NoteRow(text: "Loading…", icon: nil)
-                                    .sidebarRow(id: "loading:\(machine.id)", background: Color.clear)
-                            } else if spaces.isEmpty && !machine.isLocal {
-                                NoteRow(text: "New space there", icon: "plus") {
-                                    controller.newSpace(machine: .some(machine.name))
-                                }
-                                .sidebarRow(id: "empty:\(machine.id)", background: Color.clear)
-                            }
-                            ForEach(drag.arranged(spaces, machine: machine.name)) { space in
-                                SpaceCardRows(space: space)
-                            }
-                        }
-                    }
-                } else {
-                    // No added machines: all of them are this computer's.
-                    ForEach(drag.arranged(ws.spaces, machine: nil)) { space in
-                        SpaceCardRows(space: space)
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0) {
+                    ForEach(blocks) { block in
+                        self.block(block)
                     }
                 }
-                Color.clear.frame(height: 8)
-                    .sidebarRow(id: "end", background: Color.clear)
+                .padding(.top, Self.gap)
+                // The list's whole height, the cards at its bottom: a tap over them closes an
+                // open row too (the rows' own taps go first).
+                .frame(minHeight: viewport, alignment: .bottom)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation(PhoneSwipeMotion.bodyAnimation) { swipes.closeAll() } }
+                .background(SpaceListInteractions(drag: drag))
+                .overlay {
+                    if controller.workspace.spaces.isEmpty, controller.workspace.phase == .live { empty }
+                }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .environment(\.defaultMinListRowHeight, 0)
-            .contentMargins(.top, 4, for: .scrollContent)
-            .onScrollGeometryChange(for: CGFloat.self, of: PullToSearch.overscroll) { _, d in
+            .scrollPosition($position)
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
+            .contentMargins(.top, topInset, for: .scrollContent)
+            .contentMargins(.top, topInset, for: .scrollIndicators)
+            .contentMargins(.bottom, bottomInset, for: .scrollContent)
+            .contentMargins(.bottom, bottomInset, for: .scrollIndicators)
+            // Its own height less the margins (not the scroll geometry's: its container's size goes without them).
+            .onGeometryChange(for: CGFloat.self) { $0.size.height - topInset - bottomInset } action: { h in
+                viewport = max(0, h)
+            }
+            .onScrollGeometryChange(for: CGFloat.self, of: { [viewport, topInset] g in
+                PullToSearch.overscrollBottom(g, viewport: viewport, top: topInset)
+            }) { _, d in
                 pull.scrolled(d)
             }
+            .overlay(alignment: .bottom) {
+                PullToSearchField(pull: pull, style: .phone, inset: bottomInset)
+            }
+            .environment(swipes)
+            .environment(drag)
             .onScrollPhaseChange { old, phase in
+                // Scrolling closes an open row (Telegram: as the list's drag begins).
+                if phase == .interacting, swipes.openID != nil { swipes.closeAll() }
                 if pull.phaseChanged(from: old, to: phase) { controller.showSwitcher = true }
             }
-            .overlay(alignment: .top) {
-                PullToSearchField(pull: pull, style: .sidebar, inset: 0, lead: 4)
-            }
-            .environment(drag)
-            .background(SpaceDropTarget(drag: drag))
             .onAppear {
                 drag.controller = controller
                 drag.theme = theme
@@ -73,222 +87,160 @@ struct SpacesList: View {
             }
             .onChange(of: theme) { drag.theme = theme }
             .onChange(of: compact) { drag.compact = compact }
-            .onChange(of: ws.spaces.map(\.id)) { drag.settle() }
+            .onChange(of: controller.workspace.spaces.map(\.id)) { drag.settle() }
+            .onChange(of: controller.workspace.spaces.isEmpty, initial: true) { _, empty in
+                // The first spaces came after the list was laid out (the initial anchor
+                // had nothing to rest on): to its bottom, once they're laid out.
+                guard !empty else { return }
+                DispatchQueue.main.async { position.scrollTo(edge: .bottom) }
+            }
             .onChange(of: controller.focusedPane?.id) { _, id in
-                guard let id else { return }
-                withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(controller.listID(ofPane: id)) }
+                // The iPad: the card of the pane in front comes into view (the iPhone's list has none).
+                guard !controller.singlePane, let id, let space = controller.workspace.location(ofPane: id)?.space else { return }
+                withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo(SpacesListBlock.cardID(space.id)) }
             }
-            .onChange(of: controller.activeSpace?.id) { _, id in
+            .onChange(of: controller.revealSpace, initial: true) { _, id in
+                // Go to chose a space: its card, unfolded, comes into view.
                 guard let id else { return }
-                withAnimation(.easeOut(duration: 0.28)) { proxy.scrollTo("space:\(id)") }
-            }
-        }
-    }
-}
-
-extension View {
-    /// A sidebar list row: no insets except the list's 8-pt side padding, no separator.
-    func sidebarRow<B: View>(id: String, background: B) -> some View {
-        self
-            .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
-            .listRowSeparator(.hidden)
-            .listRowBackground(background)
-            .id(id)
-    }
-}
-
-// MARK: - Card
-
-/// The rows of one space card: its header and (unless hidden) its rows.
-struct SpaceCardRows: View {
-    var space: Space
-    @Environment(WorkspaceController.self) private var controller
-    @Environment(SpaceDrag.self) private var drag: SpaceDrag?
-
-    var body: some View {
-        let ws = controller.workspace
-        let rows = ws.sidebarRows(for: space)
-        let closed = controller.closedSpaces.contains(space.id)
-        let bodyShown = !closed && !rows.isEmpty
-        // Dragged: its rows stay (they keep the card's height), empty, as the slot
-        // where it would land.
-        let slot = drag?.dragged == space.id
-        SpaceHeader(space: space, rows: rows, closed: closed, bodyShown: bodyShown)
-            .opacity(slot ? 0 : 1)
-            .background(SpaceRowMarker(space: space.id, header: true, markers: drag?.markers))
-            .sidebarRow(id: "space:\(space.id)", background: CardSlice(top: true, bottom: !bodyShown, slot: slot))
-        if bodyShown {
-            // An agent's sub-agents are rows of their own under it: folding them
-            // (its badge) inserts and removes rows, which the list animates.
-            let items = controller.cardItems(rows)
-            ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
-                let last = i == items.count - 1
-                let bracket = Bracket.position(items, i)
-                Group {
-                    switch item {
-                    case .row(let row):
-                        SidebarRowView(row: row, space: space, bracket: bracket)
-                    case .kid(let kid, let parent):
-                        SubAgentRowView(kid: kid, parent: parent, bracket: bracket)
-                    }
+                controller.revealSpace = nil
+                if let space = controller.workspace.space(id) {
+                    controller.foldedMachines.remove(space.machine ?? "")
                 }
-                .padding(.horizontal, 5) // 1-pt border + 4-pt card padding
-                .padding(.top, 4)
-                .padding(.bottom, last ? 4 : 0)
-                .padding(.bottom, last ? 7 : 0) // 1-pt border + 6-pt gap after the card
-                .opacity(slot ? 0 : 1)
-                .background(SpaceRowMarker(space: space.id, markers: drag?.markers))
-                .sidebarRow(id: item.id, background: CardSlice(top: false, bottom: last, slot: slot))
+                withAnimation(.easeInOut(duration: 0.25)) { _ = controller.closedSpaces.remove(id) }
+                DispatchQueue.main.async {
+                    withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(SpacesListBlock.cardID(id)) }
+                }
             }
+            .onDisappear { swipes.closeAll() }
         }
+    }
+
+    @ViewBuilder
+    private func block(_ block: SpacesListBlock) -> some View {
+        switch block.kind {
+        case .machine(let machine, let folded):
+            MachineHeader(machine: machine, folded: folded)
+                .padding(.horizontal, Self.side)
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+        case .note(let text, let icon, let machine):
+            NoteRow(text: text, icon: icon) {
+                if let machine { controller.newSpace(machine: .some(machine)) }
+            }
+            .padding(.horizontal, Self.side)
+            .padding(.bottom, Self.gap)
+        case .card(let space):
+            SpaceCard(space: space)
+                .padding(.horizontal, Self.side)
+                .padding(.bottom, Self.gap)
+        }
+    }
+
+    private var empty: some View {
+        VStack(spacing: 8) {
+            Text("No spaces")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(theme.foreground)
+            Text("Start one with + below.")
+                .font(.system(size: 15))
+                .foregroundStyle(theme.muted)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
     }
 }
 
-/// A horizontal piece of a space card, drawn as a list row background:
-/// `surface` fill with the card's 1-pt border; rounded at the card's ends.
-/// The 6-pt gap after a card is left transparent. `slot`: the card is being
-/// dragged, and this is where it would land: a dashed `accent`@35% outline on
-/// `accent`@5%.
-struct CardSlice: View {
-    var top: Bool
-    var bottom: Bool
-    var slot = false
-    @Environment(\.theme) private var theme
+/// An item of the list, top to bottom as drawn: with added machines, each machine's
+/// header over its group (theirs over this computer's, which is lowest), then (unless
+/// folded) its notes and its cards, the first space lowest; without, this computer's
+/// cards alone. A machine's cards are in the drag's order while one is dragged
+/// (`SpaceDrag.arranged`).
+struct SpacesListBlock: Identifiable {
+    enum Kind {
+        case machine(Machine, folded: Bool)
+        /// "Loading…", "New space there" (`machine`: its +).
+        case note(String, icon: String?, machine: String?)
+        case card(Space)
+    }
 
-    var body: some View {
-        GeometryReader { geo in
-            let h = geo.size.height - (bottom ? 6 : 0)
-            let r: CGFloat = 10
-            let shape = UnevenRoundedRectangle(topLeadingRadius: top ? r : 0, bottomLeadingRadius: bottom ? r : 0,
-                                               bottomTrailingRadius: bottom ? r : 0, topTrailingRadius: top ? r : 0)
-            ZStack(alignment: .top) {
-                shape.fill(slot ? theme.accent.opacity(0.05) : theme.surface)
-                    .frame(height: h)
-                // Stroke a taller rounded rect and clip it, so open ends have no line.
-                RoundedRectangle(cornerRadius: r)
-                    .strokeBorder(slot ? theme.accent.opacity(0.35) : theme.border,
-                                  style: StrokeStyle(lineWidth: 1, dash: slot ? [4, 3] : []))
-                    .frame(height: h + (top ? 0 : 2 * r) + (bottom ? 0 : 2 * r))
-                    .offset(y: top ? 0 : -2 * r)
-                    .frame(height: h, alignment: .top)
-                    .clipped()
+    var kind: Kind
+    var id: String
+
+    static func cardID(_ space: String) -> String { "space:\(space)" }
+
+    @MainActor static func blocks(controller: WorkspaceController, drag: SpaceDrag) -> [SpacesListBlock] {
+        let ws = controller.workspace
+        func cards(_ spaces: [Space], machine: String?) -> [SpacesListBlock] {
+            drag.arranged(spaces, machine: machine).reversed().map { SpacesListBlock(kind: .card($0), id: cardID($0.id)) }
+        }
+        guard controller.showsMachines else { return cards(ws.spaces, machine: nil) }
+        var out: [SpacesListBlock] = []
+        for machine in ws.machines.reversed() {
+            let folded = controller.foldedMachines.contains(machine.id)
+            out.append(SpacesListBlock(kind: .machine(machine, folded: folded), id: "machine:\(machine.id)"))
+            guard !folded else { continue }
+            let spaces = ws.spaces(on: machine.name)
+            if case .loading = machine.state {
+                out.append(SpacesListBlock(kind: .note("Loading…", icon: nil, machine: nil), id: "loading:\(machine.id)"))
+            } else if spaces.isEmpty && !machine.isLocal {
+                out.append(SpacesListBlock(kind: .note("New space there", icon: "plus", machine: machine.name),
+                                           id: "empty:\(machine.id)"))
             }
-            .frame(height: geo.size.height, alignment: .top)
+            out += cards(spaces, machine: machine.name)
         }
-        .padding(.horizontal, 8)
-    }
-}
-
-/// Where a row sits in its split tab's bracket (§4.11: a 2-pt `accent`@50% `[`).
-enum Bracket {
-    case none, first, middle, last, only
-
-    static func position(_ rows: [SidebarRow], _ i: Int) -> Bracket {
-        position(rows.map { .row($0) }, i)
-    }
-
-    /// A sub-agent's row is in its agent's tab: the bracket goes on past it.
-    static func position(_ items: [CardItem], _ i: Int) -> Bracket {
-        let row = items[i].row
-        guard row.tabIsSplit else { return .none }
-        let startsGroup = i == 0 || items[i - 1].row.tabID != row.tabID
-        let endsGroup = i == items.count - 1 || items[i + 1].row.tabID != row.tabID
-        switch (startsGroup, endsGroup) {
-        case (true, true): return .only
-        case (true, false): return .first
-        case (false, true): return .last
-        default: return .middle
-        }
-    }
-}
-
-/// The bracket piece for one row. The row's 4-pt top gap is above its frame,
-/// so middle/last pieces reach up 4 pt to join the previous one.
-struct BracketShape: Shape {
-    var position: Bracket
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let x = rect.minX + 1, arm: CGFloat = 10, r: CGFloat = 8
-        let top = rect.minY, bottom = rect.maxY
-        switch position {
-        case .none:
-            break
-        case .first, .only:
-            p.move(to: CGPoint(x: x + arm, y: top + 1))
-            p.addLine(to: CGPoint(x: x + r, y: top + 1))
-            p.addQuadCurve(to: CGPoint(x: x, y: top + r), control: CGPoint(x: x, y: top + 1))
-            if position == .only {
-                p.addLine(to: CGPoint(x: x, y: bottom - r))
-                p.addQuadCurve(to: CGPoint(x: x + r, y: bottom - 1), control: CGPoint(x: x, y: bottom - 1))
-                p.addLine(to: CGPoint(x: x + arm, y: bottom - 1))
-            } else {
-                p.addLine(to: CGPoint(x: x, y: bottom))
-            }
-        case .middle:
-            p.move(to: CGPoint(x: x, y: top - 4))
-            p.addLine(to: CGPoint(x: x, y: bottom))
-        case .last:
-            p.move(to: CGPoint(x: x, y: top - 4))
-            p.addLine(to: CGPoint(x: x, y: bottom - r))
-            p.addQuadCurve(to: CGPoint(x: x + r, y: bottom - 1), control: CGPoint(x: x, y: bottom - 1))
-            p.addLine(to: CGPoint(x: x + arm, y: bottom - 1))
-        }
-        return p
+        return out
     }
 }
 
 // MARK: - Machine header (§4.2)
 
+/// A machine's header over its group of cards: its icon and name, its agents' summary
+/// while folded, + (a new space there), its connection's dot, the fold chevron.
 struct MachineHeader: View {
     var machine: Machine
     var folded: Bool
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    @State private var hovering = false
-    @State private var plusHover = false
 
     var body: some View {
-        let ws = controller.workspace
-        HStack(spacing: 7) {
-            Icon(machine.isLocal ? "monitor" : "server", size: 13, color: theme.dim)
-            Text(machine.displayName)
-                .font(.ui(11))
-                .foregroundStyle(theme.dim)
+        HStack(spacing: 8) {
+            Icon(machine.isLocal ? "monitor" : "server", size: 14, color: theme.dim)
+            Text(machine.displayName.uppercased())
+                .font(.system(size: 13))
+                .foregroundStyle(theme.muted)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if folded {
-                StatusSummary(counts: counts(ws))
+                StatusBadges(counts: controller.workspace.agentCounts(on: machine.name))
             }
             if case .unavailable(let why) = machine.state {
                 Text(why.replacingOccurrences(of: "_", with: " "))
-                    .font(.ui(11)).foregroundStyle(theme.dim).lineLimit(1)
+                    .font(.system(size: 12)).foregroundStyle(theme.dim).lineLimit(1)
             }
             Button { controller.newSpace(machine: .some(machine.name)) } label: {
-                Text("+")
-                    .font(.ui(13))
-                    .foregroundStyle(plusHover ? theme.foreground : theme.dim)
-                    .padding(.horizontal, 4)
-                    .frame(height: 18)
-                    .background(plusHover ? theme.hover : .clear, in: RoundedRectangle(cornerRadius: 4))
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(theme.muted)
+                    .frame(width: 30, height: 30)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .onHover { plusHover = $0 }
+            .buttonStyle(PressStyle())
             .hoverEffect(.highlight)
             .accessibilityLabel("New space on \(machine.displayName)")
             Circle()
                 .fill(machine.isConnected ? theme.ansi(2) : theme.dim)
-                .frame(width: 6, height: 6)
+                .frame(width: 7, height: 7)
                 .accessibilityLabel(machine.isConnected ? "Connected" : "Not connected")
-            Icon(folded ? "chevron-right" : "chevron-down", size: 11, color: theme.dim)
+            Icon(folded ? "chevron-right" : "chevron-down", size: 13, color: theme.dim)
+                .frame(width: 20)
         }
         .padding(.horizontal, 8)
-        .frame(height: 26)
-        .background(hovering ? theme.hover : .clear)
+        .frame(height: 34)
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
         .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(.easeInOut(duration: 0.25)) {
                 if folded { controller.foldedMachines.remove(machine.id) } else { controller.foldedMachines.insert(machine.id) }
             }
         }
@@ -297,32 +249,24 @@ struct MachineHeader: View {
         .accessibilityHint(folded ? "Shows its spaces" : "Hides its spaces")
         .accessibilityAddTraits(.isButton)
     }
-
-    /// Its spaces' agents, sub-agents too (as each card counts them).
-    private func counts(_ ws: Workspace) -> [AgentStatus: Int] {
-        ws.agentCounts(on: machine.name)
-    }
 }
 
-/// A 28-pt note row ("Loading…", "New space there").
+/// A note in place of a machine's cards ("Loading…", "New space there").
 struct NoteRow: View {
     var text: String
     var icon: String?
     var action: (() -> Void)? = nil
     @Environment(\.theme) private var theme
-    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 8) {
-            if let icon { Icon(icon, size: 12, color: theme.dim) }
-            Text(text).font(.ui(12)).foregroundStyle(theme.dim)
+            if let icon { Icon(icon, size: 13, color: theme.dim) }
+            Text(text).font(.system(size: 15)).foregroundStyle(theme.dim)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
-        .frame(height: 28)
-        .background(hovering && action != nil ? theme.hover : .clear, in: RoundedRectangle(cornerRadius: 7))
+        .padding(.horizontal, 12)
+        .frame(height: 40)
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
         .onTapGesture { action?() }
     }
 }

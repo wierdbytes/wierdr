@@ -1,60 +1,70 @@
 import SwiftUI
 import WierdrModel
 
-/// A space card's header (§4.3): avatar, name, git tail, status summary when
-/// the body is hidden, show/hide chevron. 34 pt.
+/// A space card's header (§4.3): avatar, name, git tail, the agents' summary while the
+/// card is folded, show/hide chevron. 44 pt, on the card's top.
+///
+/// A tap: on the iPad it selects the space (its tab shows in the panel); in the iPhone
+/// layout, where nothing is selected, it folds or unfolds the card, as the chevron does.
+/// Held, its menu (`SpaceMenu`), and moved on, the card is dragged (`SpaceDrag`; the
+/// list's own interactions, `SpaceListInteractions`, which find the header by its
+/// marker, so the menu is theirs too).
 struct SpaceHeader: View {
     var space: Space
-    var rows: [SidebarRow]
+    var hasRows: Bool
     var closed: Bool
     var bodyShown: Bool
 
+    static let height: CGFloat = 44
+
     @Environment(WorkspaceController.self) private var controller
+    @Environment(SpaceDrag.self) private var drag: SpaceDrag?
     @Environment(\.theme) private var theme
-    @Environment(\.isCompactLayout) private var compact
     @State private var hovering = false
     @State private var chevronHover = false
 
     var body: some View {
-        let isActive = controller.activeSpace?.id == space.id
-        HStack(spacing: 9) {
-            SpaceAvatar(space: space, size: compact ? 20 : 18)
+        let isActive = !controller.singlePane && controller.activeSpace?.id == space.id
+        HStack(spacing: 10) {
+            SpaceAvatar(space: space, size: 22)
             Text(space.displayName)
-                .font(.ui(compact ? 14.5 : 13, .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)
-                .frame(maxWidth: compact ? 230 : 150, alignment: .leading)
+                .frame(maxWidth: 220, alignment: .leading)
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)
             gitTail
                 .frame(maxWidth: .infinity, alignment: .trailing)
             if closed {
-                StatusSummary(counts: counts)
+                StatusBadges(counts: counts)
             }
             chevron
         }
-        .padding(.leading, 13)
-        .padding(.trailing, 11)
-        .frame(height: compact ? 42 : 34)
-        .background {
-            let r: CGFloat = 9
-            UnevenRoundedRectangle(topLeadingRadius: r, bottomLeadingRadius: bodyShown ? 0 : r,
-                                   bottomTrailingRadius: bodyShown ? 0 : r, topTrailingRadius: r)
-                .fill(headerFill(isActive: isActive))
-                .padding(.horizontal, 1).padding(.top, 1).padding(.bottom, bodyShown ? 0 : 1)
-        }
+        .padding(.leading, PhoneRowMetrics.inset - 2)
+        .padding(.trailing, 8)
+        .frame(height: Self.height)
+        .background(headerFill(isActive: isActive))
         .overlay(alignment: .bottom) {
-            if bodyShown { Hairline().padding(.horizontal, 1) }
+            if bodyShown { Hairline() }
         }
-        .padding(.bottom, bodyShown ? 0 : 6)
-        .contentShape(.contextMenuPreview, UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: bodyShown ? 0 : 10, bottomTrailingRadius: bodyShown ? 0 : 10, topTrailingRadius: 10))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture {
-            controller.select(space: space)
-            controller.showPanel()
+            if controller.singlePane {
+                toggle()
+            } else {
+                controller.select(space: space)
+                controller.showPanel()
+            }
         }
         .contextMenu { SpaceMenu(space: space) }
+        // Its menu's New Tab lists the agents installed there.
+        .onAppear { controller.workspace.refreshLaunchers(machine: space.machine) }
+        .background {
+            // Not in the lifted card's picture (`ImageRenderer` draws a UIKit view as a placeholder).
+            if let drag { SpaceMarker(space: space.id, role: .header, markers: drag.markers) }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Space \(space.displayName)")
         .accessibilityValue(Format.summary(counts))
@@ -84,7 +94,7 @@ struct SpaceHeader: View {
                 if let n = git?.ahead, n > 0 { Text("↑\(n)").foregroundStyle(theme.ansi(2)) }
                 if let n = git?.behind, n > 0 { Text("↓\(n)").foregroundStyle(theme.ansi(1)) }
             }
-            .font(.ui(compact ? 12.5 : 11.5))
+            .font(.system(size: 13))
         } else {
             Color.clear.frame(height: 1)
         }
@@ -92,25 +102,24 @@ struct SpaceHeader: View {
 
     @ViewBuilder
     private var chevron: some View {
-        if !rows.isEmpty {
+        if hasRows {
             Button(action: toggle) {
-                Icon(closed ? "chevron-right" : "chevron-down", size: compact ? 14 : 12, color: chevronHover ? theme.foreground : theme.dim)
-                    .frame(width: compact ? 32 : 20, height: compact ? 32 : 20)
-                    .background(chevronHover ? theme.raised : .clear, in: RoundedRectangle(cornerRadius: 5))
-                    .contentShape(RoundedRectangle(cornerRadius: 5))
+                Icon(closed ? "chevron-right" : "chevron-down", size: 14, color: chevronHover ? theme.foreground : theme.dim)
+                    .frame(width: 32, height: 32)
+                    .background(chevronHover ? theme.raised : .clear, in: RoundedRectangle(cornerRadius: 6))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
             .onHover { chevronHover = $0 }
             .hoverEffect(.highlight)
-            .padding(.trailing, -4)
             .accessibilityLabel(closed ? "Show tabs" : "Hide tabs")
         } else {
-            Color.clear.frame(width: compact ? 32 : 20, height: 20).padding(.trailing, -4)
+            Color.clear.frame(width: 32, height: 20)
         }
     }
 
     private func toggle() {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(.easeInOut(duration: 0.25)) {
             if closed { controller.closedSpaces.remove(space.id) } else { controller.closedSpaces.insert(space.id) }
         }
     }
@@ -120,19 +129,40 @@ struct SpaceHeader: View {
 struct SpaceMenu: View {
     var space: Space
     @Environment(WorkspaceController.self) private var controller
-    @Environment(\.isCompactLayout) private var compact
 
     var body: some View {
         Button { controller.beginRename(space: space.id) } label: { Label("Rename…", image: "ui.square-pen") }
-        if compact {
-            // iPhone: no tab bar with its + menu, so agents start from here too.
-            Menu {
-                LaunchMenuItems(machine: space.machine) { controller.newTab(launch: $0, in: space) }
-            } label: { Label("New Tab", image: "ui.plus") }
-        } else {
-            Button { controller.newTab(in: space) } label: { Label("New Tab", image: "ui.plus") }
-        }
+        Menu {
+            LaunchMenuItems(machine: space.machine) { controller.newTab(launch: $0, in: space) }
+        } label: { Label("New Tab", image: "ui.plus") }
         Divider()
         Button(role: .destructive) { controller.closeSpace(space.id) } label: { Label("Close Space", image: "ui.x") }
+    }
+}
+
+/// A folded card's (or machine's) agents by status, as the header's counts: a round
+/// badge filled with its status's color and their number, for needs you, done and
+/// working (idle has none), most urgent first.
+struct StatusBadges: View {
+    var counts: [AgentStatus: Int]
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach([AgentStatus.blocked, .done, .working], id: \.self) { status in
+                if let n = counts[status], n > 0 {
+                    Text("\(n)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.background)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 20, minHeight: 20)
+                        .background(theme.color(for: status), in: Capsule())
+                }
+            }
+        }
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Format.summary(counts))
     }
 }
