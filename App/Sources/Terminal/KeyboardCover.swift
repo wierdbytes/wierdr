@@ -101,47 +101,59 @@ private struct KeyboardCoverPadding: ViewModifier {
 /// and a `List` that overlaps it stretches its scroll view down to the
 /// window's bottom (under the views below it, which then show its rows).
 private struct NoKeyboardSafeArea: UIViewRepresentable {
-    func makeUIView(context: Context) -> Anchor { Anchor() }
-    func updateUIView(_ view: Anchor, context: Context) {}
-    static func dismantleUIView(_ view: Anchor, coordinator: ()) { view.restore() }
+    func makeUIView(context: Context) -> KeyboardRegionOff { KeyboardRegionOff() }
+    func updateUIView(_ view: KeyboardRegionOff, context: Context) {}
+    static func dismantleUIView(_ view: KeyboardRegionOff, coordinator: ()) { view.restore() }
+}
 
-    final class Anchor: UIView {
-        /// The hosts this anchor turned the region off in.
-        private var held: [ObjectIdentifier] = []
-        /// Per host: how many anchors want its keyboard region off.
-        private static var holds: [ObjectIdentifier: (host: WeakHost, count: Int)] = [:]
+/// While in a window, turns the keyboard's safe area off in the hosting controllers
+/// above it (`NoKeyboardSafeArea`; the iPhone's Go to, which keeps over the keyboard by
+/// itself while the screens under it stay whole, `PhoneNavController`); back on when it
+/// leaves the window. Holds are counted per host.
+final class KeyboardRegionOff: UIView {
+    /// The hosts this view turned the region off in.
+    private var held: [ObjectIdentifier] = []
+    /// Per host: how many views want its keyboard region off.
+    private static var holds: [ObjectIdentifier: (host: WeakHost, count: Int)] = [:]
 
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            restore()
-            guard window != nil else { return }
-            var responder: UIResponder? = next
-            while let r = responder {
-                if let host = r as? SafeAreaRegionsHost {
-                    let id = ObjectIdentifier(host)
-                    var hold = Self.holds[id] ?? (WeakHost(host), 0)
-                    hold.count += 1
-                    Self.holds[id] = hold
-                    held.append(id)
-                    host.safeAreaRegions.remove(.keyboard)
-                }
-                responder = r.next
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        isHidden = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        restore()
+        guard window != nil else { return }
+        var responder: UIResponder? = next
+        while let r = responder {
+            if let host = r as? SafeAreaRegionsHost {
+                let id = ObjectIdentifier(host)
+                var hold = Self.holds[id] ?? (WeakHost(host), 0)
+                hold.count += 1
+                Self.holds[id] = hold
+                held.append(id)
+                host.safeAreaRegions.remove(.keyboard)
+            }
+            responder = r.next
+        }
+    }
+
+    func restore() {
+        for id in held {
+            guard var hold = Self.holds[id] else { continue }
+            hold.count -= 1
+            if hold.count > 0 {
+                Self.holds[id] = hold
+            } else {
+                Self.holds[id] = nil
+                hold.host.host?.safeAreaRegions.insert(.keyboard)
             }
         }
-
-        func restore() {
-            for id in held {
-                guard var hold = Self.holds[id] else { continue }
-                hold.count -= 1
-                if hold.count > 0 {
-                    Self.holds[id] = hold
-                } else {
-                    Self.holds[id] = nil
-                    hold.host.host?.safeAreaRegions.insert(.keyboard)
-                }
-            }
-            held = []
-        }
+        held = []
     }
 
     private struct WeakHost {

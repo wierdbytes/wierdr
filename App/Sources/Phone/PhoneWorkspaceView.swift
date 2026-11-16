@@ -38,7 +38,7 @@ struct PhoneWorkspaceView: View {
             PhoneNavigation(shown: shown, goTo: controller.showSwitcher) { goTo = false }
                 // The whole window (the screens' grounds run under the status bar and the home
                 // indicator; their content keeps to the safe area, `PhoneHostContext`), above
-                // the keyboard while it is up.
+                // the keyboard while it is up; not with Go to (`PhoneNavController.mountGoTo`).
                 .ignoresSafeArea(.container)
             AttentionBanner(showing: shown && !goTo)
         }
@@ -93,6 +93,7 @@ private struct PhoneNavigation: UIViewControllerRepresentable {
 
     static func dismantleUIViewController(_ nav: PhoneNavController, coordinator: ()) {
         nav.swipe.detach()
+        nav.stopObserving()
     }
 }
 
@@ -131,6 +132,17 @@ final class PhoneNavController: UIViewController {
     private var goTo: UIHostingController<PhoneHosted<PhoneGoToRoot>>?
     private let goDim = UIView()
     private let goCard = PhoneCardView()
+    /// Go to's ground under its card, down to the screen's bottom (behind the keyboard's glass).
+    private let goSkirt = UIView()
+    /// How much of this view the keyboard covers (0: down); Go to's card keeps over it.
+    private var keyboardOverlap: CGFloat = 0
+    /// While Go to is up: SwiftUI's keyboard safe area off above this container, so the
+    /// screens under Go to stay whole (squeezed over the keyboard, they grew back only at
+    /// SwiftUI's next update, late when the main thread was busy as Go to went, the
+    /// window's black under the keyboard as it went down); Go to keeps over the keyboard
+    /// itself (`keyboardMoved`). Ignoring the keyboard in the view wasn't enough on iOS 27.
+    private var keyboardRegionOff: KeyboardRegionOff?
+    private var keyboardObservers: [NSObjectProtocol] = []
     /// Go to is up (`showSwitcher`).
     private var goPresented = false
     /// Where Go to is headed, 1 pushed, 0 popped.
@@ -192,7 +204,16 @@ final class PhoneNavController: UIViewController {
         view.addSubview(goDim)
         goCard.onEscape = { [weak self] in self?.controller.showSwitcher = false }
         goCard.isHidden = true
+        goSkirt.isUserInteractionEnabled = false
+        goCard.insertSubview(goSkirt, at: 0)
         view.addSubview(goCard)
+        let center = NotificationCenter.default
+        for name in [UIResponder.keyboardWillChangeFrameNotification, UIResponder.keyboardWillHideNotification] {
+            keyboardObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                let hiding = name == UIResponder.keyboardWillHideNotification
+                MainActor.assumeIsolated { self?.keyboardMoved(note, hiding: hiding) }
+            })
+        }
         swipe.onBegin = { [weak self] in
             guard let self else { return 1 }
             self.swipingGoTo = self.goTo != nil
@@ -219,10 +240,11 @@ final class PhoneNavController: UIViewController {
         let bounds = view.bounds
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         // Bounds and center, not frames: the layers carry the move's translation.
-        for v in [list.view!, card, goCard] {
+        for v in [list.view!, card] {
             v.bounds = CGRect(origin: .zero, size: bounds.size)
             v.center = center
         }
+        layoutGoCard()
         dim.frame = bounds
         goDim.frame = bounds
         guard bounds.width != width else { return }
@@ -456,6 +478,46 @@ final class PhoneNavController: UIViewController {
                               key: Self.goEnterKey)
     }
 
+    func stopObserving() {
+        keyboardObservers.forEach(NotificationCenter.default.removeObserver)
+        keyboardObservers = []
+    }
+
+    /// Go to's card: over the keyboard, as the screens are without Go to. Its bottom 20 pt
+    /// behind the keyboard where there's a home indicator: the field's bar keeps 28 pt
+    /// over the card's bottom (over the home indicator with the keyboard down), so 8 pt
+    /// over the keyboard. Its skirt goes on to the screen's bottom.
+    private func layoutGoCard() {
+        let b = view.bounds
+        let tuck: CGFloat = view.safeAreaInsets.bottom > 0 ? 20 : 0
+        let lift = keyboardOverlap > 0 ? max(0, keyboardOverlap - tuck) : 0
+        let h = max(0, b.height - lift)
+        goCard.bounds = CGRect(x: 0, y: 0, width: b.width, height: h)
+        goCard.center = CGPoint(x: b.midX, y: h / 2)
+        goSkirt.frame = CGRect(x: 0, y: h - 1, width: b.width, height: b.height - h + 1)
+        goSkirt.backgroundColor = UIColor(host.theme.chrome)
+    }
+
+    /// The keyboard comes, goes or changes: Go to's card follows it on its own curve, set
+    /// off here at once (the notification comes as the field takes or loses the keyboard),
+    /// not at SwiftUI's next update.
+    private func keyboardMoved(_ note: Notification, hiding: Bool) {
+        guard let info = note.userInfo, let window = view.window,
+              let end = (info[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else { return }
+        let frame = view.convert(end, from: window.screen.coordinateSpace)
+        let overlap = hiding ? 0 : max(0, view.bounds.maxY - frame.minY)
+        guard overlap != keyboardOverlap else { return }
+        keyboardOverlap = overlap
+        let duration = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0
+        let curve = info[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int ?? 7
+        guard goTo != nil, duration > 0 else { return layoutGoCard() }
+        UIView.animate(withDuration: duration, delay: 0,
+                       options: [UIView.AnimationOptions(rawValue: UInt(curve) << 16), .beginFromCurrentState]) {
+            self.layoutGoCard()
+            self.goCard.layoutIfNeeded()
+        }
+    }
+
     private func mountGoTo() {
         guard goTo == nil else { return }
         // The bottom's safe area goes to the field's bar (`PhoneGoToRoot`).
@@ -469,6 +531,9 @@ final class PhoneNavController: UIViewController {
         goTo.didMove(toParent: self)
         self.goTo = goTo
         goCard.isHidden = false
+        let off = KeyboardRegionOff()
+        view.addSubview(off)
+        keyboardRegionOff = off
         updateAccess()
     }
 
@@ -479,6 +544,8 @@ final class PhoneNavController: UIViewController {
         goTo.removeFromParent()
         self.goTo = nil
         goCard.isHidden = true
+        keyboardRegionOff?.removeFromSuperview()
+        keyboardRegionOff = nil
         updateAccess()
         onGoToGone()
     }

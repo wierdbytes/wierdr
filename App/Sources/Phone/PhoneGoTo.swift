@@ -6,12 +6,12 @@ import SwiftUI
 /// pulled chat list. This is its content: `QuickSwitcher` in its panel form, its list
 /// fading under the status bar as the iPhone list's does.
 ///
-/// The safe area's bottom (the home indicator's while the keyboard is down, none over it:
-/// the screens keep over the keyboard, as the pane screen's message field does) goes to
-/// the field's bar (`QuickSwitcher.barBottom`), not to the list as its safe area, which its
-/// scroll view wouldn't count as its inset (its last rows would rest under the field):
-/// the field 28 pt over the screen's bottom (as the list's header row and the message
-/// field), 8 pt over the keyboard or without a home indicator.
+/// The safe area's bottom (the home indicator's) goes to the field's bar
+/// (`QuickSwitcher.barBottom`), not to the list as its safe area, which its scroll view
+/// wouldn't count as its inset (its last rows would rest under the field): the field
+/// 28 pt over the card's bottom (as the list's header row and the message field), 8 pt
+/// without a home indicator. The card keeps over the keyboard, its bottom 20 pt behind it,
+/// so the field is 8 pt over the keyboard (`PhoneNavController.layoutGoCard`).
 struct PhoneGoToRoot: View {
     let context: PhoneHostContext
 
