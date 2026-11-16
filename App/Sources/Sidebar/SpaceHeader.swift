@@ -2,7 +2,8 @@ import SwiftUI
 import WierdrModel
 
 /// A space card's header (§4.3): avatar, name, git tail, the agents' summary while the
-/// card is folded, show/hide chevron. 44 pt, on the card's top.
+/// card is folded, show/hide chevron. 44 pt, at the card's bottom (the list is drawn
+/// bottom up: a header is under what it names), a hairline over it when rows show.
 ///
 /// A tap: on the iPad it selects the space (its tab shows in the panel); in the iPhone
 /// layout, where nothing is selected, it folds or unfolds the card, as the chevron does.
@@ -45,7 +46,7 @@ struct SpaceHeader: View {
         .padding(.trailing, 8)
         .frame(height: Self.height)
         .background(headerFill(isActive: isActive))
-        .overlay(alignment: .bottom) {
+        .overlay(alignment: .top) {
             if bodyShown { Hairline() }
         }
         .contentShape(Rectangle())
@@ -104,7 +105,9 @@ struct SpaceHeader: View {
     private var chevron: some View {
         if hasRows {
             Button(action: toggle) {
-                Icon(closed ? "chevron-right" : "chevron-down", size: 14, color: chevronHover ? theme.foreground : theme.dim)
+                // Open, it points up, at the rows over the header.
+                Icon("chevron-right", size: 14, color: chevronHover ? theme.foreground : theme.dim)
+                    .rotationEffect(.degrees(closed ? 0 : -90))
                     .frame(width: 32, height: 32)
                     .background(chevronHover ? theme.raised : .clear, in: RoundedRectangle(cornerRadius: 6))
                     .contentShape(RoundedRectangle(cornerRadius: 6))

@@ -1,14 +1,13 @@
 import SwiftUI
 import WierdrModel
 
-/// A space's card in the sidebar: its header (`SpaceHeader`: avatar, name, git, the
-/// agents' summary while it's folded, the chevron) and, unless folded, its rows in the
-/// iPhone's chat-row style (`PhoneListRow`), drawn bottom up as the iPhone's list was
-/// (`PhoneListLine.lines` on the space's `Workspace.phoneList`): its pinned agents
-/// lowest (the newest pin at the bottom), over them the rest by their latest status
-/// change, the oldest on top; an agent's sub-agents over it (`TreeLines.upward`); the
-/// space's terminals and desktop panels over its agents. The header stays over what it
-/// names.
+/// A space's card in the sidebar, drawn bottom up as the whole list is: at its bottom its
+/// header (`SpaceHeader`: avatar, name, git, the agents' summary while it's folded, the
+/// chevron), nearest the thumb; over it, unless folded, its rows in the iPhone's chat-row
+/// style (`PhoneListRow`), in `PhoneListLine.lines` on the space's `Workspace.phoneList`:
+/// its pinned agents lowest, right over the header (the newest pin at the bottom), over
+/// them the rest by their latest status change, the oldest on top; an agent's sub-agents
+/// over it (`TreeLines.upward`); the space's terminals and desktop panels over its agents.
 ///
 /// One view in the list (its lazy stack's item), so a fold or a pin animates inside it
 /// and a drag lifts it whole (`SpaceDrag`): dragged, it is its own slot, a dashed outline
@@ -59,7 +58,6 @@ struct SpaceCardContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SpaceHeader(space: space, hasRows: !page.isEmpty, closed: closed, bodyShown: bodyShown)
             if bodyShown {
                 let lines = PhoneListLine.lines(page, showsKids: controller.showsKids(of:), terminalsHeader: false)
                 ForEach(Array(lines.enumerated()), id: \.element.id) { i, line in
@@ -69,6 +67,7 @@ struct SpaceCardContent: View {
                         .transition(.opacity)
                 }
             }
+            SpaceHeader(space: space, hasRows: !page.isEmpty, closed: closed, bodyShown: bodyShown)
         }
         .animation(PhoneListMotion.move, value: pinKey)
     }

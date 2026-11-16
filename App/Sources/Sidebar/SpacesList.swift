@@ -3,8 +3,8 @@ import WierdrModel
 
 /// The sidebar's list (iPhone and iPad): the space cards (`SpaceCard`), drawn bottom up
 /// for a thumb: this computer's spaces lowest, the first space at the bottom, each added
-/// machine's group over them under its header (`MachineHeader`, with fold and +); a card's
-/// rows bottom up too (the newest and pinned lowest). A vertical `ScrollView` over a lazy
+/// machine's group over them; a group's header (`MachineHeader`, with fold and +) under
+/// it, as a card's header is under its rows (the newest and pinned lowest). A vertical `ScrollView` over a lazy
 /// stack, a card an item of it, resting at its bottom: cards short of its height sit there,
 /// and a card that grows or comes keeps the ones under it in place
 /// (`defaultScrollAnchor(.bottom)` for the initial offset and size changes).
@@ -121,8 +121,8 @@ struct SpacesList: View {
         case .machine(let machine, let folded):
             MachineHeader(machine: machine, folded: folded)
                 .padding(.horizontal, Self.side)
-                .padding(.top, 6)
-                .padding(.bottom, 2)
+                .padding(.top, -2)
+                .padding(.bottom, 10)
         case .note(let text, let icon, let machine):
             NoteRow(text: text, icon: icon) {
                 if let machine { controller.newSpace(machine: .some(machine)) }
@@ -153,9 +153,9 @@ struct SpacesList: View {
 }
 
 /// An item of the list, top to bottom as drawn: with added machines, each machine's
-/// header over its group (theirs over this computer's, which is lowest), then (unless
-/// folded) its notes and its cards, the first space lowest; without, this computer's
-/// cards alone. A machine's cards are in the drag's order while one is dragged
+/// group (theirs over this computer's, which is lowest): unless folded, its notes and its
+/// cards, the first space lowest, then the machine's header under them; without, this
+/// computer's cards alone. A machine's cards are in the drag's order while one is dragged
 /// (`SpaceDrag.arranged`).
 struct SpacesListBlock: Identifiable {
     enum Kind {
@@ -179,16 +179,17 @@ struct SpacesListBlock: Identifiable {
         var out: [SpacesListBlock] = []
         for machine in ws.machines.reversed() {
             let folded = controller.foldedMachines.contains(machine.id)
-            out.append(SpacesListBlock(kind: .machine(machine, folded: folded), id: "machine:\(machine.id)"))
-            guard !folded else { continue }
-            let spaces = ws.spaces(on: machine.name)
-            if case .loading = machine.state {
-                out.append(SpacesListBlock(kind: .note("Loading…", icon: nil, machine: nil), id: "loading:\(machine.id)"))
-            } else if spaces.isEmpty && !machine.isLocal {
-                out.append(SpacesListBlock(kind: .note("New space there", icon: "plus", machine: machine.name),
-                                           id: "empty:\(machine.id)"))
+            if !folded {
+                let spaces = ws.spaces(on: machine.name)
+                out += cards(spaces, machine: machine.name)
+                if case .loading = machine.state {
+                    out.append(SpacesListBlock(kind: .note("Loading…", icon: nil, machine: nil), id: "loading:\(machine.id)"))
+                } else if spaces.isEmpty && !machine.isLocal {
+                    out.append(SpacesListBlock(kind: .note("New space there", icon: "plus", machine: machine.name),
+                                               id: "empty:\(machine.id)"))
+                }
             }
-            out += cards(spaces, machine: machine.name)
+            out.append(SpacesListBlock(kind: .machine(machine, folded: folded), id: "machine:\(machine.id)"))
         }
         return out
     }
@@ -196,7 +197,7 @@ struct SpacesListBlock: Identifiable {
 
 // MARK: - Machine header (§4.2)
 
-/// A machine's header over its group of cards: its icon and name, its agents' summary
+/// A machine's header under its group of cards: its icon and name, its agents' summary
 /// while folded, + (a new space there), its connection's dot, the fold chevron.
 struct MachineHeader: View {
     var machine: Machine
@@ -233,7 +234,9 @@ struct MachineHeader: View {
                 .fill(machine.isConnected ? theme.ansi(2) : theme.dim)
                 .frame(width: 7, height: 7)
                 .accessibilityLabel(machine.isConnected ? "Connected" : "Not connected")
-            Icon(folded ? "chevron-right" : "chevron-down", size: 13, color: theme.dim)
+            // Open, it points up, at the cards over the header.
+            Icon("chevron-right", size: 13, color: theme.dim)
+                .rotationEffect(.degrees(folded ? 0 : -90))
                 .frame(width: 20)
         }
         .padding(.horizontal, 8)
