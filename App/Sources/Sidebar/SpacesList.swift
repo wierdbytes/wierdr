@@ -139,10 +139,10 @@ struct SpacesList: View {
     private var empty: some View {
         VStack(spacing: 8) {
             Text("No spaces")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.ui(17, .semibold))
                 .foregroundStyle(theme.foreground)
             Text("Start one with + below.")
-                .font(.system(size: 15))
+                .font(.ui(15))
                 .foregroundStyle(theme.muted)
         }
         .multilineTextAlignment(.center)
@@ -207,8 +207,8 @@ struct MachineHeader: View {
     var body: some View {
         HStack(spacing: 8) {
             Icon(machine.isLocal ? "monitor" : "server", size: 14, color: theme.dim)
-            Text(machine.displayName.uppercased())
-                .font(.system(size: 13))
+            Text(machine.displayName)
+                .font(.ui(13))
                 .foregroundStyle(theme.muted)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -217,7 +217,7 @@ struct MachineHeader: View {
             }
             if case .unavailable(let why) = machine.state {
                 Text(why.replacingOccurrences(of: "_", with: " "))
-                    .font(.system(size: 12)).foregroundStyle(theme.dim).lineLimit(1)
+                    .font(.ui(12)).foregroundStyle(theme.dim).lineLimit(1)
             }
             Button { controller.newSpace(machine: .some(machine.name)) } label: {
                 Image(systemName: "plus")
@@ -261,7 +261,7 @@ struct NoteRow: View {
     var body: some View {
         HStack(spacing: 8) {
             if let icon { Icon(icon, size: 13, color: theme.dim) }
-            Text(text).font(.system(size: 15)).foregroundStyle(theme.dim)
+            Text(text).font(.ui(14)).foregroundStyle(theme.dim)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)

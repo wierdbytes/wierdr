@@ -2,102 +2,49 @@ import SwiftUI
 import WierdrModel
 
 /// The sidebar's header, at the bottom of the screen for the thumb (iPhone and iPad alike),
-/// floating over the list's bottom (the rows scroll under it). Two 44-pt rows, 8 pt apart,
-/// 16 pt from the sides:
-/// - on the iPad the sidebar's toggle at the left; the subscription limits at the right
-///   (`PhoneLimits`; none without data, and then on the iPhone no row);
-/// - settings in a glass circle at the left, the agents' counts by status in the middle
-///   (or the connection's state, `SidebarTitle`), + at the right (`SidebarNewMenu`),
-///   placed by `SidebarHeaderRow`.
-/// Its bottom is 28 pt over the screen's, as the pane screen's message field's (`bottomGap`).
+/// floating over the list's bottom (the rows scroll under it): one 44-pt row, 16 pt from
+/// the sides, its bottom 28 pt over the screen's, as the pane screen's message field's
+/// (`bottomGap`). At its left the subscription limits (`SidebarLimits`: as many rings as
+/// fit; none without data), in its middle the agents' counts by status (or the
+/// connection's state, `SidebarTitle`), at its right, under the right thumb, + in a glass
+/// circle (`SidebarMenu`: a new space, Settings, on the iPad Hide Sidebar). Placed by
+/// `SidebarHeaderRow`.
 struct SidebarHeader: View {
-    static let rowHeight: CGFloat = 44
+    static let height: CGFloat = 44
     static let sideInset: CGFloat = 16
-    static let rowSpacing: CGFloat = 8
-
-    /// Whether it has the row over its main one: the limits, or the iPad's toggle.
-    @MainActor static func hasTopRow(_ controller: WorkspaceController, compact: Bool) -> Bool {
-        !compact || !controller.workspace.limits.isEmpty
-    }
-
-    /// The header's height over its row's bottom.
-    static func height(topRow: Bool) -> CGFloat {
-        rowHeight + (topRow ? rowSpacing + rowHeight : 0)
-    }
 
     /// From the row's bottom to the screen's: Telegram's 28 pt, into the home
     /// indicator's room (as the message field's); without one, 8 pt.
     static func bottomGap(safeBottom: CGFloat) -> CGFloat { safeBottom > 0 ? 28 : 8 }
 
-    @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    /// The iPad's split view (the sidebar beside the panel): its toggle is here.
-    @Environment(\.isCompactLayout) private var compact
 
     var body: some View {
-        VStack(spacing: Self.rowSpacing) {
-            if Self.hasTopRow(controller, compact: compact) {
-                HStack(spacing: Self.rowSpacing) {
-                    if !compact {
-                        ComposerGlassGroup {
-                            circle(icon: "sidebar", label: "Hide Sidebar") { controller.toggleSidebar() }
-                        }
-                    }
-                    if !controller.workspace.limits.isEmpty {
-                        // The rings; scrolled sideways when the sidebar is too narrow for them.
-                        ViewThatFits(in: .horizontal) {
-                            PhoneLimits(height: Self.rowHeight)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                PhoneLimits(height: Self.rowHeight)
-                            }
-                            .defaultScrollAnchor(.trailing)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .transition(.opacity)
-                    } else {
-                        Spacer(minLength: 0)
-                    }
-                }
-                .frame(height: Self.rowHeight)
-                .padding(.horizontal, Self.sideInset)
-            }
-            SidebarHeaderRow {
+        SidebarHeaderRow {
+            SidebarLimits()
+            SidebarTitle()
+            HStack(spacing: 0) {
+                // Go to is a pull of the list; VoiceOver's is here.
+                GoToAccessibilityButton(hint: "Or pull the list up.")
                 ComposerGlassGroup {
-                    circle(icon: "settings", label: "Settings") { controller.showSettings = true }
-                }
-                SidebarTitle()
-                HStack(spacing: 0) {
-                    // Go to is a pull of the list; VoiceOver's is here.
-                    GoToAccessibilityButton(hint: "Or pull the list up.")
-                    ComposerGlassGroup {
-                        SidebarNewMenu()
-                            .composerGlass(Circle(), theme: theme)
-                    }
+                    SidebarMenu()
+                        .composerGlass(Circle(), theme: theme)
                 }
             }
-            .frame(height: Self.rowHeight)
-            .padding(.horizontal, Self.sideInset)
         }
+        .frame(height: Self.height)
+        .padding(.horizontal, Self.sideInset)
         .frame(maxWidth: .infinity, alignment: .bottom)
-        .animation(.easeInOut(duration: 0.25), value: controller.workspace.limits.isEmpty)
-    }
-
-    private func circle(icon: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Icon(icon, size: 21, color: theme.foreground)
-                .frame(width: Self.rowHeight, height: Self.rowHeight)
-                .contentShape(Circle())
-        }
-        .buttonStyle(AttachPressStyle())
-        .composerGlass(Circle(), theme: theme)
-        .accessibilityLabel(label)
     }
 }
 
-/// The header's row: its leading buttons at the left, what's at its right at the right,
-/// and the title (three views, in that order) in the middle of the row, so of the
-/// sidebar, when it fits there clear of both by 8 pt; else as near the middle as it
-/// fits between them, and as wide as the room there.
+/// The header's row: what's at its left (the limits), the title, and its right (+), three
+/// views in that order. The right one at its size; the title (the counts) gets its room
+/// first, and the limits what's left beside it: they pick their widest form that fits
+/// there (`SidebarLimits`), and only when even their narrowest doesn't fit beside the
+/// title's widest, the title gives way to its narrowest (`SidebarTitle`). The title is in
+/// the row's middle, so the sidebar's, when it fits there clear of both by 8 pt; else as
+/// near the middle as it fits between them, and as wide as the room there.
 struct SidebarHeaderRow: Layout {
     static let spacing: CGFloat = 8
 
@@ -110,30 +57,71 @@ struct SidebarHeaderRow: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard subviews.count == 3 else { return }
         let (leading, title, trailing) = (subviews[0], subviews[1], subviews[2])
-        let l = leading.sizeThatFits(.unspecified), t = trailing.sizeThatFits(.unspecified)
-        leading.place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(l))
+        let h = bounds.height
+        let t = trailing.sizeThatFits(.unspecified)
         trailing.place(at: CGPoint(x: bounds.maxX, y: bounds.midY), anchor: .trailing, proposal: ProposedViewSize(t))
-        let lo = bounds.minX + l.width + Self.spacing
+        // The room for the limits and the title, with the gap between them.
+        let room = max(0, bounds.width - t.width - 2 * Self.spacing)
+        let widest = title.sizeThatFits(.unspecified).width
+        let narrowest = title.sizeThatFits(ProposedViewSize(width: 0, height: h)).width
+        var l = leading.sizeThatFits(ProposedViewSize(width: max(0, room - widest), height: h))
+        if l.width > room - widest + 0.5 {
+            l = leading.sizeThatFits(ProposedViewSize(width: max(0, room - narrowest), height: h))
+        }
+        let lw = min(l.width, max(0, room - narrowest))
+        leading.place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading,
+                      proposal: ProposedViewSize(width: lw, height: h))
+        let lo = bounds.minX + lw + (lw > 0 ? Self.spacing : 0)
         let hi = bounds.maxX - t.width - Self.spacing
-        let room = max(0, hi - lo)
-        let width = min(room, title.sizeThatFits(ProposedViewSize(width: room, height: bounds.height)).width)
+        let space = max(0, hi - lo)
+        let width = min(space, title.sizeThatFits(ProposedViewSize(width: space, height: h)).width)
         let x = min(max(bounds.midX - width / 2, lo), hi - width)
         title.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading,
-                    proposal: ProposedViewSize(width: width, height: bounds.height))
+                    proposal: ProposedViewSize(width: width, height: h))
     }
 }
 
-/// The header's title: the agents' counts by status (`SidebarStatusCounts`; "Agents" while
-/// there are none); while not live, Telegram's "Connecting…" in its place (a spinner
-/// before it), "Not Connected" when it failed (`ConnectionBanner` says why).
+/// The limits in the header, in the widest form that fits (`PhoneLimits.Style`): every
+/// limit's ring by its account's icon; the headline limit's ring alone, by the icon;
+/// without the icons; and past that, those scrolled sideways.
+struct SidebarLimits: View {
+    @Environment(WorkspaceController.self) private var controller
+
+    var body: some View {
+        if !controller.workspace.limits.isEmpty {
+            ViewThatFits(in: .horizontal) {
+                PhoneLimits(height: SidebarHeader.height)
+                PhoneLimits(height: SidebarHeader.height, style: .headline)
+                PhoneLimits(height: SidebarHeader.height, style: .bare)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    PhoneLimits(height: SidebarHeader.height, style: .bare)
+                }
+            }
+            .transition(.opacity)
+        }
+    }
+}
+
+/// The header's title: the agents' counts by status (`SidebarStatusCounts`, idle's left
+/// out when they don't fit; "Agents" while there are none); while not live, Telegram's
+/// "Connecting…" in its place (a spinner before it), "Not Connected" when it failed
+/// (`ConnectionBanner` says why).
 struct SidebarTitle: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
         let counts = SidebarStatusCounts.Entry.all(in: controller.workspace)
+        let busy = counts.filter { $0.status != .idle }
         if case .live = controller.workspace.phase, !counts.isEmpty {
-            SidebarStatusCounts(entries: counts)
+            if busy.isEmpty || busy.count == counts.count {
+                SidebarStatusCounts(entries: counts)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    SidebarStatusCounts(entries: counts)
+                    SidebarStatusCounts(entries: busy)
+                }
+            }
         } else {
             text
         }
@@ -146,7 +134,7 @@ struct SidebarTitle: View {
         HStack(spacing: 7) {
             if spinner { ProgressView().controlSize(.small) }
             Text(text)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.ui(17, .semibold))
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)
             if spinner { ProgressView().controlSize(.small).hidden() }
@@ -170,9 +158,8 @@ struct SidebarTitle: View {
 /// The agents' counts by status in the header's middle (needs you, done, working, idle;
 /// only those with any; every sub-agent counts, as it reads under its parent): each a
 /// round badge filled with its status's color, as the pane's back button has. A tap
-/// opens the first agent with that status in the order of the iPhone's old "All" list
-/// (`Workspace.phoneList`: an agent, then its sub-agents; one without a pane shows as a
-/// tap on its row does).
+/// opens the first agent with that status in `Workspace.phoneList`'s order (an agent,
+/// then its sub-agents; one without a pane shows as a tap on its row does).
 struct SidebarStatusCounts: View {
     struct Entry: Equatable {
         var status: AgentStatus
@@ -201,14 +188,14 @@ struct SidebarStatusCounts: View {
             ForEach(entries, id: \.status) { entry in
                 Button { open(entry.first) } label: {
                     Text("\(entry.count)")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.ui(14, .semibold))
                         .monospacedDigit()
                         .contentTransition(.numericText())
                         .foregroundStyle(theme.background)
                         .padding(.horizontal, 6)
                         .frame(minWidth: 22, minHeight: 22)
                         .background(theme.color(for: entry.status), in: Capsule())
-                        .frame(minWidth: 34, minHeight: SidebarHeader.rowHeight)
+                        .frame(minWidth: 30, minHeight: SidebarHeader.height)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(AttachPressStyle())
@@ -272,33 +259,45 @@ struct PhoneEdgeFade: View {
     }
 }
 
-/// The header's +, Telegram's compose: a new space (a terminal or an installed agent),
-/// in the folder of the last pane you looked at (as the desktop's New Space), on its
-/// computer. A new tab in a space is in its card's menu.
-struct SidebarNewMenu: View {
+/// The header's +, Telegram's compose, the sidebar's one button: its menu opens over it,
+/// top to bottom Settings, on the iPad Hide Sidebar (⌘B), then a new space (a terminal or
+/// an installed agent) in the folder of the last pane you looked at (as the desktop's New
+/// Space), on its computer, the new space's items lowest, nearest the thumb. A new tab
+/// in a space is in its card's menu.
+struct SidebarMenu: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
+    /// The iPad's split view (the sidebar beside the panel): it can be hidden.
+    @Environment(\.isCompactLayout) private var compact
 
     var body: some View {
         let machine = controller.activeSpace?.machine
         Menu {
+            Button { controller.showSettings = true } label: {
+                Label { Text("Settings") } icon: { MenuIcon.image("ui.settings") }
+            }
+            if !compact {
+                Button { controller.toggleSidebar() } label: {
+                    Label { Text("Hide Sidebar") } icon: { MenuIcon.image("ui.sidebar") }
+                }
+            }
             NewSpaceItems()
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(theme.accent)
-                .frame(width: SidebarHeader.rowHeight, height: SidebarHeader.rowHeight)
+                .frame(width: SidebarHeader.height, height: SidebarHeader.height)
                 .contentShape(Circle())
         }
         .menuOrder(.fixed)
-        .accessibilityLabel("New Space")
+        .accessibilityLabel("New Space, Settings")
         .onAppear { controller.workspace.refreshLaunchers(machine: machine) }
         .onChange(of: machine) { _, machine in controller.workspace.refreshLaunchers(machine: machine) }
     }
 }
 
 /// The new-space menu's items: a terminal or an installed agent, in the folder of the
-/// last pane you looked at, on its computer (the header's +).
+/// last pane you looked at, on its computer (the header's +, `SidebarMenu`).
 struct NewSpaceItems: View {
     @Environment(WorkspaceController.self) private var controller
 

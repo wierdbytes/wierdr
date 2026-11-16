@@ -104,7 +104,7 @@ struct SpaceCardLine: View {
             }
         case .header(let title):
             Text(title)
-                .font(.system(size: 13))
+                .font(.ui(12))
                 .foregroundStyle(theme.muted)
                 .padding(.horizontal, PhoneRowMetrics.inset)
                 .padding(.top, 14)

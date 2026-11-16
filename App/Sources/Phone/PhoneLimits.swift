@@ -1,15 +1,27 @@
 import SwiftUI
 import WierdrModel
 
-/// The subscription limits in the iPhone list's header, at its right (the status
-/// counts in the middle): per account its provider's icon, then a ring for each of
-/// its limits (`LimitRing`), all of them. A tap on an account shows its limits as the
-/// sidebar's panel lists them, bar, share and reset, in a popover over it (the header is at the screen's bottom)
+/// The subscription limits in the sidebar's header, at its left (the status counts in
+/// the middle): per account its provider's icon, then a ring for each of its limits
+/// (`LimitRing`), all of them; narrower (`style`), only its headline limit's ring
+/// (`Limits.headline`: the worst projection), and then without the icon. A tap on an
+/// account shows all its limits as the old sidebar's panel listed them, bar, share and
+/// reset, in a popover over it (the header is at the screen's bottom)
 /// (`PhoneLimitsPopover`). Nothing without limits. Data: `Workspace.limits`, as
 /// `LimitsPanel`'s (`7d_oi` isn't shown either).
 struct PhoneLimits: View {
+    enum Style {
+        /// The icon and every limit's ring.
+        case full
+        /// The icon and the headline limit's ring.
+        case headline
+        /// The headline limit's ring alone.
+        case bare
+    }
+
     /// The header row's: the accounts' touch areas.
     var height: CGFloat
+    var style = Style.full
 
     @Environment(WorkspaceController.self) private var controller
 
@@ -18,9 +30,9 @@ struct PhoneLimits: View {
         if !accounts.isEmpty {
             // Pace moves without new readings.
             TimelineView(.periodic(from: .now, by: 30)) { context in
-                HStack(spacing: 10) {
+                HStack(spacing: style == .bare ? 4 : 10) {
                     ForEach(accounts) { account in
-                        PhoneLimitAccount(account: account, now: context.date, height: height,
+                        PhoneLimitAccount(account: account, now: context.date, height: height, style: style,
                                           multi: accounts.filter { $0.provider == account.provider }.count > 1)
                     }
                 }
@@ -35,6 +47,7 @@ private struct PhoneLimitAccount: View {
     var account: LimitAccount
     var now: Date
     var height: CGFloat
+    var style: PhoneLimits.Style
     var multi: Bool
 
     @Environment(WorkspaceController.self) private var controller
@@ -43,11 +56,14 @@ private struct PhoneLimitAccount: View {
 
     var body: some View {
         let windows = Limits.shown(account)
+        let rings = style == .full ? windows : Limits.headline(account, pinned: nil, now: now).map { [$0] } ?? []
         Button { showsLimits = true } label: {
             HStack(spacing: 3) {
-                ProviderIcon(provider: account.provider, size: 16)
-                    .padding(.trailing, 1)
-                ForEach(windows) { LimitRing(window: $0, now: now) }
+                if style != .bare {
+                    ProviderIcon(provider: account.provider, size: 16)
+                        .padding(.trailing, 1)
+                }
+                ForEach(rings) { LimitRing(window: $0, now: now) }
             }
             .frame(minHeight: height)
             .contentShape(Rectangle())

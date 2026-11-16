@@ -28,7 +28,7 @@ struct SpaceHeader: View {
         HStack(spacing: 10) {
             SpaceAvatar(space: space, size: 22)
             Text(space.displayName)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.ui(16, .semibold))
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)
                 .frame(maxWidth: 220, alignment: .leading)
@@ -94,7 +94,7 @@ struct SpaceHeader: View {
                 if let n = git?.ahead, n > 0 { Text("↑\(n)").foregroundStyle(theme.ansi(2)) }
                 if let n = git?.behind, n > 0 { Text("↓\(n)").foregroundStyle(theme.ansi(1)) }
             }
-            .font(.system(size: 13))
+            .font(.ui(13))
         } else {
             Color.clear.frame(height: 1)
         }
@@ -152,7 +152,7 @@ struct StatusBadges: View {
             ForEach([AgentStatus.blocked, .done, .working], id: \.self) { status in
                 if let n = counts[status], n > 0 {
                     Text("\(n)")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.ui(13, .semibold))
                         .monospacedDigit()
                         .foregroundStyle(theme.background)
                         .padding(.horizontal, 5)

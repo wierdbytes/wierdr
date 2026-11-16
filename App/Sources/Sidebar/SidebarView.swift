@@ -14,13 +14,12 @@ import WierdrModel
 struct SidebarView: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    @Environment(\.isCompactLayout) private var compact
     @State private var safeTop: CGFloat = 0
     @State private var safeBottom: CGFloat = 0
 
     var body: some View {
         let bottomGap = SidebarHeader.bottomGap(safeBottom: safeBottom)
-        let headerHeight = SidebarHeader.height(topRow: SidebarHeader.hasTopRow(controller, compact: compact)) + bottomGap
+        let headerHeight = SidebarHeader.height + bottomGap
         ZStack(alignment: .bottom) {
             SpacesList(topInset: safeTop, bottomInset: headerHeight)
             PhoneEdgeFade(edge: .top, height: PhoneEdgeFade.statusBar(safeTop))
@@ -34,7 +33,6 @@ struct SidebarView: View {
             }
         }
         .ignoresSafeArea(.container, edges: [.top, .bottom])
-        .animation(.easeInOut(duration: 0.25), value: headerHeight)
         .overlay(alignment: .bottom) {
             if controller.singlePane {
                 // Over the header (this overlay keeps to the safe area).

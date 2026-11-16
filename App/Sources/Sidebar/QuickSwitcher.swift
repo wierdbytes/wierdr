@@ -93,7 +93,7 @@ struct QuickSwitcher: View {
         switch line.kind {
         case .header(let title):
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.ui(15, .semibold))
                 .foregroundStyle(theme.muted)
                 .padding(.horizontal, PhoneRowMetrics.inset)
                 .padding(.top, top ? 12 : 24)
@@ -410,7 +410,7 @@ struct GoToSpaceRow: View {
             SpaceAvatar(space: hit.space, size: Self.avatar)
             VStack(alignment: .leading, spacing: 4) {
                 MatchText.text(hit.space.displayName, matched: hit.match, color: theme.accent)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.ui(16, .semibold))
                     .foregroundStyle(theme.foreground)
                     .lineLimit(1)
                 chips(hit.tally)
@@ -431,7 +431,7 @@ struct GoToSpaceRow: View {
     private func chips(_ tally: SpaceTally) -> some View {
         if tally.agents + tally.subAgents + tally.terminals == 0 {
             Text("Empty")
-                .font(.system(size: 15))
+                .font(.ui(14))
                 .foregroundStyle(theme.dim)
                 .frame(height: 22)
         } else {
@@ -473,7 +473,7 @@ struct GoToStatusBadges: View {
             ForEach([AgentStatus.blocked, .done, .working], id: \.self) { status in
                 if let n = counts[status], n > 0 {
                     Text("\(n)")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.ui(14, .semibold))
                         .monospacedDigit()
                         .foregroundStyle(theme.background)
                         .padding(.horizontal, 6)
@@ -498,7 +498,7 @@ struct GoToMachineDivider: View {
         HStack(spacing: 7) {
             Icon(name == nil ? "monitor" : "server", size: 13, color: theme.dim)
             Text(shown)
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(theme.muted)
                 .lineLimit(1)
                 .layoutPriority(1)

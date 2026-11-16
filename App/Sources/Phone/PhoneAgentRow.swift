@@ -78,19 +78,19 @@ struct PhoneAgentRowContent: View {
     private func titleLine(now: Date) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             MatchText.text(Format.agentTitle(terminal, tab: tab), matched: titleMatch, color: theme.accent)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.ui(16, .semibold))
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 if let machine = terminal.machine {
                     Text(machine)
-                        .font(.system(size: 14))
+                        .font(.ui(13))
                         .foregroundStyle(theme.dim)
                         .lineLimit(1)
                 }
                 Text(Format.age(since: terminal.statusChangedAt, now: now) ?? "")
-                    .font(.system(size: 14).monospacedDigit())
+                    .font(.mono(13))
                     .foregroundStyle(theme.muted)
             }
             .fixedSize()
@@ -99,7 +99,7 @@ struct PhoneAgentRowContent: View {
 
     /// Model, @effort, then the context's ring: the model gives way first.
     private func contextLine(now: Date) -> some View {
-        PhoneModelLine(terminal: terminal, size: 15)
+        PhoneModelLine(terminal: terminal, size: 13)
     }
 
     private var spaceLine: some View {
@@ -192,7 +192,7 @@ struct PhoneModelLine: View {
             PhoneContextRing(meta: meta).fixedSize()
             Spacer(minLength: 0)
         }
-        .font(.system(size: size))
+        .font(.mono(size))
     }
 }
 
@@ -204,7 +204,7 @@ struct PhoneSpaceTag: View {
 
     var body: some View {
         Text(name)
-            .font(.system(size: 14, weight: .medium))
+            .font(.ui(13, .medium))
             .foregroundStyle(theme.muted)
             .lineLimit(1)
             .truncationMode(.tail)
@@ -305,7 +305,7 @@ struct PhoneKidBadge: View {
         let chip = HStack(spacing: 4) {
             Icon(icon, size: 13, color: color)
             Text("\(count)")
-                .font(.system(size: 14, weight: .medium).monospacedDigit())
+                .font(.ui(13, .medium))
                 .foregroundStyle(color)
         }
         .padding(.horizontal, 7)
@@ -378,17 +378,17 @@ struct PhoneKidRowContent: View {
                 HStack(spacing: 8) {
                     StatusMark(status: status).frame(width: 14)
                     MatchText.text(Format.kidTitle(t), matched: titleMatch, color: theme.accent)
-                        .font(.system(size: 15))
+                        .font(.ui(15))
                         .foregroundStyle(theme.foreground)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(Format.age(since: t.statusChangedAt, now: now) ?? "")
-                        .font(.system(size: 14).monospacedDigit())
+                        .font(.mono(13))
                         .foregroundStyle(theme.muted)
                         .fixedSize()
                 }
                 .frame(height: 22)
-                PhoneModelLine(terminal: t, size: 14, status: .some(status))
+                PhoneModelLine(terminal: t, size: 12.5, status: .some(status))
                     .padding(.leading, 22)
                     .frame(height: 18)
             }
@@ -415,7 +415,7 @@ struct PhoneKidRowContent: View {
             .frame(width: 14)
             .padding(.trailing, 8)
             Text(Format.kidTitle(t, plain: true))
-                .font(.system(size: 15))
+                .font(.ui(15))
                 .foregroundStyle(theme.muted)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -464,11 +464,11 @@ struct PhonePaneRowContent: View {
             .frame(width: PhoneRowMetrics.paneIcon)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.ui(16, .semibold))
                     .foregroundStyle(theme.foreground)
                     .lineLimit(1)
                 Text(detail)
-                    .font(.system(size: 15))
+                    .font(.mono(13))
                     .foregroundStyle(theme.muted)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -476,7 +476,7 @@ struct PhonePaneRowContent: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             if let machine = t?.machine {
                 Text(machine)
-                    .font(.system(size: 14))
+                    .font(.ui(13))
                     .foregroundStyle(theme.dim)
                     .fixedSize()
             }
