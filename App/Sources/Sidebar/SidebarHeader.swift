@@ -5,7 +5,7 @@ import WierdrModel
 /// floating over the list's bottom (the rows scroll under it): one 44-pt row, 16 pt from
 /// the sides, its bottom 28 pt over the screen's, as the pane screen's message field's
 /// (`bottomGap`). At its left the subscription limits (`SidebarLimits`: as many rings as
-/// fit; none without data), in its middle the agents' counts by status (or the
+/// fit; none without data), in its middle the agents' statuses as one ring (or the
 /// connection's state, `SidebarTitle`), at its right, under the right thumb, + in a glass
 /// circle (`SidebarMenu`: a new space, Settings, on the iPad Hide Sidebar). Placed by
 /// `SidebarHeaderRow`.
@@ -39,7 +39,7 @@ struct SidebarHeader: View {
 }
 
 /// The header's row: what's at its left (the limits), the title, and its right (+), three
-/// views in that order. The right one at its size; the title (the counts) gets its room
+/// views in that order. The right one at its size; the title (the status ring) gets its room
 /// first, and the limits what's left beside it: they pick their widest form that fits
 /// there (`SidebarLimits`), and only when even their narrowest doesn't fit beside the
 /// title's widest, the title gives way to its narrowest (`SidebarTitle`). The title is in
@@ -102,26 +102,17 @@ struct SidebarLimits: View {
     }
 }
 
-/// The header's title: the agents' counts by status (`SidebarStatusCounts`, idle's left
-/// out when they don't fit; "Agents" while there are none); while not live, Telegram's
-/// "Connecting…" in its place (a spinner before it), "Not Connected" when it failed
-/// (`ConnectionBanner` says why).
+/// The header's title: the agents' statuses as one ring (`SidebarStatusRing`; "Agents"
+/// while there are none); while not live, Telegram's "Connecting…" in its place (a
+/// spinner before it), "Not Connected" when it failed (`ConnectionBanner` says why).
 struct SidebarTitle: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
-        let counts = SidebarStatusCounts.Entry.all(in: controller.workspace)
-        let busy = counts.filter { $0.status != .idle }
-        if case .live = controller.workspace.phase, !counts.isEmpty {
-            if busy.isEmpty || busy.count == counts.count {
-                SidebarStatusCounts(entries: counts)
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    SidebarStatusCounts(entries: counts)
-                    SidebarStatusCounts(entries: busy)
-                }
-            }
+        let entries = SidebarStatusRing.Entry.all(in: controller.workspace)
+        if case .live = controller.workspace.phase, !entries.isEmpty {
+            SidebarStatusRing(entries: entries)
         } else {
             text
         }
@@ -155,12 +146,13 @@ struct SidebarTitle: View {
     }
 }
 
-/// The agents' counts by status in the header's middle (needs you, done, working, idle;
-/// only those with any; every sub-agent counts, as it reads under its parent): each a
-/// round badge filled with its status's color, as the pane's back button has. A tap
-/// opens the first agent with that status in `Workspace.phoneList`'s order (an agent,
-/// then its sub-agents; one without a pane shows as a tap on its row does).
-struct SidebarStatusCounts: View {
+/// The agents' statuses in the header's middle, one ring (`StatusRing`: a dash per
+/// agent, every sub-agent counting as it reads under its parent, the most urgent first;
+/// inside, how many have the most urgent status). A tap opens the first agent with the
+/// most urgent status in `Workspace.phoneList`'s order (an agent, then its sub-agents;
+/// one without a pane shows as a tap on its row does); held, a menu opens the first
+/// one of any status, the most urgent lowest, nearest the thumb.
+struct SidebarStatusRing: View {
     struct Entry: Equatable {
         var status: AgentStatus
         var count: Int
@@ -178,36 +170,66 @@ struct SidebarStatusCounts: View {
         }
     }
 
+    /// Every status with agents, most urgent first (`Entry.all`).
     var entries: [Entry]
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(entries, id: \.status) { entry in
-                Button { open(entry.first) } label: {
-                    Text("\(entry.count)")
-                        .font(.ui(14, .semibold))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .foregroundStyle(theme.background)
-                        .padding(.horizontal, 6)
-                        .frame(minWidth: 22, minHeight: 22)
-                        .background(theme.color(for: entry.status), in: Capsule())
-                        .frame(minWidth: 30, minHeight: SidebarHeader.height)
-                        .contentShape(Rectangle())
+        if let top = entries.first {
+            Menu {
+                // The menu opens over the ring: the least urgent on top, the most
+                // urgent nearest the thumb.
+                ForEach(entries.reversed(), id: \.status) { entry in
+                    Button { open(entry.first) } label: {
+                        Label {
+                            Text(Self.title(entry))
+                        } icon: {
+                            Image(uiImage: Self.dot(theme.color(for: entry.status), hollow: entry.status == .idle))
+                        }
+                    }
                 }
-                .buttonStyle(AttachPressStyle())
-                .transition(.scale(scale: 0.6).combined(with: .opacity))
-                .accessibilityLabel("\(entry.count) \(Format.statusWord(entry.status))")
-                .accessibilityHint("Opens the first one")
+            } label: {
+                StatusRing(counts: Dictionary(uniqueKeysWithValues: entries.map { ($0.status, $0.count) }))
+                    .frame(width: SidebarHeader.height, height: SidebarHeader.height)
+                    .contentShape(Rectangle())
+            } primaryAction: {
+                open(top.first)
             }
+            .menuOrder(.fixed)
+            .accessibilityLabel("Agents")
+            .accessibilityValue(entries.map { "\($0.count) \(Format.statusWord($0.status))" }.joined(separator: ", "))
+            .accessibilityHint("Opens the first one that \(top.status == .blocked ? "needs you" : "is \(Format.statusWord(top.status))"). Held, the first of any status.")
         }
-        .animation(.snappy(duration: 0.3), value: entries.map(\.status))
-        .animation(.snappy(duration: 0.3), value: entries.map(\.count))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Agents")
+    }
+
+    /// A menu item's title: "2 Need You", "3 Done", "5 Working", "14 Idle".
+    private static func title(_ entry: Entry) -> String {
+        switch entry.status {
+        case .blocked: return "\(entry.count) \(entry.count == 1 ? "Needs" : "Need") You"
+        case .done: return "\(entry.count) Done"
+        case .working: return "\(entry.count) Working"
+        case .idle: return "\(entry.count) Idle"
+        }
+    }
+
+    /// A status's dot for its menu item, filled with its color (idle's a ring), drawn
+    /// as it is: a menu draws a SwiftUI shape's image as a template, in the text's color.
+    private static func dot(_ color: Color, hollow: Bool) -> UIImage {
+        let ui = UIColor(color)
+        return UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).image { _ in
+            let rect = CGRect(x: 5, y: 5, width: 10, height: 10)
+            if hollow {
+                let path = UIBezierPath(ovalIn: rect.insetBy(dx: 0.75, dy: 0.75))
+                path.lineWidth = 1.5
+                ui.setStroke()
+                path.stroke()
+            } else {
+                ui.setFill()
+                UIBezierPath(ovalIn: rect).fill()
+            }
+        }.withRenderingMode(.alwaysOriginal)
     }
 
     /// An agent's pane; a sub-agent as a tap on its row shows it (`open`).
@@ -217,6 +239,97 @@ struct SidebarStatusCounts: View {
         } else {
             controller.focus(pane: agent.rowPane)
         }
+    }
+}
+
+/// The agents' statuses as one ring (the header's, `SidebarStatusRing`), the limits'
+/// rings' kin, but larger, dashed and with a colored number: a dash per agent from the
+/// top, clockwise, the most urgent first (needs you, done, working) in their colors and
+/// idle ones faint, as a track, so the many idle ones don't drown the few that need you
+/// (a dash per agent, as a story ring has one per story: a few are counted at a glance).
+/// Past `dashes` agents a dash would be too short: then each status is one arc, at
+/// least `least` of the ring. Inside, how many have the most urgent status, in its
+/// color (idle's dim). A change moves the dashes (trims animate) and rolls the number.
+struct StatusRing: View {
+    var counts: [AgentStatus: Int]
+
+    @Environment(\.theme) private var theme
+
+    /// The dashes' middle and their line: the limits' ring is 9.5 and 2.5.
+    static let radius: CGFloat = 14
+    static let line: CGFloat = 3.5
+    /// Between two dashes, along the ring.
+    static let gap: CGFloat = 1.5
+    /// The most dashes drawn (each 2.2 pt or more); past that, an arc per status.
+    static let dashes = 24
+    /// An arc's least share of the ring, past `dashes`.
+    static let least = 0.1
+    static var size: CGFloat { 2 * radius + line }
+
+    /// Most urgent first: the ring's order from the top, clockwise.
+    static let order: [AgentStatus] = [.blocked, .done, .working, .idle]
+
+    /// A dash or an arc: its share of the ring, from the top.
+    struct Segment: Equatable, Identifiable {
+        var id: Int
+        var status: AgentStatus
+        var from: Double
+        var to: Double
+    }
+
+    static func segments(_ counts: [AgentStatus: Int]) -> [Segment] {
+        let present = order.compactMap { s in counts[s].flatMap { $0 > 0 ? (s, $0) : nil } }
+        let total = present.reduce(0) { $0 + $1.1 }
+        guard total > 0 else { return [] }
+        let gap = Double(Self.gap / (2 * .pi * radius))
+        if total <= dashes {
+            let share = 1 / Double(total)
+            return present.flatMap { s, n in Array(repeating: s, count: n) }.enumerated().map { i, s in
+                Segment(id: i, status: s, from: Double(i) * share + gap / 2, to: Double(i + 1) * share - gap / 2)
+            }
+        }
+        let weights = present.map { max(Double($0.1) / Double(total), least) }
+        let sum = weights.reduce(0, +)
+        var at = 0.0
+        return zip(present, weights).map { entry, weight in
+            let share = weight / sum
+            defer { at += share }
+            return Segment(id: dashes + (order.firstIndex(of: entry.0) ?? 0), status: entry.0,
+                           from: at + gap / 2, to: at + share - gap / 2)
+        }
+    }
+
+    var body: some View {
+        let segments = Self.segments(counts)
+        let top = Self.order.first { (counts[$0] ?? 0) > 0 }
+        ZStack {
+            ForEach(segments) { segment in
+                Circle()
+                    .trim(from: segment.from, to: segment.to)
+                    .stroke(color(segment.status), style: StrokeStyle(lineWidth: Self.line, lineCap: .butt))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 2 * Self.radius, height: 2 * Self.radius)
+            }
+            if let top {
+                Text("\(counts[top] ?? 0)")
+                    .font(.ui(14, .semibold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .foregroundStyle(top == .idle ? theme.dim : theme.color(for: top))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(width: 2 * (Self.radius - Self.line / 2) - 3)
+            }
+        }
+        .frame(width: Self.size, height: Self.size)
+        .animation(.snappy(duration: 0.35), value: segments)
+        .animation(.snappy(duration: 0.35), value: counts)
+        .accessibilityHidden(true)
+    }
+
+    /// Idle's dashes faint, as the ring's track.
+    private func color(_ status: AgentStatus) -> Color {
+        status == .idle ? theme.color(for: .idle).opacity(0.45) : theme.color(for: status)
     }
 }
 

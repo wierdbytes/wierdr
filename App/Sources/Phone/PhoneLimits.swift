@@ -1,7 +1,7 @@
 import SwiftUI
 import WierdrModel
 
-/// The subscription limits in the sidebar's header, at its left (the status counts in
+/// The subscription limits in the sidebar's header, at its left (the status ring in
 /// the middle): per account its provider's icon, then a ring for each of its limits
 /// (`LimitRing`), all of them; narrower (`style`), only its headline limit's ring
 /// (`Limits.headline`: the worst projection), and then without the icon. A tap on an
