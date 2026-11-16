@@ -132,7 +132,7 @@ struct PhoneAgentRowContent: View {
 
     /// Folds its sub-agents in or out (its badges).
     private func toggleKids() {
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(SpaceCard.fold) {
             if controller.foldedAgents.contains(terminal.address) {
                 controller.foldedAgents.remove(terminal.address)
             } else {

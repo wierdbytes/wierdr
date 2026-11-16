@@ -50,6 +50,8 @@ struct PhoneListRow<Content: View, Menu: View>: View {
     @Environment(\.theme) private var theme
     /// What's under the row: the list's chrome, a card's surface.
     @Environment(\.rowGround) private var ground
+    /// In the sidebar's upside-down list (`SpacesList`): the menu gets its own picture.
+    @Environment(\.invertedList) private var inverted
     @Environment(\.displayScale) private var displayScale
     @State private var size: CGSize = .zero
     @State private var reveal = Reveal()
@@ -140,7 +142,7 @@ struct PhoneListRow<Content: View, Menu: View>: View {
             .contentShape(Rectangle())
             .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
             .onTapGesture { tapped() }
-            .contextMenu { menu() }
+            .modifier(PhoneRowMenu(inverted: inverted, menu: menu) { rowPicture })
             .gesture(PhoneRowPan(
                 edgeOnly: edgeSwipesOnly, width: size.width, isOpen: isOpen,
                 canBegin: { direction in
@@ -164,6 +166,18 @@ struct PhoneListRow<Content: View, Menu: View>: View {
     }
 
     // MARK: Drawing
+
+    /// The row as the menu's preview shows it (the sidebar's list: its own picture).
+    private var rowPicture: some View {
+        content()
+            .frame(width: size.width, height: size.height, alignment: .leading)
+            .background {
+                ZStack {
+                    ground ?? theme.chrome
+                    theme.hover.opacity(pinned ? 1 : 0)
+                }
+            }
+    }
 
     /// The highlight and, while swiping, the plate the content slides on (Telegram's
     /// surface: the highlight's color, rounding to 26 pt).
@@ -367,5 +381,34 @@ extension EnvironmentValues {
     var rowGround: Color? {
         get { self[RowGroundKey.self] }
         set { self[RowGroundKey.self] = newValue }
+    }
+}
+
+/// A row's long-press menu: with the system's picture of the row, or (in an upside-down
+/// list, whose transform the system's picture doesn't take: it came out as a line) with
+/// the row drawn afresh as the preview.
+private struct PhoneRowMenu<Menu: View, Picture: View>: ViewModifier {
+    var inverted: Bool
+    @ViewBuilder var menu: () -> Menu
+    @ViewBuilder var picture: () -> Picture
+    /// The preview is hosted on its own, without the row's environment: it gets it all.
+    @Environment(\.self) private var environment
+
+    func body(content: Content) -> some View {
+        if inverted {
+            content.contextMenu { menu() } preview: { picture().environment(\.self, environment) }
+        } else {
+            content.contextMenu { menu() }
+        }
+    }
+}
+
+private struct InvertedListKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// The rows are in an upside-down list (the sidebar's, `SpacesList`).
+    var invertedList: Bool {
+        get { self[InvertedListKey.self] }
+        set { self[InvertedListKey.self] = newValue }
     }
 }

@@ -4,15 +4,20 @@ import WierdrModel
 /// The sidebar's list (iPhone and iPad): the space cards (`SpaceCard`), drawn bottom up
 /// for a thumb: this computer's spaces lowest, the first space at the bottom, each added
 /// machine's group over them; a group's header (`MachineHeader`, with fold and +) under
-/// it, as a card's header is under its rows (the newest and pinned lowest). A vertical `ScrollView` over a lazy
-/// stack, a card an item of it, resting at its bottom: cards short of its height sit there,
-/// and a card that grows or comes keeps the ones under it in place
-/// (`defaultScrollAnchor(.bottom)` for the initial offset and size changes).
+/// it, as a card's header is under its rows (the newest and pinned lowest).
+///
+/// An inverted vertical `ScrollView` over a lazy stack (the chat lists' way, Telegram's
+/// too): the scroll view is flipped upside down and each item flipped back, so its
+/// content starts at the screen's bottom. It rests there (the scroll view's own start,
+/// no anchoring), cards short of its height sit there, and anything that grows, comes or
+/// goes (a card folding or unfolding, an agent, a sub-agent's tree) keeps what's under it
+/// in place and moves only what's over it, in the same animation as the change: a card
+/// unfolds upward and folds down into its header, which stays where it is.
 ///
 /// Cards fold (their chevron; the iPhone's header tap), and are dragged by their header to
 /// reorder them among their machine's (`SpaceDrag`, held then moved, as the menu comes).
-/// Pulled up past its bottom, it brings out Go to's field under the last card; let go
-/// past 72 pt, Go to opens (`PullToSearch`).
+/// Pulled up past its bottom (its content's start), it brings out Go to's field under the
+/// last card; let go past 72 pt, Go to opens (`PullToSearch`).
 struct SpacesList: View {
     /// The status bar's room over the list (the cards scroll under it).
     var topInset: CGFloat
@@ -26,7 +31,6 @@ struct SpacesList: View {
     @State private var drag = SpaceDrag()
     @State private var swipes = PhoneRowSwipes()
     @State private var pull = PullToSearch(threshold: PullToSearchStyle.phone.threshold, edge: .bottom)
-    @State private var position = ScrollPosition(edge: .bottom)
     /// The list's height under its insets.
     @State private var viewport: CGFloat = 0
 
@@ -35,46 +39,47 @@ struct SpacesList: View {
     static let side: CGFloat = 8
 
     var body: some View {
-        let blocks = SpacesListBlock.blocks(controller: controller, drag: drag)
+        // In the content's order: from the screen's bottom up.
+        let blocks = SpacesListBlock.blocks(controller: controller, drag: drag).reversed()
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 LazyVStack(spacing: 0) {
                     ForEach(blocks) { block in
                         self.block(block)
+                            .flippedUp()
                     }
                 }
-                .padding(.top, Self.gap)
-                // The list's whole height, the cards at its bottom: a tap over them closes an
-                // open row too (the rows' own taps go first).
-                .frame(minHeight: viewport, alignment: .bottom)
+                // Over the top card (the content's end).
+                .padding(.bottom, Self.gap)
+                // The list's whole height, the cards at its bottom (the content's start): a tap
+                // over them closes an open row too (the rows' own taps go first).
+                .frame(minHeight: viewport, alignment: .top)
                 .contentShape(Rectangle())
                 .onTapGesture { withAnimation(PhoneSwipeMotion.bodyAnimation) { swipes.closeAll() } }
                 .background(SpaceListInteractions(drag: drag))
-                .overlay {
-                    if controller.workspace.spaces.isEmpty, controller.workspace.phase == .live { empty }
-                }
             }
-            .scrollPosition($position)
-            .defaultScrollAnchor(.bottom, for: .initialOffset)
-            .defaultScrollAnchor(.bottom, for: .sizeChanges)
-            .contentMargins(.top, topInset, for: .scrollContent)
-            .contentMargins(.top, topInset, for: .scrollIndicators)
-            .contentMargins(.bottom, bottomInset, for: .scrollContent)
-            .contentMargins(.bottom, bottomInset, for: .scrollIndicators)
-            // Its own height less the margins (not the scroll geometry's: its container's size goes without them).
+            // The header's room is at the content's start, the status bar's at its end.
+            .contentMargins(.top, bottomInset, for: .scrollContent)
+            .contentMargins(.top, bottomInset, for: .scrollIndicators)
+            .contentMargins(.bottom, topInset, for: .scrollContent)
+            .contentMargins(.bottom, topInset, for: .scrollIndicators)
+            .flippedUp()
             .onGeometryChange(for: CGFloat.self) { $0.size.height - topInset - bottomInset } action: { h in
                 viewport = max(0, h)
             }
-            .onScrollGeometryChange(for: CGFloat.self, of: { [viewport, topInset] g in
-                PullToSearch.overscrollBottom(g, viewport: viewport, top: topInset)
-            }) { _, d in
+            // Pulled past its start: up past its bottom on the screen.
+            .onScrollGeometryChange(for: CGFloat.self, of: PullToSearch.overscroll) { _, d in
                 pull.scrolled(d)
             }
             .overlay(alignment: .bottom) {
                 PullToSearchField(pull: pull, style: .phone, inset: bottomInset)
             }
+            .overlay {
+                if controller.workspace.spaces.isEmpty, controller.workspace.phase == .live { empty }
+            }
             .environment(swipes)
             .environment(drag)
+            .environment(\.invertedList, true)
             .onScrollPhaseChange { old, phase in
                 // Scrolling closes an open row (Telegram: as the list's drag begins).
                 if phase == .interacting, swipes.openID != nil { swipes.closeAll() }
@@ -88,12 +93,6 @@ struct SpacesList: View {
             .onChange(of: theme) { drag.theme = theme }
             .onChange(of: compact) { drag.compact = compact }
             .onChange(of: controller.workspace.spaces.map(\.id)) { drag.settle() }
-            .onChange(of: controller.workspace.spaces.isEmpty, initial: true) { _, empty in
-                // The first spaces came after the list was laid out (the initial anchor
-                // had nothing to rest on): to its bottom, once they're laid out.
-                guard !empty else { return }
-                DispatchQueue.main.async { position.scrollTo(edge: .bottom) }
-            }
             .onChange(of: controller.focusedPane?.id) { _, id in
                 // The iPad: the card of the pane in front comes into view (the iPhone's list has none).
                 guard !controller.singlePane, let id, let space = controller.workspace.location(ofPane: id)?.space else { return }
@@ -106,7 +105,7 @@ struct SpacesList: View {
                 if let space = controller.workspace.space(id) {
                     controller.foldedMachines.remove(space.machine ?? "")
                 }
-                withAnimation(.easeInOut(duration: 0.25)) { _ = controller.closedSpaces.remove(id) }
+                withAnimation(SpaceCard.fold) { _ = controller.closedSpaces.remove(id) }
                 DispatchQueue.main.async {
                     withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(SpacesListBlock.cardID(id)) }
                 }
@@ -241,9 +240,10 @@ struct MachineHeader: View {
         }
         .padding(.horizontal, 8)
         .frame(height: 34)
+        .geometryGroup()
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(SpaceCard.fold) {
                 if folded { controller.foldedMachines.remove(machine.id) } else { controller.foldedMachines.insert(machine.id) }
             }
         }
@@ -271,5 +271,12 @@ struct NoteRow: View {
         .frame(height: 40)
         .contentShape(Rectangle())
         .onTapGesture { action?() }
+    }
+}
+
+extension View {
+    /// Upside down: the inverted list (`SpacesList`) and each of its items, flipped back.
+    func flippedUp() -> some View {
+        scaleEffect(x: 1, y: -1, anchor: .center)
     }
 }

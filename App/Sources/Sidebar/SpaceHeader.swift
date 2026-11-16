@@ -2,14 +2,15 @@ import SwiftUI
 import WierdrModel
 
 /// A space card's header (§4.3): avatar, name, git tail, the agents' summary while the
-/// card is folded, show/hide chevron. 44 pt, at the card's bottom (the list is drawn
-/// bottom up: a header is under what it names), a hairline over it when rows show.
+/// card is folded, show/hide chevron (`SpaceHeaderBar`). 44 pt, at the card's bottom (the
+/// list is drawn bottom up: a header is under what it names), a hairline over it when
+/// rows show.
 ///
 /// A tap: on the iPad it selects the space (its tab shows in the panel); in the iPhone
 /// layout, where nothing is selected, it folds or unfolds the card, as the chevron does.
-/// Held, its menu (`SpaceMenu`), and moved on, the card is dragged (`SpaceDrag`; the
-/// list's own interactions, `SpaceListInteractions`, which find the header by its
-/// marker, so the menu is theirs too).
+/// Held, its menu (`SpaceHeaderMenu`), and moved on, the card is dragged (`SpaceDrag`):
+/// both are the list's own UIKit interactions (`SpaceListDragDrop`), which find the
+/// header by its marker, so UIKit plays them together.
 struct SpaceHeader: View {
     var space: Space
     var hasRows: Bool
@@ -20,12 +21,64 @@ struct SpaceHeader: View {
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(SpaceDrag.self) private var drag: SpaceDrag?
-    @Environment(\.theme) private var theme
     @State private var hovering = false
-    @State private var chevronHover = false
 
     var body: some View {
         let isActive = !controller.singlePane && controller.activeSpace?.id == space.id
+        SpaceHeaderBar(space: space, hasRows: hasRows, closed: closed, bodyShown: bodyShown,
+                       isActive: isActive, hovering: hovering, toggle: toggle)
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+            .onTapGesture {
+                if controller.singlePane {
+                    toggle()
+                } else {
+                    controller.select(space: space)
+                    controller.showPanel()
+                }
+            }
+            // Its menu's New Tab lists the agents installed there.
+            .onAppear { controller.workspace.refreshLaunchers(machine: space.machine) }
+            .background {
+                // Not in the lifted card's picture (`ImageRenderer` draws a UIKit view as a placeholder).
+                if let drag { SpaceMarker(space: space.id, role: .header, markers: drag.markers) }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Space \(space.displayName)")
+            .accessibilityValue(Format.summary(controller.workspace.agentCounts(in: space.id)))
+            .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction(named: closed ? "Show tabs" : "Hide tabs") { toggle() }
+            // The menu is UIKit's, on the list: VoiceOver gets its items here.
+            .accessibilityAction(named: "Rename") { controller.beginRename(space: space.id) }
+            .accessibilityAction(named: "New Terminal Tab") { controller.newTab(launch: .shell, in: space) }
+            .accessibilityAction(named: "Close Space") { controller.closeSpace(space.id) }
+    }
+
+    private func toggle() {
+        withAnimation(SpaceCard.fold) {
+            if closed { controller.closedSpaces.remove(space.id) } else { controller.closedSpaces.insert(space.id) }
+        }
+    }
+}
+
+/// What a card's header draws: its line on its ground (opaque: folding, the rows slide
+/// down under it into the card's bottom edge), the hairline over it while rows show. Also
+/// the picture its menu lifts (`SpaceListDragDrop.headerPreview`).
+struct SpaceHeaderBar: View {
+    var space: Space
+    var hasRows: Bool
+    var closed: Bool
+    var bodyShown: Bool
+    var isActive: Bool
+    var hovering: Bool
+    var toggle: (() -> Void)? = nil
+
+    @Environment(WorkspaceController.self) private var controller
+    @Environment(\.theme) private var theme
+    @Environment(\.rowGround) private var ground
+    @State private var chevronHover = false
+
+    var body: some View {
         HStack(spacing: 10) {
             SpaceAvatar(space: space, size: 22)
             Text(space.displayName)
@@ -38,49 +91,30 @@ struct SpaceHeader: View {
             gitTail
                 .frame(maxWidth: .infinity, alignment: .trailing)
             if closed {
-                StatusBadges(counts: counts)
+                StatusBadges(counts: controller.workspace.agentCounts(in: space.id))
             }
             chevron
         }
         .padding(.leading, PhoneRowMetrics.inset - 2)
         .padding(.trailing, 8)
-        .frame(height: Self.height)
-        .background(headerFill(isActive: isActive))
+        .frame(height: SpaceHeader.height)
+        // Moves as one while the card folds: the summary coming or going comes in its place
+        // here, not at the card's top as the card's own geometry would put it.
+        .geometryGroup()
+        .background {
+            ZStack {
+                ground ?? theme.surface
+                fill
+            }
+        }
         .overlay(alignment: .top) {
             if bodyShown { Hairline() }
         }
-        .contentShape(Rectangle())
-        .onHover { hovering = $0 }
-        .onTapGesture {
-            if controller.singlePane {
-                toggle()
-            } else {
-                controller.select(space: space)
-                controller.showPanel()
-            }
-        }
-        .contextMenu { SpaceMenu(space: space) }
-        // Its menu's New Tab lists the agents installed there.
-        .onAppear { controller.workspace.refreshLaunchers(machine: space.machine) }
-        .background {
-            // Not in the lifted card's picture (`ImageRenderer` draws a UIKit view as a placeholder).
-            if let drag { SpaceMarker(space: space.id, role: .header, markers: drag.markers) }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Space \(space.displayName)")
-        .accessibilityValue(Format.summary(counts))
-        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction(named: closed ? "Show tabs" : "Hide tabs") { toggle() }
     }
 
-    private func headerFill(isActive: Bool) -> Color {
+    private var fill: Color {
         if isActive { return theme.accent.opacity(hovering ? 0.20 : 0.15) }
         return hovering ? theme.selected : theme.hover
-    }
-
-    /// Its agents by status, and the sub-agents under them (never done; §4.6).
-    private var counts: [AgentStatus: Int] {
-        controller.workspace.agentCounts(in: space.id)
     }
 
     @ViewBuilder
@@ -104,7 +138,7 @@ struct SpaceHeader: View {
     @ViewBuilder
     private var chevron: some View {
         if hasRows {
-            Button(action: toggle) {
+            Button { toggle?() } label: {
                 // Open, it points up, at the rows over the header.
                 Icon("chevron-right", size: 14, color: chevronHover ? theme.foreground : theme.dim)
                     .rotationEffect(.degrees(closed ? 0 : -90))
@@ -120,26 +154,35 @@ struct SpaceHeader: View {
             Color.clear.frame(width: 32, height: 20)
         }
     }
-
-    private func toggle() {
-        withAnimation(.easeInOut(duration: 0.25)) {
-            if closed { controller.closedSpaces.remove(space.id) } else { controller.closedSpaces.insert(space.id) }
-        }
-    }
 }
 
-/// The space menu (§7): Rename, New tab, Close.
-struct SpaceMenu: View {
-    var space: Space
-    @Environment(WorkspaceController.self) private var controller
-
-    var body: some View {
-        Button { controller.beginRename(space: space.id) } label: { Label("Rename…", image: "ui.square-pen") }
-        Menu {
-            LaunchMenuItems(machine: space.machine) { controller.newTab(launch: $0, in: space) }
-        } label: { Label("New Tab", image: "ui.plus") }
-        Divider()
-        Button(role: .destructive) { controller.closeSpace(space.id) } label: { Label("Close Space", image: "ui.x") }
+/// The space menu (§7), UIKit's (`SpaceListDragDrop` shows it held on a header):
+/// Rename…, New Tab › (a terminal or an agent installed on its machine), Close Space.
+@MainActor
+enum SpaceHeaderMenu {
+    static func menu(space id: String, controller: WorkspaceController) -> UIMenu? {
+        guard let space = controller.workspace.space(id) else { return nil }
+        let rename = UIAction(title: "Rename…", image: MenuIcon.uiImage("ui.square-pen")) { _ in
+            controller.beginRename(space: id)
+        }
+        let launchers = controller.workspace.launchers[space.machine ?? ""] ?? []
+        var tabs: [UIMenuElement] = [UIAction(title: "Terminal", image: MenuIcon.uiImage("program.shell")) { _ in
+            controller.newTab(launch: .shell, in: space)
+        }]
+        if launchers.isEmpty {
+            tabs.append(UIAction(title: "Checking installed agents…", attributes: .disabled) { _ in })
+        }
+        for launcher in launchers where launcher.installed == true {
+            tabs.append(UIAction(title: launcher.program.name, image: MenuIcon.uiImage(launcher.program.iconAsset)) { _ in
+                controller.newTab(launch: .agent(launcher, task: nil), in: space)
+            })
+        }
+        let newTab = UIMenu(title: "New Tab", image: MenuIcon.uiImage("ui.plus"), children: tabs)
+        let close = UIAction(title: "Close Space", image: MenuIcon.uiImage("ui.x"), attributes: .destructive) { _ in
+            controller.closeSpace(id)
+        }
+        return UIMenu(children: [UIMenu(options: .displayInline, children: [rename, newTab]),
+                                 UIMenu(options: .displayInline, children: [close])])
     }
 }
 

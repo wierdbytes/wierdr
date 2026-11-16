@@ -108,13 +108,19 @@ enum MenuIcon {
 
     static func image(_ name: String, size: CGFloat = 20) -> Image {
         if let cached = cache[name] { return Image(uiImage: cached) }
-        guard let source = UIImage(named: name) else { return Image(systemName: "app") }
+        return Image(uiImage: uiImage(name, size: size))
+    }
+
+    /// The same for a UIKit menu (`UIAction`'s image).
+    static func uiImage(_ name: String, size: CGFloat = 20) -> UIImage {
+        if let cached = cache[name] { return cached }
+        guard let source = UIImage(named: name) else { return UIImage(systemName: "app") ?? UIImage() }
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
         let drawn = renderer.image { _ in
             source.draw(in: CGRect(x: 0, y: 0, width: size, height: size))
         }
         let image = drawn.withRenderingMode(source.renderingMode == .alwaysOriginal ? .alwaysOriginal : .alwaysTemplate)
         cache[name] = image
-        return Image(uiImage: image)
+        return image
     }
 }

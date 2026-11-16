@@ -20,6 +20,9 @@ struct SpaceCard: View {
     @Environment(\.theme) private var theme
 
     static let radius: CGFloat = 12
+    /// Folding and unfolding (a card, a machine's group, an agent's sub-agents): critically
+    /// damped, 0.35 s; the list's inversion keeps what's under the change in place.
+    static let fold = Animation.spring(duration: 0.35, bounce: 0)
 
     var body: some View {
         let page = controller.workspace.phoneList(space: space.id)
