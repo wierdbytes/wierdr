@@ -9,8 +9,8 @@ import WierdrModel
 /// A tap: on the iPad it selects the space (its tab shows in the panel); in the iPhone
 /// layout, where nothing is selected, it folds or unfolds the card, as the chevron does.
 /// Held, its menu (`SpaceHeaderMenu`), and moved on, the card is dragged (`SpaceDrag`):
-/// both are the list's own UIKit interactions (`SpaceListDragDrop`), which find the
-/// header by its marker, so UIKit plays them together.
+/// both are the list's own long press (`SpaceListDragDrop`), which finds the header by
+/// its marker.
 struct SpaceHeader: View {
     var space: Space
     var hasRows: Bool
@@ -25,8 +25,13 @@ struct SpaceHeader: View {
 
     var body: some View {
         let isActive = !controller.singlePane && controller.activeSpace?.id == space.id
+        // Held for its menu: it shrinks 15 pt narrower (Telegram's).
+        let shrunk = drag?.pressing == "space:\(space.id)"
         SpaceHeaderBar(space: space, hasRows: hasRows, closed: closed, bodyShown: bodyShown,
                        isActive: isActive, hovering: hovering, toggle: toggle)
+            .visualEffect { content, proxy in
+                content.scaleEffect(shrunk ? max(0.7, (proxy.size.width - 15) / max(1, proxy.size.width)) : 1)
+            }
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
             .onTapGesture {
@@ -158,33 +163,29 @@ struct SpaceHeaderBar: View {
     }
 }
 
-/// The space menu (§7), UIKit's (`SpaceListDragDrop` shows it held on a header):
+/// The space menu (§7), the list's own (`SpaceListDragDrop` shows it held on a header):
 /// Rename…, New Tab › (a terminal or an agent installed on its machine), Close Space.
 @MainActor
 enum SpaceHeaderMenu {
-    static func menu(space id: String, controller: WorkspaceController) -> UIMenu? {
-        guard let space = controller.workspace.space(id) else { return nil }
-        let rename = UIAction(title: "Rename…", image: MenuIcon.uiImage("ui.square-pen")) { _ in
-            controller.beginRename(space: id)
-        }
+    static func menu(space id: String, controller: WorkspaceController) -> PhoneMenu {
+        guard let space = controller.workspace.space(id) else { return [] }
         let launchers = controller.workspace.launchers[space.machine ?? ""] ?? []
-        var tabs: [UIMenuElement] = [UIAction(title: "Terminal", image: MenuIcon.uiImage("program.shell")) { _ in
+        var tabs: [PhoneMenuItem] = [PhoneMenuItem(title: "Terminal", icon: .asset("program.shell")) {
             controller.newTab(launch: .shell, in: space)
         }]
         if launchers.isEmpty {
-            tabs.append(UIAction(title: "Checking installed agents…", attributes: .disabled) { _ in })
+            tabs.append(PhoneMenuItem(title: "Checking installed agents…", icon: .system("hourglass"), disabled: true))
         }
         for launcher in launchers where launcher.installed == true {
-            tabs.append(UIAction(title: launcher.program.name, image: MenuIcon.uiImage(launcher.program.iconAsset)) { _ in
+            tabs.append(PhoneMenuItem(title: launcher.program.name, icon: .asset(launcher.program.iconAsset)) {
                 controller.newTab(launch: .agent(launcher, task: nil), in: space)
             })
         }
-        let newTab = UIMenu(title: "New Tab", image: MenuIcon.uiImage("ui.plus"), children: tabs)
-        let close = UIAction(title: "Close Space", image: MenuIcon.uiImage("ui.x"), attributes: .destructive) { _ in
-            controller.closeSpace(id)
-        }
-        return UIMenu(children: [UIMenu(options: .displayInline, children: [rename, newTab]),
-                                 UIMenu(options: .displayInline, children: [close])])
+        return [
+            [PhoneMenuItem(title: "Rename…", icon: .asset("ui.square-pen")) { controller.beginRename(space: id) },
+             PhoneMenuItem(title: "New Tab", icon: .asset("ui.plus"), children: [tabs])],
+            [PhoneMenuItem(title: "Close Space", icon: .asset("ui.x"), destructive: true) { controller.closeSpace(id) }],
+        ]
     }
 }
 

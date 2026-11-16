@@ -60,6 +60,7 @@
 		997F8D2F476056E4F6653FC8 /* TerminalPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6654E2F2DE8CC92909567AD /* TerminalPanel.swift */; };
 		9CF692D9846CA0F210A5C27A /* SidebarResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */; };
 		9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD1D033D2D7C97DEF34DCD0 /* Previews.swift */; };
+		9E306F2CA9F4E2F07E8C1467 /* ListMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11F7172C86560D747AF38A0E /* ListMenu.swift */; };
 		9F4371D40DBE38454BC60FC8 /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A94262DB139809864F08002 /* AppServices.swift */; };
 		A33C61072ABF9838EE2A68CD /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 5414B4EB3559CA74F9238D6D /* SwiftTerm */; };
 		A5A665F63667AD58A3437D8E /* HostSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B9899D1F0993F0A4EEFB4B /* HostSession.swift */; };
@@ -130,6 +131,7 @@
 		0666454A0F3654CFD8BB3434 /* Device.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Device.swift; sourceTree = "<group>"; };
 		0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Variable.ttf"; sourceTree = "<group>"; };
 		11D65FB4D80A6D047E94868F /* LimitsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LimitsPanel.swift; sourceTree = "<group>"; };
+		11F7172C86560D747AF38A0E /* ListMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListMenu.swift; sourceTree = "<group>"; };
 		12305F8F403DDBD0CA945AC3 /* Fonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fonts.swift; sourceTree = "<group>"; };
 		12BEB38073DA12C77FA628AC /* WierdrApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WierdrApp.swift; sourceTree = "<group>"; };
 		12EDAF530116B45FFE732B07 /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
@@ -247,6 +249,7 @@
 			isa = PBXGroup;
 			children = (
 				11D65FB4D80A6D047E94868F /* LimitsPanel.swift */,
+				11F7172C86560D747AF38A0E /* ListMenu.swift */,
 				BBDB08858052E955C8F9E69B /* QuickSwitcher.swift */,
 				84FD27B70E7742ECA8155B28 /* RowMenu.swift */,
 				D01DB30E5E16F116C4D66507 /* SidebarHeader.swift */,
@@ -643,6 +646,7 @@
 				BC5F03E81D285DF5CBC65E43 /* KeyboardCover.swift in Sources */,
 				5F6BB648C5B2875AA3C9F66E /* KeyboardFirstDismissal.swift in Sources */,
 				3369452A0EEE814CFC410FF6 /* LimitsPanel.swift in Sources */,
+				9E306F2CA9F4E2F07E8C1467 /* ListMenu.swift in Sources */,
 				D025F02BB8E45BEADA711A3A /* LiveActivities.swift in Sources */,
 				FFF085F26F93DD76B88BEA24 /* LiveActivityDemo.swift in Sources */,
 				60DFCEE352A3DD2104A9AE02 /* LiveServices.swift in Sources */,
@@ -767,7 +771,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 71;
+				CURRENT_PROJECT_VERSION = 72;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -853,7 +857,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 71;
+				CURRENT_PROJECT_VERSION = 72;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

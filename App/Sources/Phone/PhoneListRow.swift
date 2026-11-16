@@ -105,8 +105,10 @@ struct PhoneListRow<Content: View>: View {
         let listMenu = inverted ? drag : nil
         // VoiceOver: the list's menu isn't the row's, its items are actions (but the swipes' again).
         let menuActions = listMenu == nil ? [] : menu().joined().filter { item in
-            !(leading + trailing).contains { $0.title == item.title }
+            !item.disabled && item.children == nil && !(leading + trailing).contains { $0.title == item.title }
         }
+        // Held for the list's menu: the content shrinks 15 pt narrower (Telegram's), not its ground.
+        let shrunk = listMenu?.pressing == "row:\(id)"
         content()
             // VoiceOver: the swipe actions as the row's actions.
             .accessibilityActions {
@@ -119,6 +121,9 @@ struct PhoneListRow<Content: View>: View {
             }
             .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .visualEffect { content, proxy in
+                content.scaleEffect(shrunk ? max(0.7, (proxy.size.width - 15) / max(1, proxy.size.width)) : 1)
+            }
             .background { plate }
             .offset(x: reveal.offset)
             .background {
@@ -154,7 +159,7 @@ struct PhoneListRow<Content: View>: View {
             .onTapGesture { tapped() }
             .background {
                 if let listMenu {
-                    RowMenuMarker(id: id, markers: listMenu.rowMarkers, menu: menu) { rowPicture(size: $0) }
+                    RowMenuMarker(id: id, markers: listMenu.rowMarkers, menu: menu, open: tap) { rowPicture(size: $0) }
                 }
             }
             .modifier(PhoneRowMenu(enabled: listMenu == nil, menu: menu))

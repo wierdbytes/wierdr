@@ -8,9 +8,9 @@ import WierdrModel
 /// Let go over the list, it glides into the slot and the space moves there
 /// (`space.move`); let go off the list, it flies back to where it was.
 ///
-/// The drag is UIKit's (`SpaceListInteractions`: a drag interaction on the list's scroll
-/// view with the headers' own menu interaction, so it plays along with the menu, held
-/// then moved; a drop interaction there too). The lifted card is drawn by
+/// The drag is the list's own long press (`SpaceListInteractions`: `ListPressRecognizer`
+/// on the list's scroll view, which shows a header's menu held, and moved on lifts the
+/// card). The lifted card is drawn by
 /// the app over the window (`LiftedCard`), the cards' markers (`SpaceMarker`) say
 /// where the cards and their headers are, and `SpacesList` shows the machine's spaces
 /// in `lane`'s order, the dragged one as its slot. The list is drawn bottom up (and is
@@ -19,9 +19,6 @@ import WierdrModel
 @MainActor
 @Observable
 final class SpaceDrag {
-    /// The drag's item type; only this app's own drags carry it.
-    static let typeID = "pw.xff.wierdr.space"
-
     struct Lane: Equatable {
         var machine: String?
         /// In the workspace's order (drawn bottom up).
@@ -34,6 +31,8 @@ final class SpaceDrag {
     /// hidden in the list meanwhile, as UIKit hides a view it lifts itself; else the row
     /// showed through its picture, scaled, as a doubled text.
     var menuLifted: String?
+    /// What the list's press is holding (as `menuLifted`): it shrinks, Telegram's way.
+    var pressing: String?
     /// Its machine's spaces as the list shows them meanwhile, it at its slot. After
     /// a drop, until the workspace has them in this order (or gives up, `settleAfter`).
     private(set) var lane: Lane?
@@ -337,112 +336,167 @@ struct SpaceListInteractions: UIViewRepresentable {
     }
 }
 
-/// Counts the touches that come down on the list and keeps where the last one did (it
-/// never recognizes anything), so a drag can tell which header the touch that lifted it
-/// came down on, wherever the finger is when the drag really starts.
-final class TouchCounter: UIGestureRecognizer {
-    private(set) var count = 0
-    /// Where the last touch came down (in the view's coordinates).
-    private(set) var downAt: CGPoint = .zero
-    /// A touch came down there.
-    var began: ((CGPoint) -> Void)?
+/// The list's long press (Telegram's `ContextGesture`): a touch on a header or on a row
+/// with a menu, held 0.12 s, starts the item shrinking (`pressing`), and at 0.32 s, still
+/// within 10 pt of where it came down, it begins: the menu. Then it follows the finger
+/// to its end (the menu's items, a card's drag). Moving on before (scrolling, a swipe)
+/// lets it go. A pointer's secondary click begins it at once; a pointer's press on a
+/// header moved on begins it at once too, as a card's drag (`movedOff`).
+final class ListPressRecognizer: UIGestureRecognizer {
+    /// Whether there's something to hold at this point (in the view).
+    var accepts: (CGPoint) -> Bool = { _ in false }
+    /// Whether a pointer's press moved off this point drags (a header's).
+    var dragsOnMove: (CGPoint) -> Bool = { _ in false }
+    /// The shrinking starts (true) or is let go (false).
+    var pressing: (Bool) -> Void = { _ in }
+
+    static let delay: TimeInterval = 0.12
+    static let ramp: TimeInterval = 0.2
+
+    /// Where the touch came down, in the view.
+    private(set) var start: CGPoint = .zero
+    private(set) var secondary = false
+    /// Begun by a pointer's press moved on (a card's drag), not by holding.
+    private(set) var movedOff = false
+    private(set) weak var touch: UITouch?
+    private var timers: [Timer] = []
+    private var pressed = false
 
     override init(target: Any?, action: Selector?) {
         super.init(target: target, action: action)
-        cancelsTouchesInView = false
         delaysTouchesBegan = false
         delaysTouchesEnded = false
-        // A pointer's press too (its drags start without a hold).
         allowedTouchTypes = [UITouch.TouchType.direct, .indirect, .pencil, .indirectPointer].map { NSNumber(value: $0.rawValue) }
     }
 
-    convenience init() { self.init(target: nil, action: nil) }
-
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        count += 1
-        if let touch = touches.first, let view {
-            downAt = touch.location(in: view)
-            began?(downAt)
+        guard touch == nil, touches.count == 1, let t = touches.first, let view else {
+            if state == .possible { fail() }
+            return
         }
+        let p = t.location(in: view)
+        // Telegram leaves the screen's left 8 pt to the swipe back.
+        guard accepts(p), t.type != .direct || t.location(in: nil).x >= 8 else {
+            state = .failed
+            return
+        }
+        touch = t
+        start = p
+        if event.buttonMask.contains(.secondary) {
+            secondary = true
+            state = .began
+            return
+        }
+        schedule(Self.delay) { [weak self] in
+            guard let self, self.state == .possible else { return }
+            self.pressed = true
+            self.pressing(true)
+        }
+        schedule(Self.delay + Self.ramp) { [weak self] in
+            guard let self, self.state == .possible else { return }
+            self.state = .began
+        }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let t = touch, touches.contains(t), let view else { return }
+        let p = t.location(in: view)
+        if state == .possible {
+            let moved = hypot(p.x - start.x, p.y - start.y)
+            if t.type == .indirectPointer, moved > 4, dragsOnMove(start) {
+                movedOff = true
+                state = .began
+            } else if moved > 10 {
+                fail()
+            }
+        } else if state == .began || state == .changed {
+            state = .changed
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let t = touch, touches.contains(t) else { return }
+        if state == .possible { fail() } else { state = .ended }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard let t = touch, touches.contains(t) else { return }
+        if state == .possible { fail() } else { state = .cancelled }
+    }
+
+    override func reset() {
+        super.reset()
+        timers.forEach { $0.invalidate() }
+        timers = []
+        if pressed { pressing(false) }
+        pressed = false
+        touch = nil
+        secondary = false
+        movedOff = false
+    }
+
+    private func fail() {
+        timers.forEach { $0.invalidate() }
+        timers = []
         state = .failed
     }
 
-    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
-    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+    private func schedule(_ delay: TimeInterval, _ block: @escaping () -> Void) {
+        let timer = Timer(timeInterval: delay, repeats: false) { _ in MainActor.assumeIsolated { block() } }
+        RunLoop.main.add(timer, forMode: .common)
+        timers.append(timer)
+    }
 }
 
-/// A see-through view over the window while the list's own space drag lasts, a
-/// drop target for it wherever the list isn't (the panel's SwiftUI hosting view
-/// has its own drop target, for the tab pills, which would take the drag there):
-/// letting go off the list is a drop heard at once, so the card flies back straight
-/// away instead of after the system's cancel animation. Over the list it isn't
-/// there for hit testing, and the list takes the drag.
+/// The list's long press (`ListPressRecognizer`, on its scroll view): a header's or a
+/// row's menu (`ListMenuOverlay`, the item drawn afresh: the list is upside down, a
+/// picture of it would be too), and dragging a card by its header. Held, a header shows
+/// its menu; moved on away from the menu, its card lifts out of the list and follows
+/// the finger (`LiftedCard`, over the window, so off the list too), the list scrolling
+/// while the finger is near its top or bottom; let go over the list, it lands in its
+/// slot, off it, it flies back. A pointer's press on a header moved on drags at once.
 @MainActor
-final class SpaceOffListDrop: UIView, UIDropInteractionDelegate {
-    private weak var owner: SpaceListDragDrop?
-
-    init(owner: SpaceListDragDrop) {
-        self.owner = owner
-        super.init(frame: .zero)
-        backgroundColor = .clear
-        autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        addInteraction(UIDropInteraction(delegate: self))
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        owner?.isOffList(point, in: self) == true ? self : nil
-    }
-
-    func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
-        owner?.owns(session) ?? false
-    }
-
-    func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
-        UIDropProposal(operation: .move)
-    }
-
-    func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
-        owner?.letGoOffList()
-    }
-}
-
-/// What a space drag carries: the space, for the list it's dropped on.
-final class SpaceDragContext: NSObject {
-    let space: String
-    init(space: String) { self.space = space }
-}
-
-/// The list's drag and drop, and the headers' and rows' menus. On the list's scroll view:
-/// the context menu interaction (`SpaceHeaderMenu`, the rows' `RowMenuMarker`; SwiftUI's
-/// own draws its pictures upside down in the flipped list, and with a preview of its own
-/// wouldn't let a drag start from it) and a drag interaction
-/// (so a header held shows its menu, and moved on, the card lifts: UIKit plays the two
-/// together on one view), which starts a drag only for a touch that came down on a card's
-/// header; a drop interaction, which reports
-/// the drag to `SpaceDrag` and draws the card lifted where the finger holds it
-/// (`LiftedCard`), scrolling the list while the finger is near its top or bottom.
-@MainActor
-final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropInteractionDelegate,
-                                 UIContextMenuInteractionDelegate {
+final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
     var drag: SpaceDrag
     private(set) weak var list: UIScrollView?
-    private lazy var dragInteraction = UIDragInteraction(delegate: self)
-    private lazy var dropInteraction = UIDropInteraction(delegate: self)
-    /// The headers' menu (`SpaceHeaderMenu`): on the list with the drag, so UIKit plays
-    /// the two together (held, the menu; moved on, the card lifts). The rows' menus too.
-    private lazy var menuInteraction = UIContextMenuInteraction(delegate: self)
+    private lazy var press: ListPressRecognizer = {
+        let press = ListPressRecognizer(target: self, action: #selector(pressed(_:)))
+        press.delegate = self
+        press.accepts = { [weak self] p in self?.held(at: p) != nil }
+        press.dragsOnMove = { [weak self] p in
+            guard let self, let list = self.list else { return false }
+            return self.drag.header(at: p, in: list) != nil
+        }
+        press.pressing = { [weak self] on in self?.pressing(on) }
+        return press
+    }()
 
-    /// The dragged card, drawn over the window (the system's own preview is
-    /// invisible), and the drag it follows, frame by frame, anywhere on the screen.
+    /// What's held: a header (its space) or a row.
+    private enum Held {
+        case header(String)
+        case row(RowMenuMarkerView)
+
+        var identifier: String {
+            switch self {
+            case .header(let id): return "space:\(id)"
+            case .row(let row): return "row:\(row.id ?? "")"
+            }
+        }
+    }
+
+    private var held: Held?
+    private var overlay: ListMenuOverlay?
+    /// Where the menu came (the finger), in the window.
+    private var openedAt: CGPoint = .zero
+
+    /// The dragged card, drawn over the window, and the finger it follows, frame by frame.
     private var card: LiftedCard?
-    private var session: (any UIDragDropSession)?
     private var follower: CADisplayLink?
-    /// Over the window while the card is dragged: hears it let go off the list at
-    /// once (the drag itself ends only after the system's own animations).
-    private lazy var offList = SpaceOffListDrop(owner: self)
-    private let touches = TouchCounter()
+    private var finger: CGPoint = .zero
+    /// The card follows the finger.
+    private var dragging = false
+    /// The finger is over the list.
+    private var dropping = false
 
     init(drag: SpaceDrag) {
         self.drag = drag
@@ -453,243 +507,231 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
         guard self.list !== list else { return }
         detach()
         self.list = list
-        list.addGestureRecognizer(touches)
-        touches.began = { [weak self] p in self?.touchDown(at: p) }
-        list.addInteraction(dropInteraction)
-        list.addInteraction(menuInteraction)
-        list.addInteraction(dragInteraction)
-        dragInteraction.isEnabled = true
+        list.addGestureRecognizer(press)
     }
 
     func detach() {
-        offList.removeFromSuperview()
-        touches.view?.removeGestureRecognizer(touches)
-        dragInteraction.view?.removeInteraction(dragInteraction)
-        dropInteraction.view?.removeInteraction(dropInteraction)
-        menuInteraction.view?.removeInteraction(menuInteraction)
+        press.view?.removeGestureRecognizer(press)
         list = nil
     }
 
-    /// A touch came down on the list.
-    private func touchDown(at p: CGPoint) {
-        // A lift whose end UIKit didn't report (none is open now that the list is touched).
-        if !menuOpen { drag.menuLifted = nil }
+    /// Along with everything but a pan (the list's scrolling), as Telegram's: a button in
+    /// a row (a chip) doesn't take the press from it. Begun, it takes the touch (`takeTouch`).
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        !(other is UIPanGestureRecognizer)
     }
 
-    /// The list's menu is up (from its display to the end of its dismissal).
-    private var menuOpen = false
+    // MARK: The press
 
-    // MARK: The headers' and rows' menus
+    /// The header or the row (with a menu) at `p`, in the list.
+    private func held(at p: CGPoint) -> Held? {
+        guard let list else { return nil }
+        if let id = drag.header(at: p, in: list)?.space { return .header(id) }
+        guard let row = drag.row(at: p, in: list), row.id != nil, row.menu().contains(where: { !$0.isEmpty }) else { return nil }
+        return .row(row)
+    }
 
-    /// A header held (or right-clicked): its space's menu; a row: its own (`RowMenuMarker`).
-    /// The menus' identifiers: `space:` or `row:` and the id.
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
-                                configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
-        guard let list, let controller = drag.controller else { return nil }
-        if let id = drag.header(at: location, in: list)?.space {
-            guard controller.workspace.space(id) != nil else { return nil }
-            return UIContextMenuConfiguration(identifier: "space:\(id)" as NSString, previewProvider: nil) { _ in
-                SpaceHeaderMenu.menu(space: id, controller: controller)
+    /// The held item shrinks (Telegram's: linearly, to 15 pt narrower, by the menu's time)
+    /// or springs back.
+    private func pressing(_ on: Bool) {
+        if on, let held = held(at: press.start) {
+            withAnimation(.linear(duration: ListPressRecognizer.ramp)) { drag.pressing = held.identifier }
+        } else if !on, drag.pressing != nil {
+            withAnimation(.easeOut(duration: 0.2)) { drag.pressing = nil }
+        }
+    }
+
+    @objc private func pressed(_ press: ListPressRecognizer) {
+        guard let list, let window = list.window else { return }
+        let p = press.location(in: window)
+        finger = p
+        switch press.state {
+        case .began:
+            guard let held = held(at: press.start) else { return }
+            self.held = held
+            takeTouch(from: press)
+            if press.movedOff, case .header(let id) = held {
+                startDragging(id)
+            } else {
+                openedAt = p
+                openMenu(for: held, in: window)
+            }
+        case .changed:
+            if dragging { return }
+            guard let overlay, !overlay.dismissing else { return }
+            let local = overlay.convert(p, from: window)
+            // A header's menu: the finger gone off it and off the lifted header, the card lifts.
+            if case .header(let id) = held, hypot(p.x - openedAt.x, p.y - openedAt.y) > 12,
+               !overlay.isOverMenu(local, margin: 24), !overlay.isOverItem(local, margin: 12) {
+                closeMenuAtOnce()
+                startDragging(id)
+                return
+            }
+            overlay.fingerMoved(to: local)
+        case .ended:
+            if dragging {
+                letGo(at: p)
+            } else if let overlay {
+                overlay.fingerLifted(at: overlay.convert(p, from: window))
+            }
+        case .cancelled, .failed:
+            if dragging { letGo(at: nil) }
+        default:
+            break
+        }
+    }
+
+    /// Begun, the press takes the touch from everything else on it (the list's scrolling,
+    /// the row's press, swipe and tap), as Telegram's does.
+    private func takeTouch(from press: ListPressRecognizer) {
+        for other in press.touch?.gestureRecognizers ?? [] where other !== press && other.isEnabled {
+            other.isEnabled = false
+            other.isEnabled = true
+        }
+    }
+
+    // MARK: The menu
+
+    private func openMenu(for held: Held, in window: UIWindow) {
+        overlay?.removeFromSuperview()
+        let source: ListMenuOverlay.Source
+        switch held {
+        case .header(let id):
+            guard let frame = drag.headerFrame(id, in: window), let picture = headerPicture(id, width: frame.width, in: window),
+                  let controller = drag.controller else { return }
+            source = .init(identifier: held.identifier, frame: frame, picture: picture, radius: SpaceCard.radius,
+                           menu: SpaceHeaderMenu.menu(space: id, controller: controller), open: nil)
+        case .row(let row):
+            let frame = row.convert(row.bounds, to: window)
+            guard frame.width > 0, frame.height > 0, let picture = render(row.picture(frame.size), in: window) else { return }
+            source = .init(identifier: held.identifier, frame: frame, picture: picture, radius: SpaceCard.radius,
+                           menu: row.menu(), open: row.open)
+        }
+        let overlay = ListMenuOverlay(source: source, dark: drag.theme.isDark,
+                                      compact: window.traitCollection.horizontalSizeClass == .compact)
+        overlay.returnFrame = { [weak self, weak window] in
+            guard let self, let window else { return nil }
+            switch held {
+            case .header(let id): return self.drag.headerFrame(id, in: window)
+            case .row(let row):
+                guard let id = row.id, let marker = self.drag.row(id) else { return nil }
+                return marker.convert(marker.bounds, to: window)
             }
         }
-        guard let row = drag.row(at: location, in: list), let id = row.id else { return nil }
-        let menu = row.menu()
-        guard menu.contains(where: { !$0.isEmpty }) else { return nil }
-        return UIContextMenuConfiguration(identifier: "row:\(id)" as NSString, previewProvider: nil) { _ in
-            PhoneMenuBuilder.uiMenu(menu)
-        }
-    }
-
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
-                                highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        let preview = menuPreview(identifier as? String)
-        // Lifted: the picture stands in for it.
-        if preview != nil { drag.menuLifted = identifier as? String }
-        return preview
-    }
-
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration,
-                                animator: (any UIContextMenuInteractionAnimating)?) {
-        menuOpen = true
-    }
-
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration,
-                                animator: (any UIContextMenuInteractionAnimating)?) {
-        let done = { [weak self] in
+        overlay.onDismissed = { [weak self, weak overlay] in
             guard let self else { return }
-            self.menuOpen = false
-            self.drag.menuLifted = nil
+            if self.overlay === overlay { self.overlay = nil }
+            if self.drag.menuLifted == held.identifier { self.drag.menuLifted = nil }
         }
-        if let animator { animator.addCompletion(done) } else { done() }
+        self.overlay = overlay
+        // Lifted: its picture stands in for it, the item itself is hidden in the list.
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            drag.pressing = nil
+            drag.menuLifted = held.identifier
+        }
+        let (container, sibling) = list.map { menuContainer(over: $0, in: window) } ?? (window, nil)
+        overlay.present(in: container, over: sibling)
     }
 
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
-                                dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        menuPreview(identifier as? String)
+    /// Where the menu goes: over the list's screen in its container, when the list is a
+    /// full-screen child's (the iPhone's: `PhoneNavController`, which pushes the pane
+    /// screen over it), so a pushed screen covers the menu as it goes; else the window.
+    private func menuContainer(over list: UIView, in window: UIWindow) -> (UIView, UIView?) {
+        var view: UIView? = list
+        while let v = view {
+            if let child = controller(of: v), let parent = child.parent, let host = parent.viewIfLoaded,
+               v.superview === host, v.bounds.size == window.bounds.size {
+                return (host, v)
+            }
+            view = v.superview
+        }
+        return (window, nil)
     }
 
-    private func menuPreview(_ identifier: String?) -> UITargetedPreview? {
-        guard let identifier else { return nil }
-        if identifier.hasPrefix("space:") { return headerPreview(String(identifier.dropFirst(6))) }
-        if identifier.hasPrefix("row:") { return rowPreview(String(identifier.dropFirst(4))) }
+    /// The view controller whose view `view` is (SwiftUI's hosting view has a key-press
+    /// responder before its controller in the chain).
+    private func controller(of view: UIView) -> UIViewController? {
+        var next = view.next
+        while let responder = next, !(responder is UIView) {
+            if let controller = responder as? UIViewController { return controller.view === view ? controller : nil }
+            next = responder.next
+        }
         return nil
     }
 
-    /// The header drawn afresh where it is (the list is upside down: a picture of the
-    /// header itself would be too).
-    private func headerPreview(_ id: String) -> UITargetedPreview? {
-        guard let list, let window = list.window, let controller = drag.controller,
-              let space = controller.workspace.space(id),
-              let frame = drag.headerFrame(id, in: window) else { return nil }
+    /// A header's menu went for its card's drag: at once.
+    private func closeMenuAtOnce() {
+        overlay?.removeFromSuperview()
+        overlay = nil
+        drag.menuLifted = nil
+    }
+
+    private func headerPicture(_ id: String, width: CGFloat, in window: UIWindow) -> UIImage? {
+        guard let controller = drag.controller, let space = controller.workspace.space(id) else { return nil }
         let closed = controller.closedSpaces.contains(id)
         let page = controller.workspace.phoneList(space: id)
         let bar = SpaceHeaderBar(space: space, hasRows: !page.isEmpty, closed: closed,
                                  bodyShown: !closed && !page.isEmpty, isActive: false, hovering: false)
-            .frame(width: frame.width)
+            .frame(width: width)
             .environment(controller)
             .environment(\.theme, drag.theme)
             .environment(\.rowGround, drag.theme.surface)
-        return uprightPreview(bar, frame: frame, in: list)
+        return render(bar, in: window)
     }
 
-    /// The row drawn afresh where it is, as the header is.
-    private func rowPreview(_ id: String) -> UITargetedPreview? {
-        guard let list, let window = list.window, let row = drag.row(id) else { return nil }
-        let frame = row.convert(row.bounds, to: window)
-        return uprightPreview(row.picture(frame.size), frame: frame, in: list)
-    }
-
-    /// `content` as a picture at `frame` (the window's), placed in the list turned back upright.
-    private func uprightPreview(_ content: some View, frame: CGRect, in list: UIScrollView) -> UITargetedPreview? {
-        guard let window = list.window, frame.width > 0, frame.height > 0 else { return nil }
+    private func render(_ content: some View, in window: UIWindow) -> UIImage? {
         let renderer = ImageRenderer(content: content)
         renderer.scale = window.traitCollection.displayScale
-        guard let image = renderer.uiImage else { return nil }
-        let view = UIImageView(image: image)
-        view.frame = CGRect(origin: .zero, size: frame.size)
-        let parameters = UIPreviewParameters()
-        parameters.backgroundColor = .clear
-        parameters.visiblePath = UIBezierPath(roundedRect: view.bounds, cornerRadius: SpaceCard.radius)
-        // Over the list, in the nearest view that isn't upside down: in the list (turned
-        // upright), the menu shrinking back into it as it went was upside down; in the
-        // window, the lifted picture stayed under the menu's dimming.
-        let container = uprightView(over: list, in: window)
-        return UITargetedPreview(view: view, parameters: parameters,
-                                 target: UIPreviewTarget(container: container,
-                                                         center: container.convert(CGPoint(x: frame.midX, y: frame.midY), from: window)))
+        return renderer.uiImage
     }
 
-    /// `list`, or the nearest view over it that isn't upside down.
-    private func uprightView(over list: UIView, in window: UIWindow) -> UIView {
-        var view = list
-        while isUpsideDown(view, in: window), let parent = view.superview { view = parent }
-        return view
-    }
+    // MARK: The card's drag
 
-    private func isUpsideDown(_ view: UIView, in window: UIWindow) -> Bool {
-        view.convert(CGPoint(x: 0, y: 1), to: window).y < view.convert(CGPoint.zero, to: window).y
-    }
-
-    /// The space a drag carries.
-    private static func space(of items: [UIDragItem]) -> String? {
-        items.lazy.compactMap { ($0.localObject as? SpaceDragContext)?.space }.first
-    }
-
-    private func space(of session: any UIDropSession) -> String? {
-        session.localDragSession.flatMap { Self.space(of: $0.items) }
-    }
-
-    // MARK: Drag
-
-    func dragInteraction(_ interaction: UIDragInteraction, itemsForBeginning session: any UIDragSession) -> [UIDragItem] {
-        // Held until its menu came, the drag starts where the finger has gone since:
-        // what it lifts is the header the touch came down on.
-        guard let list, let window = list.window, let id = drag.header(at: touches.downAt, in: list)?.space,
-              let card = drag.cardFrames(in: window)[id] else { return [] }
-        let p = list.convert(touches.downAt, to: window)
-        drag.grab = CGPoint(x: p.x - card.minX, y: p.y - card.minY)
-        let provider = NSItemProvider()
-        provider.registerDataRepresentation(forTypeIdentifier: SpaceDrag.typeID, visibility: .ownProcess) { done in
-            done(Data(id.utf8), nil)
-            return nil
-        }
-        let item = UIDragItem(itemProvider: provider)
-        item.localObject = SpaceDragContext(space: id)
-        return [item]
-    }
-
-    /// Lifted, the list draws the card (`LiftedCard`): the system's preview goes where
-    /// it likes (centered under the finger) and can't change as it lands.
-    func dragInteraction(_ interaction: UIDragInteraction, previewForLifting item: UIDragItem,
-                         session: any UIDragSession) -> UITargetedDragPreview? {
-        guard let view = interaction.view, view.window != nil else { return nil }
-        let parameters = UIDragPreviewParameters()
-        parameters.backgroundColor = .clear
-        parameters.visiblePath = UIBezierPath(rect: CGRect(x: 0, y: 0, width: 1, height: 1))
-        parameters.shadowPath = UIBezierPath()
-        let dot = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
-        dot.alpha = 0.01
-        let at = list.map { view.convert(touches.downAt, from: $0) } ?? .zero
-        return UITargetedDragPreview(view: dot, parameters: parameters,
-                                     target: UIDragPreviewTarget(container: view, center: at))
-    }
-
-    func dragInteraction(_ interaction: UIDragInteraction, previewForCancelling item: UIDragItem,
-                         withDefault defaultPreview: UITargetedDragPreview) -> UITargetedDragPreview? {
-        nil
-    }
-
-    func dragInteraction(_ interaction: UIDragInteraction, sessionIsRestrictedToDraggingApplication session: any UIDragSession) -> Bool {
-        true
-    }
-
-    func dragInteraction(_ interaction: UIDragInteraction, sessionAllowsMoveOperation session: any UIDragSession) -> Bool {
-        true
-    }
-
-    /// The drag started: the card lifts out of the list (over everything, so it
-    /// follows the finger off the list too).
-    func dragInteraction(_ interaction: UIDragInteraction, sessionWillBegin session: any UIDragSession) {
-        guard let list, let window = list.window, let id = Self.space(of: session.items) else { return }
+    /// Space `id`'s card lifts out of the list and follows the finger, held where the
+    /// touch came down on it.
+    private func startDragging(_ id: String) {
+        guard let list, let window = list.window, let frame = drag.cardFrames(in: window)[id] else { return }
         removeCard()
+        let down = list.convert(press.start, to: window)
+        drag.grab = CGPoint(x: down.x - frame.minX, y: down.y - frame.minY)
         let made = makeCard(id, in: list)
         drag.begin(id, in: window)
+        dragging = true
+        dropping = true
         guard let made else { return }
-        offList.frame = window.bounds
-        window.addSubview(offList)
         window.addSubview(made)
         card = made
-        self.session = session
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         follow()
         let link = CADisplayLink(target: self, selector: #selector(follow))
         link.add(to: .main, forMode: .common)
         follower = link
     }
 
-    func dragInteraction(_ interaction: UIDragInteraction, session: any UIDragSession,
-                         didEndWith operation: UIDropOperation) {
-        guard Self.space(of: session.items) != nil else { return }
-        stopFollowing()
-        if let list { flyBack(in: list) }
-    }
-
     /// Held where the finger took it (desktop's `dragLayout` card), wherever it is; the
     /// list scrolls while the finger is near its top or bottom.
     @objc private func follow() {
-        guard let session, let card, !card.landing, let window = card.superview else { return }
-        let p = session.location(in: window)
-        card.frame.origin = CGPoint(x: p.x - drag.grab.x, y: p.y - drag.grab.y)
+        guard dragging, let card, !card.landing, let window = card.superview, let id = drag.dragged else { return }
+        card.frame.origin = CGPoint(x: finger.x - drag.grab.x, y: finger.y - drag.grab.y)
+        let over = !isOffList(finger, in: window)
+        if over != dropping {
+            dropping = over
+            if over { drag.enter(id, in: window) } else { drag.exit() }
+        }
         autoscroll()
         // The finger may hold still while the cards part: once they're in place, the slot
         // is decided again (`SpaceDrag.update`).
-        if dropping { drag.update(at: p, in: window) }
+        if dropping { drag.update(at: finger, in: window) }
     }
 
     /// Near the list's visible top or bottom (its insets: the status bar's, the
     /// header's), it scrolls that way, faster nearer the edge.
     private func autoscroll() {
-        guard let list, let session, dropping else { return }
-        let p = session.location(in: list)
+        guard let list, let window = list.window, dropping else { return }
+        let p = list.convert(finger, from: window)
         let inset = list.adjustedContentInset
         let top = list.bounds.minY + inset.top, bottom = list.bounds.maxY - inset.bottom
         let zone: CGFloat = 70, most: CGFloat = 14
@@ -703,19 +745,31 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
         list.contentOffset.y = y
     }
 
-    /// The drag is over the list.
-    private var dropping = false
-
-    private func stopFollowing() {
+    /// Let go (nil: the touch was taken away): over the list, the space moves and the card
+    /// glides into its slot; off it, the card flies back.
+    private func letGo(at point: CGPoint?) {
         follower?.invalidate()
         follower = nil
-        session = nil
-        offList.removeFromSuperview()
+        dragging = false
+        guard let list, let window = list.window else { return removeCard() }
+        if let point, !isOffList(point, in: window) {
+            dropping = false
+            drag.drop()
+            guard let slot = drag.slotFrame(in: window) else {
+                removeCard()
+                drag.end()
+                return
+            }
+            land(in: slot) { [drag] in drag.end() }
+        } else {
+            dropping = false
+            flyBack(in: list)
+        }
     }
 
     /// Whether `point` (in `view`) is off the list.
-    func isOffList(_ point: CGPoint, in view: UIView) -> Bool {
-        guard let list, list.window != nil else { return false }
+    private func isOffList(_ point: CGPoint, in view: UIView) -> Bool {
+        guard let list, list.window != nil else { return true }
         return !list.convert(list.bounds, to: view).contains(point)
     }
 
@@ -760,22 +814,13 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
         card = nil
     }
 
-    /// This list's drag, now over `session`.
-    func owns(_ session: any UIDropSession) -> Bool {
-        guard let mine = self.session, let theirs = session.localDragSession else { return false }
-        return mine as AnyObject === theirs as AnyObject
-    }
-
-    /// Let go off the list: the card flies back at once.
-    func letGoOffList() {
-        stopFollowing()
-        if let list { flyBack(in: list) }
-    }
-
     /// Let go off the list (or the drag was called off): the card flies back into its
     /// slot, where it was.
     private func flyBack(in list: UIScrollView) {
-        guard let card, !card.landing else { return }
+        guard let card, !card.landing else {
+            drag.cancelled()
+            return
+        }
         card.landing = true  // no longer follows; flies back once
         drag.exit()
         // The slot is back where the card was once the list has laid that out.
@@ -788,58 +833,6 @@ final class SpaceListDragDrop: NSObject, UIDragInteractionDelegate, UIDropIntera
             }
             self.land(in: slot, duration: 0.3) { [drag = self.drag] in drag.cancelled() }
         }
-    }
-
-    // MARK: Drop
-
-    func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
-        space(of: session) != nil
-    }
-
-    func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnter session: any UIDropSession) {
-        guard let window = list?.window, let id = space(of: session) else { return }
-        dropping = true
-        drag.enter(id, in: window)
-    }
-
-    func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
-        guard let window = list?.window, space(of: session) != nil else { return UIDropProposal(operation: .cancel) }
-        drag.update(at: session.location(in: window), in: window)
-        return UIDropProposal(operation: .move)
-    }
-
-    func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: any UIDropSession) {
-        guard space(of: session) != nil else { return }
-        dropping = false
-        drag.exit()
-    }
-
-    func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: any UIDropSession) {
-        guard space(of: session) != nil else { return }
-        dropping = false
-        drag.end()
-    }
-
-    /// Let go: the space moves, and the card glides into its slot.
-    func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
-        guard let window = list?.window, space(of: session) != nil else { return }
-        dropping = false
-        drag.drop()
-        stopFollowing()
-        guard let slot = drag.slotFrame(in: window) else {
-            removeCard()
-            return
-        }
-        // The card glides into its slot, turning into the card in the list on the way.
-        land(in: slot) { [drag] in drag.landed() }
-    }
-
-    /// The system's (invisible) preview goes to the slot too, so the drop ends.
-    func dropInteraction(_ interaction: UIDropInteraction, previewForDropping item: UIDragItem,
-                         withDefault defaultPreview: UITargetedDragPreview) -> UITargetedDragPreview? {
-        guard let window = list?.window, let slot = drag.slotFrame(in: window) else { return nil }
-        return defaultPreview.retargetedPreview(with: UIDragPreviewTarget(container: window,
-                                                                          center: CGPoint(x: slot.midX, y: slot.midY)))
     }
 }
 
