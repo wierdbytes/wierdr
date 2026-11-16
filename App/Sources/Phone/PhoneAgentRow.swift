@@ -6,11 +6,11 @@ import WierdrModel
 enum PhoneRowMetrics {
     /// Side insets; the text and the separators start here.
     static let inset: CGFloat = 16
-    static let agentHeight: CGFloat = 76
+    static let agentHeight: CGFloat = 56
     static let kidHeight: CGFloat = 50
     static let kidTerminalHeight: CGFloat = 36
     static let paneHeight: CGFloat = 60
-    /// The status badge (Telegram's unread badge) and the pin glyph in its place.
+    /// The pin glyph.
     static let badge: CGFloat = 20
     /// A terminal row's icon; its text (and separator) start after it.
     static let paneIcon: CGFloat = 22
@@ -19,19 +19,18 @@ enum PhoneRowMetrics {
     static let treeLeading: CGFloat = 22
 }
 
-/// An agent's row, Telegram's chat row without the avatar (76 pt, full width):
+/// An agent's row, Telegram's chat row without the avatar (56 pt, full width):
 /// 1. its title, and where Telegram has the date: its machine (dim) and how long
-///    it has been in its state;
-/// 2. its model (cut first when room runs out), @effort and its context's ring;
-/// 3. its sub-agents and terminals (tap: fold or unfold them), its space's name on a
-///    gray chip as theirs (in Go to; cut when room runs out); on the right, Telegram's
-///    unread badge: needs you (red), done (green), working (yellow), nothing
-///    while idle; the pin glyph there when it's pinned and has no badge.
+///    it has been in its state, on a pill of its status's color: needs you (red),
+///    done (green), working (yellow), plain while idle (`PhoneAgeLabel`);
+/// 2. its context's ring, its model (cut first when room runs out), @effort, its
+///    sub-agents and terminals (tap: fold or unfold them); on the right its space's name
+///    on a gray chip as theirs (in Go to; cut when room runs out) and the pin glyph.
 struct PhoneAgentRowContent: View {
     var terminal: TerminalInfo
     var tab: Tab?
     var space: Space
-    /// The space's name leads line 3 (Go to, where rows of all spaces mix; a card names its space).
+    /// The space's name on line 2 (Go to, where rows of all spaces mix; a card names its space).
     var showsSpace: Bool
     var subtree: [SubAgent]
     /// Its sub-agents show under it.
@@ -58,10 +57,9 @@ struct PhoneAgentRowContent: View {
     private func content(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             titleLine(now: now).frame(height: 22)
-            contextLine(now: now).frame(height: 20)
-            spaceLine.frame(height: 22)
+            secondLine.frame(height: 22)
         }
-        .padding(.top, 7)
+        .padding(.top, 6)
         .padding(.horizontal, PhoneRowMetrics.inset)
         .frame(height: PhoneRowMetrics.agentHeight, alignment: .top)
         .accessibilityElement(children: .ignore)
@@ -89,25 +87,21 @@ struct PhoneAgentRowContent: View {
                         .foregroundStyle(theme.dim)
                         .lineLimit(1)
                 }
-                Text(Format.age(since: terminal.statusChangedAt, now: now) ?? "")
-                    .font(.mono(13))
-                    .foregroundStyle(theme.muted)
+                PhoneAgeLabel(age: Format.age(since: terminal.statusChangedAt, now: now), status: terminal.status)
             }
             .fixedSize()
         }
     }
 
-    /// Model, @effort, then the context's ring: the model gives way first.
-    private func contextLine(now: Date) -> some View {
-        PhoneModelLine(terminal: terminal, size: 13)
-    }
-
-    private var spaceLine: some View {
+    /// The context's ring, model, @effort (the model gives way first), the sub-agents' and
+    /// terminals' chips, then on the right the space (Go to) and the pin.
+    private var secondLine: some View {
         let kidAgents = subtree.filter(\.isAgent)
         let kidTerms = subtree.count - kidAgents.count
         // pi's own in-process sub-agents (pi-herdr's count) have no terminal: they only add to the count.
         let inner = terminal.meta?.subagents ?? 0
         return HStack(spacing: 8) {
+            PhoneModelLine(terminal: terminal, size: 13, ringFirst: true)
             if kidAgents.count + inner > 0 {
                 PhoneKidBadge(icon: "bot", count: kidAgents.count + inner, open: open,
                               alert: kidAgents.contains { $0.terminal.status == .blocked },
@@ -120,11 +114,16 @@ struct PhoneAgentRowContent: View {
                               label: kidTerms == 1 ? "1 terminal" : "\(kidTerms) terminals", action: toggleKids)
                     .fixedSize()
             }
+            Spacer(minLength: 0)
             if showsSpace {
                 PhoneSpaceTag(name: space.displayName)
             }
-            Spacer(minLength: 0)
-            PhoneStatusBadge(status: terminal.status, pinned: terminal.pinned)
+            if terminal.pinned {
+                Icon("ui.tg-pin", size: PhoneRowMetrics.badge, color: theme.dim)
+                    .accessibilityLabel("Pinned")
+                    // The glyph comes and goes at once (Telegram's), not with the row's move.
+                    .transition(.identity)
+            }
         }
     }
 
@@ -165,19 +164,26 @@ struct PhoneAgentRowContent: View {
 
 // MARK: - Pieces
 
-/// An agent's model line: its model, @effort and its context's ring. The model is
-/// cut first when room runs out; @effort and the ring stay whole.
+/// An agent's model line: its model, @effort and its context's ring (an agent's row: the
+/// ring first, and no room taken past them). The model is cut first when room runs out;
+/// @effort and the ring stay whole.
 struct PhoneModelLine: View {
     var terminal: TerminalInfo
     var size: CGFloat
     /// A sub-agent's status (its own `kidStatus`): idle dims the model.
     var status: AgentStatus?? = nil
+    /// The ring before the model, and the line only as wide as it is (an agent's row,
+    /// where its chips follow).
+    var ringFirst = false
     @Environment(\.theme) private var theme
 
     var body: some View {
         let meta = terminal.meta
         let quiet = (status ?? terminal.status) == .idle
         HStack(spacing: 8) {
+            if ringFirst {
+                PhoneContextRing(meta: meta).fixedSize()
+            }
             HStack(spacing: 5) {
                 Text(meta?.model ?? terminal.program.name)
                     .foregroundStyle(quiet ? theme.dim : theme.muted)
@@ -189,8 +195,10 @@ struct PhoneModelLine: View {
                         .fixedSize()
                 }
             }
-            PhoneContextRing(meta: meta).fixedSize()
-            Spacer(minLength: 0)
+            if !ringFirst {
+                PhoneContextRing(meta: meta).fixedSize()
+                Spacer(minLength: 0)
+            }
         }
         .font(.mono(size))
     }
@@ -230,33 +238,25 @@ enum PhoneRowText {
     }
 }
 
-/// The bottom-right badge, where Telegram has the unread count: needs you, done
-/// and working solid circles (a chat marked unread), idle nothing; the
-/// pin glyph instead when pinned without one (an unread badge hides the pin).
-struct PhoneStatusBadge: View {
+/// How long an agent has been in its state, where Telegram has the date: on a pill
+/// filled with its status's color (needs you, done, working), as the header's counts
+/// (`StatusBadges`); plain muted text while idle.
+struct PhoneAgeLabel: View {
+    var age: String?
     var status: AgentStatus?
-    var pinned: Bool
     @Environment(\.theme) private var theme
 
     var body: some View {
-        let d = PhoneRowMetrics.badge
-        Group {
-            switch status {
-            case .blocked:
-                Circle().fill(theme.blocked).frame(width: d, height: d)
-            case .done:
-                Circle().fill(theme.done).frame(width: d, height: d)
-            case .working:
-                Circle().fill(theme.working).frame(width: d, height: d)
-            case .idle, nil:
-                if pinned {
-                    Icon("ui.tg-pin", size: d, color: theme.dim)
-                        .accessibilityLabel("Pinned")
-                }
-            }
+        let text = Text(age ?? "").font(.mono(13))
+        if let status, status != .idle {
+            text
+                .foregroundStyle(theme.background)
+                .padding(.horizontal, 6)
+                .frame(minWidth: 20, minHeight: 20)
+                .background(theme.color(for: status), in: Capsule())
+        } else {
+            text.foregroundStyle(theme.muted)
         }
-        // The glyph comes and goes at once (Telegram's), not with the row's move.
-        .transition(.identity)
     }
 }
 
