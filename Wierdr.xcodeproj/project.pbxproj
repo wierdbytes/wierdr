@@ -58,6 +58,7 @@
 		8EB50B847ABF07923FE8EF67 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D52861BA8BB122CA7C65ADB2 /* ComposerBar.swift */; };
 		95E3B7F160B52277B3942777 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8291C8C0633695801471D97 /* Theme.swift */; };
 		997F8D2F476056E4F6653FC8 /* TerminalPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6654E2F2DE8CC92909567AD /* TerminalPanel.swift */; };
+		9A165F94B15012E02066E6CE /* SpacesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B68942611F05171A0763868 /* SpacesListView.swift */; };
 		9CF692D9846CA0F210A5C27A /* SidebarResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6452CE78BC248BFD893FCCB3 /* SidebarResizeHandle.swift */; };
 		9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD1D033D2D7C97DEF34DCD0 /* Previews.swift */; };
 		9E306F2CA9F4E2F07E8C1467 /* ListMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11F7172C86560D747AF38A0E /* ListMenu.swift */; };
@@ -143,6 +144,7 @@
 		20A5417D9BCC91A5B4906C41 /* SpaceHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceHeader.swift; sourceTree = "<group>"; };
 		24C773688B33E3F0413C5204 /* KeyboardCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCover.swift; sourceTree = "<group>"; };
 		24CFA2C9F9D15FF3073EDD5A /* KeyPanelLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyPanelLayer.swift; sourceTree = "<group>"; };
+		2B68942611F05171A0763868 /* SpacesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesListView.swift; sourceTree = "<group>"; };
 		2E36CF13C460CDEB0145C6CE /* WorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceView.swift; sourceTree = "<group>"; };
 		31CAC83BAAFE0CB19F2F6FBF /* PhoneListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneListRow.swift; sourceTree = "<group>"; };
 		351E2DA61EC61DF8DAEDBC58 /* LiveActivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
@@ -261,6 +263,7 @@
 				C803598F24AD47DB7A42D7D0 /* SpaceDrag.swift */,
 				20A5417D9BCC91A5B4906C41 /* SpaceHeader.swift */,
 				4FAB055678CBEED35D324983 /* SpacesList.swift */,
+				2B68942611F05171A0763868 /* SpacesListView.swift */,
 			);
 			path = Sidebar;
 			sourceTree = "<group>";
@@ -676,6 +679,7 @@
 				ED3AFBEDB413912EC56AB45B /* SpaceDrag.swift in Sources */,
 				47BFA075FFDB3DD630E66FA2 /* SpaceHeader.swift in Sources */,
 				EAC16D41AEBCC5EC9EC37FEB /* SpacesList.swift in Sources */,
+				9A165F94B15012E02066E6CE /* SpacesListView.swift in Sources */,
 				24484EFD85EC8F1800F97C9F /* SubAgentPeek.swift in Sources */,
 				3129E5A3E56BC7C93B4845AF /* TabBar.swift in Sources */,
 				1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */,
@@ -771,7 +775,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 72;
+				CURRENT_PROJECT_VERSION = 73;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -857,7 +861,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 72;
+				CURRENT_PROJECT_VERSION = 73;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

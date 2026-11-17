@@ -294,7 +294,8 @@ struct PhoneRowPan: UIGestureRecognizerRepresentable {
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             guard let pan = other as? UIPanGestureRecognizer, other !== g else { return false }
             // The list's scrolling waits for the row's vertical rejection (else it wins before 25 pt).
-            if let scroll = pan.view as? UIScrollView, scroll.panGestureRecognizer === pan { return true }
+            // A scroll view's pan, on it or moved off it (the sidebar's list has it on its own view).
+            if pan.isScrollViewPan { return true }
             // An open row: a horizontal swipe on it closes it, rather than paging.
             return parent.isOpen
         }

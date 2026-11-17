@@ -9,9 +9,9 @@ import WierdrModel
 /// them the rest by their latest status change, the oldest on top; an agent's sub-agents
 /// over it (`TreeLines.upward`); the space's terminals and desktop panels over its agents.
 ///
-/// One view in the list (its lazy stack's item), so a fold or a pin animates inside it
-/// and a drag lifts it whole (`SpaceDrag`): dragged, it is its own slot, a dashed outline
-/// as tall as itself.
+/// One block of the list (in its own host, `SpacesListController`), so a fold or a pin
+/// animates inside it and a drag lifts it whole (`SpaceDrag`): dragged, it is its own slot, a
+/// dashed outline as tall as itself.
 struct SpaceCard: View {
     var space: Space
 

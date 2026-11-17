@@ -13,8 +13,12 @@ import UIKit
 ///   magnifier (which bounces, the capsule a little too), "Release to search";
 ///   pulled back under the threshold (less `hysteresis`) it disarms: a light haptic,
 ///   and it empties again;
-/// - let go armed, Go to opens (`phaseChanged` says so); the field stays whole and
+/// - let go armed, Go to opens (`interacting(false)` says so); the field stays whole and
 ///   fades as the list settles. Let go before, it goes back the way it came.
+///
+/// The list feeds it: `scrolled` with how far it's past its end, every time it moves, and
+/// `interacting` as a finger takes it and lets it go (the sidebar's list, from its
+/// scroller's delegate, `SpacesListController`).
 ///
 /// Only `PullToSearchField` reads it: a step of the finger redraws the field, not the list.
 @MainActor @Observable
@@ -31,7 +35,7 @@ final class PullToSearch {
     @ObservationIgnored let threshold: CGFloat
     /// The list's end it's pulled past: `.top` (pulled down), `.bottom` (pulled up).
     @ObservationIgnored let edge: VerticalEdge
-    /// A finger is on the list (its scroll phase is interacting).
+    /// A finger is on the list (dragging it).
     @ObservationIgnored private var dragging = false
     /// A finger took the list past its end; until it's back at its end.
     @ObservationIgnored private var pulling = false
@@ -46,20 +50,7 @@ final class PullToSearch {
         self.edge = edge
     }
 
-    /// How far a scroll view is pulled past its top (0 at rest or scrolled down).
-    nonisolated static func overscroll(_ g: ScrollGeometry) -> CGFloat {
-        max(0, -(g.contentOffset.y + g.contentInsets.top))
-    }
-
-    /// How far a scroll view is pulled past its bottom (0 at rest or scrolled up), given
-    /// its height under its insets (`viewport`) and its top inset, measured by the list: the
-    /// geometry's `containerSize` already goes without the insets (seen on iOS 18.4).
-    nonisolated static func overscrollBottom(_ g: ScrollGeometry, viewport: CGFloat, top: CGFloat) -> CGFloat {
-        let end = max(-top, g.contentSize.height - viewport - top)
-        return max(0, g.contentOffset.y - end)
-    }
-
-    /// The list moved: `d` is `overscroll` of its geometry.
+    /// The list moved: `d` is how far it's past its end (0 within it).
     func scrolled(_ d: CGFloat) {
         guard d > 0.5 else { reset(); return }
         if dragging, !pulling {
@@ -81,13 +72,14 @@ final class PullToSearch {
         }
     }
 
-    /// The list's scroll phase changed; true when Go to should open (let go armed).
-    func phaseChanged(from old: ScrollPhase, to new: ScrollPhase) -> Bool {
-        if new == .interacting {
+    /// A finger took the list (true) or let it go (false: its drag ended, the list may go on
+    /// decelerating); true when Go to should open (let go armed).
+    func interacting(_ on: Bool) -> Bool {
+        if on {
             dragging = true
             return false
         }
-        guard old == .interacting else { return false }
+        guard dragging else { return false }
         dragging = false
         guard armed, !committed else { return false }
         committed = true

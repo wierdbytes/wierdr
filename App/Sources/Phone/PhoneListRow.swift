@@ -51,7 +51,8 @@ struct PhoneListRow<Content: View>: View {
     @Environment(\.theme) private var theme
     /// What's under the row: the list's chrome, a card's surface.
     @Environment(\.rowGround) private var ground
-    /// In the sidebar's upside-down list (`SpacesList`): the menu is the list's (UIKit's).
+    /// In the sidebar's list (`SpacesList`, each block upside down in its host): the menu is
+    /// the list's (UIKit's).
     @Environment(\.invertedList) private var inverted
     @Environment(SpaceDrag.self) private var drag: SpaceDrag?
     @Environment(\.displayScale) private var displayScale
@@ -424,7 +425,8 @@ private struct PhoneRowMenu: ViewModifier {
 private struct InvertedListKey: EnvironmentKey { static let defaultValue = false }
 
 extension EnvironmentValues {
-    /// The rows are in an upside-down list (the sidebar's, `SpacesList`).
+    /// The rows are in the sidebar's list (`SpacesList`), each block upside down in its host
+    /// and flipped back: the list draws their menus.
     var invertedList: Bool {
         get { self[InvertedListKey.self] }
         set { self[InvertedListKey.self] = newValue }

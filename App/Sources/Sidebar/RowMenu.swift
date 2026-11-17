@@ -67,10 +67,11 @@ struct PhoneMenuButtons: View {
     }
 }
 
-/// An empty view behind a row of the sidebar's upside-down list, so the list's own press
-/// (`SpaceListDragDrop`) finds the row held, its menu, how to draw it and how to open it.
-/// SwiftUI's `contextMenu` can't be used there: its pictures of a view in the flipped
-/// list come out upside down (held, before the menu) and morph through a line.
+/// An empty view behind a row of the sidebar's list (each block upside down in its host,
+/// flipped back), so the list's own press (`SpaceListDragDrop`) finds the row held, its
+/// menu, how to draw it and how to open it. SwiftUI's `contextMenu` can't be used there:
+/// its pictures of a view in a flipped list came out upside down (held, before the menu)
+/// and morphed through a line.
 struct RowMenuMarker<Picture: View>: UIViewRepresentable {
     var id: String
     var markers: NSHashTable<RowMenuMarkerView>

@@ -209,7 +209,7 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
         }
 
         private func isScrollPan(_ g: UIGestureRecognizer) -> Bool {
-            (g.view as? UIScrollView)?.panGestureRecognizer === g
+            g.isScrollViewPan
         }
 
         /// A row's swipe (its actions, `PhoneRowPan`).

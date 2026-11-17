@@ -8,14 +8,14 @@ import WierdrModel
 /// Let go over the list, it glides into the slot and the space moves there
 /// (`space.move`); let go off the list, it flies back to where it was.
 ///
-/// The drag is the list's own long press (`SpaceListInteractions`: `ListPressRecognizer`
-/// on the list's scroll view, which shows a header's menu held, and moved on lifts the
-/// card). The lifted card is drawn by
+/// The drag is the list's own long press (`SpaceListDragDrop`: `ListPressRecognizer`
+/// on the list's view, where its scrolling pan is, which shows a header's menu held, and
+/// moved on lifts the card). The lifted card is drawn by
 /// the app over the window (`LiftedCard`), the cards' markers (`SpaceMarker`) say
 /// where the cards and their headers are, and `SpacesList` shows the machine's spaces
-/// in `lane`'s order, the dragged one as its slot. The list is drawn bottom up (and is
-/// upside down itself: the drag works in the window's coordinates): a lane's first space
-/// is its lowest card.
+/// in `lane`'s order, the dragged one as its slot. The list is drawn bottom up (each block
+/// in an upside-down host: the drag works in the window's coordinates): a lane's first
+/// space is its lowest card.
 @MainActor
 @Observable
 final class SpaceDrag {
@@ -56,7 +56,7 @@ final class SpaceDrag {
     @ObservationIgnored private var settling: Task<Void, Never>?
 
     /// The other cards part as quickly as the desktop's (PART_MS).
-    private static let part = Animation.easeOut(duration: 0.16)
+    nonisolated static let part = Animation.easeOut(duration: 0.16)
     /// After a drop, how long the list keeps the new order without the workspace's word.
     private static let settleAfter: Duration = .seconds(2)
 
@@ -81,7 +81,7 @@ final class SpaceDrag {
     }
 
     // MARK: The drag (`list`: the window, points and frames in its coordinates: they're
-    // the screen's, up being up, while the list itself is drawn upside down)
+    // the screen's, up being up, while each block's host is upside down)
 
     /// A drag of space `id` came over the list (at the start, or back).
     func enter(_ id: String, in list: UIView) {
@@ -295,47 +295,6 @@ struct SpaceMarker: UIViewRepresentable {
 
 // MARK: - The list's drag and drop
 
-/// Behind the list's content: finds the list's scroll view (its ancestor) and gives it
-/// `SpaceListDragDrop`'s interactions.
-struct SpaceListInteractions: UIViewRepresentable {
-    var drag: SpaceDrag
-
-    func makeCoordinator() -> SpaceListDragDrop { SpaceListDragDrop(drag: drag) }
-
-    func makeUIView(context: Context) -> Anchor {
-        let anchor = Anchor()
-        anchor.isUserInteractionEnabled = false
-        anchor.delegate = context.coordinator
-        return anchor
-    }
-
-    func updateUIView(_ anchor: Anchor, context: Context) {
-        context.coordinator.drag = drag
-        anchor.attach()
-    }
-
-    static func dismantleUIView(_ anchor: Anchor, coordinator: SpaceListDragDrop) {
-        coordinator.detach()
-    }
-
-    final class Anchor: UIView {
-        weak var delegate: SpaceListDragDrop?
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            attach()
-        }
-
-        func attach() {
-            guard window != nil, let delegate else { return }
-            var view = superview
-            while let v = view, !(v is UIScrollView) { view = v.superview }
-            guard let list = view as? UIScrollView else { return }
-            delegate.attach(list: list)
-        }
-    }
-}
-
 /// The list's long press (Telegram's `ContextGesture`): a touch on a header or on a row
 /// with a menu, held 0.12 s, starts the item shrinking (`pressing`), and at 0.32 s, still
 /// within 10 pt of where it came down, it begins: the menu. Then it follows the finger
@@ -448,9 +407,10 @@ final class ListPressRecognizer: UIGestureRecognizer {
     }
 }
 
-/// The list's long press (`ListPressRecognizer`, on its scroll view): a header's or a
-/// row's menu (`ListMenuOverlay`, the item drawn afresh: the list is upside down, a
-/// picture of it would be too), and dragging a card by its header. Held, a header shows
+/// The list's long press (`ListPressRecognizer`, on the list's view, `SpacesListView`, where
+/// its scrolling pan is): a header's or a row's menu (`ListMenuOverlay`, the item drawn
+/// afresh: each block's host is upside down, a picture of it would be too), and dragging a
+/// card by its header. Held, a header shows
 /// its menu; moved on away from the menu, its card lifts out of the list and follows
 /// the finger (`LiftedCard`, over the window, so off the list too), the list scrolling
 /// while the finger is near its top or bottom; let go over the list, it lands in its
@@ -458,7 +418,7 @@ final class ListPressRecognizer: UIGestureRecognizer {
 @MainActor
 final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
     var drag: SpaceDrag
-    private(set) weak var list: UIScrollView?
+    private(set) weak var list: SpacesListView?
     private lazy var press: ListPressRecognizer = {
         let press = ListPressRecognizer(target: self, action: #selector(pressed(_:)))
         press.delegate = self
@@ -503,7 +463,7 @@ final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
         super.init()
     }
 
-    func attach(list: UIScrollView) {
+    func attach(list: SpacesListView) {
         guard self.list !== list else { return }
         detach()
         self.list = list
@@ -732,17 +692,14 @@ final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
     private func autoscroll() {
         guard let list, let window = list.window, dropping else { return }
         let p = list.convert(finger, from: window)
-        let inset = list.adjustedContentInset
-        let top = list.bounds.minY + inset.top, bottom = list.bounds.maxY - inset.bottom
+        let area = list.contentArea
         let zone: CGFloat = 70, most: CGFloat = 14
         var step: CGFloat = 0
-        if p.y < top + zone { step = -most * min(1, (top + zone - p.y) / zone) }
-        if p.y > bottom - zone { step = most * min(1, (p.y - (bottom - zone)) / zone) }
+        // Near the top, what's over it comes down; near the bottom, what's under it comes up.
+        if p.y < area.minY + zone { step = most * min(1, (area.minY + zone - p.y) / zone) }
+        if p.y > area.maxY - zone { step = -most * min(1, (p.y - (area.maxY - zone)) / zone) }
         guard step != 0 else { return }
-        let minY = -inset.top, maxY = max(minY, list.contentSize.height + inset.bottom - list.bounds.height)
-        let y = min(max(list.contentOffset.y + step, minY), maxY)
-        guard abs(y - list.contentOffset.y) > 0.1 else { return }
-        list.contentOffset.y = y
+        list.scroll(by: step)
     }
 
     /// Let go (nil: the touch was taken away): over the list, the space moves and the card
@@ -789,7 +746,7 @@ final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
 
     /// The card as it is now, drawn afresh, as wide as it is in the list and where it is
     /// (in the window).
-    private func makeCard(_ id: String, in list: UIScrollView) -> LiftedCard? {
+    private func makeCard(_ id: String, in list: UIView) -> LiftedCard? {
         guard let controller = drag.controller, let space = controller.workspace.space(id),
               let window = list.window, let frame = drag.cardFrames(in: window)[id] else { return nil }
         func render(lifted: Bool) -> UIImage? {
@@ -816,7 +773,7 @@ final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
 
     /// Let go off the list (or the drag was called off): the card flies back into its
     /// slot, where it was.
-    private func flyBack(in list: UIScrollView) {
+    private func flyBack(in list: UIView) {
         guard let card, !card.landing else {
             drag.cancelled()
             return
