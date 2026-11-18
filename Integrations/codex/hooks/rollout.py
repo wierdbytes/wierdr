@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, Optional, Set
 
 HEAD_MAX = 1 << 20  # session_meta carries the base instructions: ~20 KB
 TAIL_CHUNK = 64 << 10
@@ -115,6 +115,11 @@ class Tail:
         self.ctx_max: Optional[int] = None
         # limit_id -> (rate_limits payload, unix seconds of the line)
         self.rate_limits: Dict[str, Any] = {}
+        # Turns seen from the end back to the latest `task_started`: turn id -> when it
+        # started (unix seconds) and which ended (`task_complete`, `turn_aborted`).
+        self.turn_started: Dict[str, Optional[float]] = {}
+        self.turns_ended: Set[str] = set()
+        self.latest_turn: Optional[str] = None
         self.lines = 0
 
     def as_dict(self) -> Dict[str, Any]:
@@ -137,8 +142,11 @@ def _int(value: Any) -> Optional[int]:
     return None
 
 
-def scan_lines(lines: Iterator[bytes], want_limits: bool = True, max_lines: int = 20000) -> Tail:
-    """Reads lines last first until the latest settings, usage and window are known."""
+def scan_lines(lines: Iterator[bytes], want_limits: bool = True, max_lines: int = 20000, want_turn: bool = False) -> Tail:
+    """
+    Reads lines last first until the latest settings, usage and window are
+    known (`want_turn`: and the latest turn's start).
+    """
     tail = Tail()
     have_usage = False
     for raw in lines:
@@ -189,19 +197,27 @@ def scan_lines(lines: Iterator[bytes], want_limits: bool = True, max_lines: int 
                     limit_id = limits.get("limit_id") if isinstance(limits.get("limit_id"), str) else "codex"
                     if limit_id not in tail.rate_limits:
                         tail.rate_limits[limit_id] = (limits, iso_to_unix(item.get("timestamp")))
+            elif event in ("task_complete", "turn_aborted"):
+                if isinstance(payload.get("turn_id"), str):
+                    tail.turns_ended.add(payload["turn_id"])
             elif event == "task_started":
                 if tail.ctx_max is None:
                     tail.ctx_max = _int(payload.get("model_context_window"))
+                turn = payload.get("turn_id")
+                if isinstance(turn, str) and turn not in tail.turn_started:
+                    tail.turn_started[turn] = iso_to_unix(item.get("timestamp"))
+                    if tail.latest_turn is None:
+                        tail.latest_turn = turn
                 # Other limit families come in token_count events of their own: the
                 # windows of the turn the usage came from are all read by its start.
                 if want_limits and have_usage and tail.effort_known and tail.ctx_max is not None:
                     break
-        if not want_limits and tail.effort_known and have_usage and tail.ctx_max is not None:
+        if not want_limits and tail.effort_known and have_usage and tail.ctx_max is not None and (not want_turn or tail.turn_started):
             break
     return tail
 
 
-def scan(path: Optional[str], want_limits: bool = True) -> Tail:
+def scan(path: Optional[str], want_limits: bool = True, want_turn: bool = False) -> Tail:
     if not path:
         return Tail()
-    return scan_lines(tail_lines(path), want_limits)
+    return scan_lines(tail_lines(path), want_limits, want_turn=want_turn)

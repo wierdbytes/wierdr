@@ -21,10 +21,12 @@ ChatGPT в сайдбаре. Для этого две части:
 | Статус `idle` / `working` / `done` | Codex сам, OSC 7501 (`app: "codex"`; только state/app/kind, без `msg`) | `status` терминала |
 | Заголовок `<спиннер> <имя треда> \| <проект>`, пока Codex ждёт ответа — `[ ! ] Action Required \| …` | Codex сам (OSC title) | `title` |
 | Модель, провайдер, effort, контекст, окно, сессия, число саб‑агентов, pid | плагин `codex` | метки `agent.*` |
+| Каждый работающий саб‑агент: путь задачи, ник, с какого момента работает, модель, effort, контекст, окно, старт | плагин `codex` | метка `agent.subagents_meta` (JSON) |
 | Лимиты подписки ChatGPT (5 часов, 7 дней, другие семейства) | плагин `codex` (и pi-herdr для pi) | документ `limits` |
 
 Чего Codex сам не даёт: `msg`, записей (`records`) для саб‑агентов (они работают внутри
-процесса Codex, без своего терминала), модели и лимитов. Имя треда Codex придумывает сам
+процесса Codex, без своего терминала; их строки в Wierdr — из `agent.subagents_meta`), модели и
+лимитов. Имя треда Codex придумывает сам
 (`$CODEX_HOME/session_index.jsonl`, `{"id","thread_name"}`), оно видно в заголовке. Счётчик
 `turn` у терминала растёт на каждом ходе и на каждом блокирующем экране — уже окно
 «Hooks need review» до первого промпта даёт `turn` 1.
@@ -34,7 +36,7 @@ ChatGPT в сайдбаре. Для этого две части:
 `agent.model` = `GPT-6.1 Sol` (имя в стиле pi из `GPT-6.1-Sol` / `gpt-6.1-sol`; Wierdr под
 знаком openai сокращает до `6.1 Sol`), `agent.model_id`, `agent.provider` (`model_provider`
 сессии, обычно `openai`), `agent.effort` (нет при `none`), `agent.ctx` / `agent.ctx_max`,
-`agent.session` (`codex resume <id>`), `agent.subagents`. Меток кэша нет: OpenAI не сообщает
+`agent.session` (`codex resume <id>`), `agent.subagents`, `agent.subagents_meta`. Меток кэша нет: OpenAI не сообщает
 время жизни кэша. Таблица с примерами — в [README плагина](../Integrations/codex/README.md#labels).
 
 ## Как это работает
@@ -54,14 +56,17 @@ ChatGPT в сайдбаре. Для этого две части:
 - **`SessionStart`** (синхронный) — все метки, все ключи (пустые удаляют оставшееся от
   прошлого агента). Срабатывает лениво, **на первом промпте**, а не при запуске; на
   `/clear`, `/resume`, форке — с новым id сессии.
-- **`UserPromptSubmit`** (async) — модель, effort, окно, сессия: так виден `/model` между
-  ходами.
+- **`UserPromptSubmit`** (async) — модель, effort, окно, сессия (так виден `/model` между
+  ходами) и заново саб‑агенты.
+- **`PreModelRequest`** (async) — с `agent_id` (запрос саб‑агента) отметить саб‑агента
+  работающим: возобновлённый виден с первого запроса нового хода. Запросы главного агента
+  выходят сразу, до соединения с herdr-core.
 - **`PostModelRequest`** (async) — `agent.ctx` из `token_usage.total_tokens` ответа; лимиты не
-  чаще раза в 30 с. С `agent_id` (запрос саб‑агента) — отметить саб‑агента работающим.
+  чаще раза в 30 с. С `agent_id` — отметить саб‑агента работающим, его контекст.
 - **`PostCompact`** (async) — контекст после сжатия (Codex сам пересчитывает и пишет
   `token_count` до этого хука).
 - **`SubagentStart`** / **`SubagentStop`** (async), **`PostToolUse`** с matcher
-  `(close|resume)_agent$` (async) — `agent.subagents`.
+  `(close|resume)_agent$` (async) — `agent.subagents` и `agent.subagents_meta`.
 - **`Stop`** (async) — всё заново и лимиты.
 - **`SessionEnd`** (таймаут 3 с, это максимум) — снять все свои метки.
 
@@ -85,8 +90,8 @@ rollout — `default_reasoning_level` модели из `$CODEX_HOME/models_cach
 (до 4) предков процесса хука, **и между ними нет `codex app-server`**, и сессия интерактивная
 (`session_meta.source` ∈ `cli`, `vscode`). Иначе меток нет, но лимиты пишутся (они от
 терминала не зависят). Хуки саб‑агентов приносят rollout саб‑агента (его `source` —
-`subagent`), поэтому они меняют только `agent.subagents` и только когда метки сессии уже на
-терминале (`agent.app`, `agent.pid`, `agent.session` совпадают).
+`subagent`), поэтому они меняют только `agent.subagents` и `agent.subagents_meta` и только
+когда метки сессии уже на терминале (`agent.app`, `agent.pid`, `agent.session` совпадают).
 
 **Саб‑агенты.** Они работают внутри процесса Codex. Плагин хранит в `$PLUGIN_DATA` на сессию
 множества ходов каждого агента: `SubagentStart` и `PostModelRequest` с `agent_id` отмечают
@@ -94,7 +99,51 @@ rollout — `default_reasoning_level` модели из `$CODEX_HOME/models_cach
 активный незаконченный ход и база Codex
 (`$CODEX_HOME/state_5.sqlite`, `thread_spawn_edges`, только чтение) не числит его `closed`.
 Открытые рёбра сами по себе не годятся: Codex закрывает агента только по `close_agent`, а
-модели часто оставляют его открытым и простаивающим.
+модели часто оставляют его открытым и простаивающим. Ход не считается и тогда, когда его
+закончил rollout самого саб‑агента: `task_complete` / `turn_aborted` с этим `turn_id` или уже
+начатый более поздний ход (тред ведёт один ход за раз; rollout читается с конца до последнего
+`task_started`). Прерывание (Esc) `SubagentStop` не даёт — такой саб‑агент уходит на ближайшем
+хуке (промпт, `Stop`, хук другого саб‑агента).
+
+**Строки саб‑агентов (`agent.subagents_meta`).** Из того же учёта — JSON по id треда
+саб‑агента (`agent_id` хуков), с теми же ключами, что у мода `cc` ([claude-code.md](claude-code.md));
+Wierdr (`AgentLabels.subagents`, `StatusRecords.merge`) делает из каждой записи без записи 7501
+(у Codex их нет) отдельную строку под терминалом Codex — «работает», с возрастом от `since`:
+
+```json
+{"01a1f07a-232d-75e1-abf3-24c8a50d1710": {"title": "probe", "name": "Kepler", "status": "running",
+  "since": 1795035898686, "model": "GPT-6 Luna", "model_id": "gpt-6-luna", "effort": "low",
+  "ctx": 16545, "ctx_max": 258400, "started": 1795035898672}}
+```
+
+- **`title`** — путь задачи под корневым агентом: `agent_path` из `session_meta` rollout'а
+  саб‑агента (`source.subagent.thread_spawn`) без `/root/`: `probe`, на втором уровне
+  `probe/check`. Так Codex сам называет саб‑агента в TUI («Started `/root/probe`»,
+  «Completed `/root/probe`», подпись в футере), и по этому пути к нему обращается модель
+  (`send_message`, `followup_task`). Текст задачи взять неоткуда: аргумент `message` у
+  `spawn_agent` и `agent_message` в rollout зашифрованы, у треда в `state_5.sqlite` пусты
+  `title`, `preview`, `first_user_message`. Без пути (старые инструменты multi-agent v1) —
+  как в пикере агентов: `Kepler [explorer]`.
+- **`name`** — ник (`agent_nickname`, `Kepler`: его показывает пикер `/subagents`).
+- **`status`** всегда `running`, **`since`** — начало текущего хода (`task_started` этого
+  `turn_id` в rollout саб‑агента, без него — первый хук хода).
+- **`model`** (в стиле `agent.model`) и `model_id` — из последнего `turn_context` rollout'а,
+  иначе `model` из хука; **`effort`** — оттуда же, иначе уровень модели по умолчанию;
+  **`ctx`** — `token_usage.total_tokens` последнего `PostModelRequest` саб‑агента или
+  `token_count` rollout'а, что новее; **`ctx_max`** — `model_context_window` оттуда же, иначе из
+  `models_cache.json`; **`started`** — спавн: время первой строки rollout'а (`session_meta`),
+  иначе первого `SubagentStart`.
+
+**Когда строка пропадает.** Саб‑агент в метке, только пока идёт его ход; с концом хода
+(`SubagentStop`, или rollout говорит, что ход кончился) строки нет, как у законченного
+сабагента Claude. Статуса `idle` у Codex нет: после хода саб‑агент остаётся возобновляемым до
+`close_agent`, который модели почти не вызывают, и отличить «ещё спросят» от «забыт» нечем —
+строки висели бы до конца сессии. Дали новую задачу (`followup_task`, `send_input`) — строка
+появляется снова с первого запроса (`PreModelRequest`), `since` — начало нового хода, `started`
+прежний. Никого нет — метки нет (пустое значение), `SessionEnd` снимает её с остальными.
+Rollout саб‑агента берётся из `transcript_path` у `SubagentStart` и его запросов и из
+`agent_transcript_path` у `SubagentStop` (там `transcript_path` — родителя), и только если его
+`session_meta.id` = `agent_id`.
 
 **Лимиты.** Из последних `token_count` (по одному на `limit_id`, внутри последнего хода)
 собирается чтение: семейство `codex` — окна `5h` / `7d` (`window_minutes` 300 / 10080),
@@ -164,6 +213,13 @@ review» (Review hooks → `t` на каждом хуке `codex@wierdr`, или
 - **Модель не всегда зовёт саб‑агента**: «Spawn one sub-agent…» gpt-6-luna выполнил сам;
   сработало явное «Use the spawn_agent tool … then wait_agent … then close_agent». `close_agent`
   она всё равно не вызвала — ребро осталось `open`.
+- **Переустановка плагина под работающим Codex.** После `codex plugin add` с изменённым
+  плагином уже запущенный Codex (0.170.0) не запускал ни одного его хука — ни промпта, ни
+  `Stop`, ни `SessionEnd` (метки остались до `hc rm`, Wierdr их отбросил по `agent.pid`).
+  Перезапустить Codex и снова доверить хуки.
+- **Модель может отказаться спавнить** по тексту из `hc send`: hc оборачивает его в
+  `<hc from=…>`, и gpt-6-luna ответил, что инструкции сессии запрещают саб‑агентов, «пока
+  пользователь не попросит явно» — хотя тот же текст в первой сессии сработал.
 - **`codex delete <id>`** без терминала требует `--force`.
 - Запуск 0.167 предлагает обновиться (Update now / Skip) — выбирать Skip.
 
@@ -192,7 +248,16 @@ hc keys wierdrtest-codex-1 / e x i t; hc keys wierdrtest-codex-1 enter   # ме�
 codex@wierdr`, `codex plugin marketplace remove wierdr`, удалить
 `~/.codex/plugins/{cache/wierdr,data/codex-wierdr}` и свой файл в `~/.codex/.hook-trust/`;
 вернуть `config.toml` из копии и сверить контрольную сумму; демон, если запускался, —
-`codex app-server daemon stop` и `kill` оставшегося `pid-update-loop`.
+`codex app-server daemon stop` и `kill` оставшегося `pid-update-loop`. Если плагин у
+пользователя уже стоит по‑настоящему, не удалять его, а перед установкой скопировать
+`~/.codex/plugins/{cache/wierdr,data/codex-wierdr}` и после вернуть их из копии (сверить
+`shasum` файлов): `codex plugin add` заменяет кэш новой версией. Доверие хуков 0.170 пишет
+только в `config.toml` (новых файлов в `.hook-trust/` не было). Промпты попадают в
+`~/.codex/history.jsonl` (`session_id` удалённых тредов) — их строки убрать.
+
+Саб‑агенты — промпт со `spawn_agent` (`task_name probe`, у саб‑агента `sleep 8`, потом
+`wait_agent`) и `hc get <t> --json` раз в секунду: `agent.subagents_meta` появляется со
+`SubagentStart` и пропадает с `SubagentStop`.
 
 Что видно на 0.170.0 (2026‑11‑18, gpt-6-luna, подписка Plus, `--no-daemon`): до первого
 промпта меток нет; на первом промпте (`SessionStart` и `UserPromptSubmit`) — `agent.app`
@@ -202,10 +267,24 @@ codex@wierdr`, `codex plugin marketplace remove wierdr`, удалить
 Что метка пропадает с концом хода саб‑агента, проверено только тестами: живой прогон
 показал гонку `SubagentStop` / `PostModelRequest`, и учёт по `turn_id` появился уже после
 него.
+
+`agent.subagents_meta` (версия плагина 0.1.1, 0.170.0, 2026‑11‑18; «Spawn … task_name probe …
+`sleep 8` … wait_agent», `hc get` раз в секунду): через ~3 с после промпта (`SubagentStart` и
+первый `PreModelRequest` саб‑агента, 130–175 мс) — `agent.subagents` `1` и
+`{"<id>":{"title":"probe","name":"Kepler","status":"running","since":…898686,"model":"GPT-6 Luna",
+"model_id":"gpt-6-luna","effort":"low","ctx_max":258400,"started":…}}`; через 2 с (его
+`PostModelRequest`) — плюс `"ctx":16545`; через ~10 с (`SubagentStop` и последний
+`PostModelRequest` вместе, оба отправили снятие) — меток саб‑агентов нет, главный агент ещё
+`working`; `close_agent` модель не вызвала. `started` в том прогоне был временем
+`SubagentStart` (на 1,4 с позже `since`), теперь — время `session_meta`. Возобновление
+(`followup_task`) вживую не увидели: второй промпт пришёлся на переустановку плагина (хуки не
+шли), третий модель отказалась выполнять; проверено тестами и прогоном хуков по настоящему
+rollout'у того саб‑агента (ход, закончившийся без `SubagentStop`, не показан; новый ход —
+показан, `started` = `session_meta`).
 В `wierdrtest-codex-limits` — `codex.d4800446` (label — e‑mail аккаунта, `plan` `plus`,
 `5h` и `7d`). После `/exit` меток нет. 0.167.0 (`--no-daemon`) — то же самое: async‑хуки,
 `PostModelRequest`, `SubagentStart/Stop`, `SessionEnd`. Хуки отрабатывают за 80–250 мс.
 Режим демона (0.170 CLI, демон 0.167) — меток нет, лимиты есть.
 
 Тесты без сессии: `python3 -m unittest discover -s Integrations/codex/tests` (чистые функции и
-хуки как отдельные процессы против поддельного сокета herdr-core).
+хуки как отдельные процессы против поддельного сокета herdr-core; и под `/usr/bin/python3` 3.9).

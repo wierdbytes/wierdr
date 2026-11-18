@@ -12,9 +12,10 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 
 APP = "codex"
 
-# Every label pi-herdr owns. Codex writes all but the cache ones (OpenAI
-# reports no cache lifetime); a full write clears those too, so nothing an
-# earlier agent in this terminal left stays behind.
+# Every label pi-herdr owns, and `agent.subagents_meta` (the sub-agents' rows,
+# as the Claude Code mod writes it). Codex writes all but the cache ones
+# (OpenAI reports no cache lifetime); a full write clears those too, so
+# nothing an earlier agent in this terminal left stays behind.
 LABEL_KEYS = (
     "agent.app",
     "agent.pid",
@@ -25,6 +26,7 @@ LABEL_KEYS = (
     "agent.ctx",
     "agent.ctx_max",
     "agent.subagents",
+    "agent.subagents_meta",
     "agent.session",
     "agent.cache_until",
     "agent.cache_ttl",
@@ -82,6 +84,7 @@ def build_labels(
     ctx: Optional[int] = None,
     ctx_max: Optional[int] = None,
     subagents: Optional[int] = None,
+    subagents_meta: Optional[str] = None,
 ) -> Dict[str, str]:
     """Every label Codex owns, `""` for the ones it has no value for."""
     labels = {k: "" for k in LABEL_KEYS}
@@ -102,6 +105,8 @@ def build_labels(
         labels["agent.ctx_max"] = str(ctx_max)
     if isinstance(subagents, int) and subagents > 0:
         labels["agent.subagents"] = str(subagents)
+    if subagents_meta:
+        labels["agent.subagents_meta"] = subagents_meta
     if session:
         labels["agent.session"] = session
     return labels

@@ -11,12 +11,14 @@ model context) and always exits 0: a broken hook must never disturb Codex.
 Events (hooks/hooks.json):
   session-start       SessionStart: every label (fires at the first prompt)
   prompt              UserPromptSubmit: model, effort, window
+  pre-model-request   PreModelRequest (async): a sub-agent at work (the main
+                      agent's exit at once)
   post-model-request  PostModelRequest (async): the context, or a sub-agent
                       at work; the limits at most every 30 s
   post-compact        PostCompact: the context after compaction
   subagent-start      SubagentStart: a sub-agent at work
   subagent-stop       SubagentStop: a sub-agent's turn ended
-  agent-tool          PostToolUse of close_agent / resume_agent: the count
+  agent-tool          PostToolUse of close_agent / resume_agent: the sub-agents
   stop                Stop: every label again, and the limits
   session-end         SessionEnd: remove every label
 """
@@ -30,7 +32,7 @@ import signal
 import socket
 import sys
 import time
-from typing import Any, Callable, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterator, Optional, Set
 
 # The plugin root is Codex's copy of the plugin: leave no bytecode in it.
 sys.dont_write_bytecode = True
@@ -56,14 +58,18 @@ STDIN_MAX = 4 << 20
 EVENT_KEYS = {
     "session-start": meta.LABEL_KEYS,
     "stop": meta.LABEL_KEYS,
-    "prompt": ("agent.model", "agent.model_id", "agent.provider", "agent.effort", "agent.ctx_max", "agent.session"),
+    "prompt": ("agent.model", "agent.model_id", "agent.provider", "agent.effort", "agent.ctx_max", "agent.session",
+               "agent.subagents", "agent.subagents_meta"),
     "post-model-request": ("agent.ctx",),
     "post-compact": ("agent.ctx", "agent.ctx_max"),
 }
 # The session's own events: they may write every label when the terminal doesn't carry them yet.
 SESSION_EVENTS = tuple(EVENT_KEYS)
-# Events about sub-agents: they only change `agent.subagents`, and only once the session published.
+# Events about sub-agents: they only change `agent.subagents` and `agent.subagents_meta`, and
+# only once the session published. A model request is one when it carries `agent_id`.
 AGENT_EVENTS = ("subagent-start", "subagent-stop", "agent-tool")
+MODEL_REQUESTS = ("pre-model-request", "post-model-request")
+AGENT_KEYS = ("agent.subagents", "agent.subagents_meta")
 # Events that read the rollout for the labels.
 SCANS = ("session-start", "prompt", "post-compact", "stop")
 
@@ -100,6 +106,7 @@ class Hook:
         self._tail: Optional[rollout.Tail] = None
         self._tail_limits = False
         self._models: Any = False
+        self._agents: Optional[Any] = None
 
     # ---- small readers ----
 
@@ -205,6 +212,8 @@ class Hook:
     def run(self) -> None:
         if not self.socket:
             return
+        if self.event == "pre-model-request" and not self.agent_id:
+            return  # the main agent's request: nothing to tell yet
         try:
             self.track_agents()
             if self.terminal_id:
@@ -219,26 +228,123 @@ class Hook:
             self.log()
 
     def track_agents(self) -> None:
-        """Marks a sub-agent at work or done (see subagents.py)."""
+        """Marks a sub-agent at work or done, with what the hook tells of it (see subagents.py)."""
         what = None
-        if self.event == "subagent-start" or (self.event == "post-model-request" and self.agent_id):
+        if self.event == "subagent-start" or (self.event in MODEL_REQUESTS and self.agent_id):
             what = "active"
         elif self.event == "subagent-stop":
             what = "done"
         if not what or not self.agent_id or not self.session:
             return
+        p = self.payload
+        # Its own rollout: SubagentStart's and its model requests' transcript, SubagentStop's
+        # agent_transcript_path (its transcript_path is the parent's). Kept only when it is the agent's.
+        path = p.get("agent_transcript_path") if self.event == "subagent-stop" else self.transcript
+        if isinstance(path, str) and path:
+            head = rollout.read_head(path)
+            if not isinstance(head, dict) or head.get("id") != self.agent_id:
+                path = None
+        else:
+            path = None
+        ctx = None
+        if self.event == "post-model-request":
+            usage = p.get("token_usage")
+            total = usage.get("total_tokens") if isinstance(usage, dict) else None
+            ctx = total if isinstance(total, int) and not isinstance(total, bool) and total > 0 else None
+        model = p.get("model") if self.event != "subagent-stop" else None
         name = self.agents_state()
+        turn = p.get("turn_id")
         with self.locked(name):
             agents = self.read_state(name)
-            turn = self.payload.get("turn_id")
-            self.write_state(name, subagents.mark(agents, self.agent_id, what, turn if isinstance(turn, str) else None))
+            self.write_state(name, subagents.note(
+                agents, self.agent_id, what, turn if isinstance(turn, str) else None, int(self.started_at * 1000),
+                start=self.event == "subagent-start", path=path,
+                agent_type=p.get("agent_type") if isinstance(p.get("agent_type"), str) else None,
+                model=model if isinstance(model, str) else None, ctx=ctx))
 
-    def agent_count(self) -> int:
+    def agent_labels(self) -> Dict[str, str]:
+        """`agent.subagents` and `agent.subagents_meta` from the session's sub-agents (see subagents.py)."""
+        if self._agents is not None:
+            return self._agents
+        self._agents = {"agent.subagents": "", "agent.subagents_meta": ""}
         agents = self.read_state(self.agents_state()) if self.session else {}
-        if not agents:
-            return 0
+        if not subagents.working_ids(agents):
+            return self._agents
         db = subagents.state_db(self.codex_home, self.env.get("CODEX_SQLITE_HOME"))
-        return subagents.working(agents, subagents.closed_agents(db, self.session))
+        closed = subagents.closed_agents(db, self.session)
+        tails: Dict[str, rollout.Tail] = {}
+
+        def tail_of(agent_id: str, entry: Dict[str, Any]) -> rollout.Tail:
+            if agent_id not in tails:
+                path = entry.get("path") if isinstance(entry.get("path"), str) else None
+                tails[agent_id] = rollout.scan(path, want_limits=False, want_turn=True)
+            return tails[agent_id]
+
+        def ended(agent_id: str, entry: Dict[str, Any]) -> Set[str]:
+            tail = tail_of(agent_id, entry)
+            latest = tail.latest_turn
+            return subagents.ended_turns(entry, tail.turns_ended, latest, tail.turn_started.get(latest) if latest else None)
+
+        ids = subagents.working_ids(agents, closed, ended)
+        entries = {}
+        for agent_id in ids:
+            try:
+                entries[agent_id] = self.agent_entry(agents[agent_id], tail_of(agent_id, agents[agent_id]))
+            except Exception:
+                entries[agent_id] = subagents.meta_entry()
+        self._agents = {
+            "agent.subagents": str(len(ids)) if ids else "",
+            "agent.subagents_meta": subagents.meta_label(entries),
+        }
+        return self._agents
+
+    def agent_entry(self, entry: Dict[str, Any], tail: rollout.Tail) -> Dict[str, Any]:
+        """One running sub-agent's row: what its rollout says, else what its hooks told."""
+        path = entry.get("path") if isinstance(entry.get("path"), str) else None
+        head = rollout.read_head(path) if path else None
+        title, name = subagents.describe(head, entry.get("type") if isinstance(entry.get("type"), str) else None)
+        seen = entry.get("seen") if isinstance(entry.get("seen"), dict) else {}
+        latest = tail.latest_turn
+        turns = subagents.running_turns(entry, subagents.ended_turns(entry, tail.turns_ended, latest, tail.turn_started.get(latest) if latest else None))
+        since = None
+        if turns:
+            began = tail.turn_started.get(turns[0])
+            since = began * 1000 if isinstance(began, (int, float)) else seen.get(turns[0])
+        hooked = entry.get("model") if isinstance(entry.get("model"), str) else None
+        model_id = tail.model if tail.effort_known and tail.model else hooked
+        info = self.models().get(model_id) if model_id else None
+        info = info if isinstance(info, dict) else {}
+        if tail.effort_known:
+            effort = tail.effort
+        else:
+            level = info.get("default_reasoning_level")
+            effort = level if isinstance(level, str) else None
+        ctx = tail.ctx
+        hook_ctx, hook_at = entry.get("ctx"), entry.get("ctx_at")
+        if isinstance(hook_ctx, int) and isinstance(hook_at, (int, float)):
+            if ctx is None or (tail.ctx_at or 0) * 1000 < hook_at:
+                ctx = hook_ctx
+        ctx_max = tail.ctx_max if tail.ctx_max is not None else self.window(info)
+        # Its spawn: when its thread was made (the rollout's first line), else when its
+        # SubagentStart hook ran (a second or so later), else its first hook.
+        at = rollout.iso_to_unix((head or {}).get("timestamp"))
+        times = [t for t in (entry.get("started"), at * 1000 if at is not None else None) if isinstance(t, (int, float))]
+        times = times or [v for v in seen.values() if isinstance(v, (int, float))]
+        started = min(times) if times else None
+        display = info.get("display_name") if isinstance(info.get("display_name"), str) else None
+        return subagents.meta_entry(
+            title=title, name=name, since=since,
+            model=meta.model_name(model_id, display) if model_id else None, model_id=model_id,
+            effort=meta.effort_label(effort), ctx=ctx, ctx_max=ctx_max, started=started)
+
+    @staticmethod
+    def window(info: Dict[str, Any]) -> Optional[int]:
+        """The model's context window as Codex works with it: its window times its effective share."""
+        if not isinstance(info.get("context_window"), int):
+            return None
+        pct = info.get("effective_context_window_percent")
+        pct = pct if isinstance(pct, (int, float)) and 0 < pct <= 100 else 100
+        return int(info["context_window"] * pct / 100)
 
     def own_terminal(self, check_source: bool = True):
         """(terminal, codex pid) when this hook belongs to the interactive Codex in the terminal."""
@@ -264,7 +370,7 @@ class Hook:
         return terminal, pid
 
     def publish_labels(self) -> None:
-        agent_event = self.event in AGENT_EVENTS or (self.event == "post-model-request" and self.agent_id)
+        agent_event = self.event in AGENT_EVENTS or (self.event in MODEL_REQUESTS and self.agent_id)
         if not agent_event and (self.event not in SESSION_EVENTS or self.agent_id):
             return  # a sub-agent's prompt or compaction: not the session's model or context
         # A sub-agent's hook carries the sub-agent's transcript: the session owns the labels already.
@@ -278,8 +384,7 @@ class Hook:
             if not owned:
                 self.trace["skip"] = "not published yet"
                 return
-            count = self.agent_count()
-            change = meta.diff(current, {"agent.subagents": str(count) if count > 0 else ""})
+            change = meta.diff(current, self.agent_labels(), AGENT_KEYS)
         else:
             full = self.event == "session-start" or not owned
             self.trace["full"] = full
@@ -333,14 +438,15 @@ class Hook:
             ctx = _int_label(kept["agent.ctx"])
 
         ctx_max = tail.ctx_max if tail is not None else None
-        if ctx_max is None and isinstance(info.get("context_window"), int):
-            pct = info.get("effective_context_window_percent")
-            pct = pct if isinstance(pct, (int, float)) and 0 < pct <= 100 else 100
-            ctx_max = int(info["context_window"] * pct / 100)
+        if ctx_max is None:
+            ctx_max = self.window(info)
         if ctx_max is None:
             ctx_max = _int_label(kept["agent.ctx_max"])
 
-        count = self.agent_count() if full or self.event == "stop" else _int_label(kept["agent.subagents"])
+        if full or self.event in ("stop", "prompt"):
+            agents = self.agent_labels()
+        else:
+            agents = {k: kept[k] for k in AGENT_KEYS}
 
         provider = head.get("model_provider")
         return meta.build_labels(
@@ -352,7 +458,8 @@ class Hook:
             effort=effort,
             ctx=ctx,
             ctx_max=ctx_max,
-            subagents=count,
+            subagents=_int_label(agents["agent.subagents"]),
+            subagents_meta=agents["agent.subagents_meta"] or None,
         )
 
     def clear_labels(self) -> None:

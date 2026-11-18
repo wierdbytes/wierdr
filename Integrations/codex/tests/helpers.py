@@ -34,12 +34,37 @@ def session_meta(source="cli", provider="openai", account="acct-1"):
     })
 
 
-def task_started(ts, window=258400):
-    return line({"timestamp": ts, "type": "event_msg", "payload": {"type": "task_started", "turn_id": "t", "model_context_window": window}})
+def subagent_meta(agent_id, agent_path="/root/probe", nickname="Euler", role=None, parent=SESSION, depth=1, ts="2026-11-18T19:11:53.376Z"):
+    """A sub-agent's first rollout line as Codex 0.170.0 writes it (multi-agent v2, a spawn)."""
+    return line({
+        "timestamp": ts,
+        "type": "session_meta",
+        "payload": {
+            "account_scoped": True, "creator_account_id": "acct-1", "session_id": SESSION, "id": agent_id,
+            "parent_thread_id": parent, "timestamp": ts, "cwd": "/private/tmp/wierdrtest-codex",
+            "originator": "codex-tui", "cli_version": "0.170.0",
+            "source": {"subagent": {"thread_spawn": {"parent_thread_id": parent, "depth": depth, "agent_path": agent_path,
+                                                     "agent_nickname": nickname, "agent_role": role}}},
+            "thread_source": "subagent", "agent_nickname": nickname, "agent_path": agent_path, "model_provider": "openai",
+            "history_mode": "paginated", "multi_agent_version": "v2", "context_window": {"window_id": "w"},
+        },
+    })
 
 
-def turn_context(ts, model="gpt-6-luna", effort="low"):
-    return line({"timestamp": ts, "type": "turn_context", "payload": {"turn_id": "t", "model": model, "effort": effort, "cwd": "/tmp"}})
+def task_started(ts, window=258400, turn="t"):
+    return line({"timestamp": ts, "type": "event_msg", "payload": {"type": "task_started", "turn_id": turn, "model_context_window": window}})
+
+
+def task_complete(ts, turn="t"):
+    return line({"timestamp": ts, "type": "event_msg", "payload": {"type": "task_complete", "turn_id": turn, "last_agent_message": "ok"}})
+
+
+def turn_aborted(ts, turn="t"):
+    return line({"timestamp": ts, "type": "event_msg", "payload": {"type": "turn_aborted", "turn_id": turn, "reason": "interrupted"}})
+
+
+def turn_context(ts, model="gpt-6-luna", effort="low", turn="t"):
+    return line({"timestamp": ts, "type": "turn_context", "payload": {"turn_id": turn, "model": model, "effort": effort, "cwd": "/tmp"}})
 
 
 def settings_applied(ts, model="gpt-6-luna", effort="low"):

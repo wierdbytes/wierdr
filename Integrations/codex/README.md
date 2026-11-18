@@ -46,6 +46,7 @@ Nothing to configure. Outside a herdr-core terminal (no `HC_TERMINAL_ID` / `HC_T
 | `agent.ctx_max` | `258400` | The context window Codex works with (`model_context_window`: the model's window times its effective share) |
 | `agent.session` | `01a1f03a-3010-7682-91da-ef62917dfb79` | The session (thread) id: `codex resume <id>` opens it again. Follows `/clear`, `/resume` and forks |
 | `agent.subagents` | `1` | Sub-agents working now (a turn started and not yet ended, and not closed). Absent when none |
+| `agent.subagents_meta` | `{"01a1f07a-232d-75e1-abf3-24c8a50d1710":{"title":"probe","name":"Kepler","status":"running","since":1795035898686,"model":"GPT-6 Luna","model_id":"gpt-6-luna","effort":"low","ctx":16545,"ctx_max":258400,"started":1795035898672}}` | The same sub-agents, one row each, as JSON keyed by the sub-agent's thread id (the hooks' `agent_id`). The keys are the ones the Claude Code plugin [`cc`](../claude-code/README.md#labels) writes. `title` is its task path under the root agent: Codex shows `/root/probe` as "Started `/root/probe`", and the title is `probe` (`probe/check` one level down). `name` is its nickname (`Kepler`, as in Codex's agent picker). Without a task path (the older multi-agent tools), the title is the picker's `Kepler [explorer]`. `status` is always `running`, and `since` is when its current turn started (epoch ms). `model` is named as `agent.model` is, and `model_id` is its slug. `effort` is its latest turn's. `ctx` and `ctx_max` work as `agent.ctx` and `agent.ctx_max` do, but for its own context. `started` is when it was spawned (epoch ms). Ids are sorted and unknown fields are left out. Absent when none |
 
 There are no `agent.cache_until` / `agent.cache_ttl` labels: OpenAI doesn't report a cache lifetime. The first write clears any that an earlier agent left in the terminal.
 
@@ -84,17 +85,20 @@ Each hook runs `python3 hooks/herdr.py <event>` with the hook's JSON on stdin. I
 | Hook | What it writes |
 |---|---|
 | `SessionStart` | Every label (all keys; empties remove what an earlier agent left). Also on `/clear`, `/resume` and forks, under the new session id |
-| `UserPromptSubmit` (async) | Model, effort, window, session: a `/model` between turns shows here |
-| `PostModelRequest` (async) | `agent.ctx` from the response's `token_usage`, before the rollout has it; the limits at most every 30 s. In a sub-agent's turn, it marks the sub-agent as working |
+| `UserPromptSubmit` (async) | Model, effort, window, session (a `/model` between turns shows here), and the sub-agents again |
+| `PreModelRequest` (async) | In a sub-agent's turn, it marks the sub-agent as working, so a resumed one shows up when its first request starts. The main agent's requests exit at once |
+| `PostModelRequest` (async) | `agent.ctx` from the response's `token_usage`, before the rollout has it; the limits at most every 30 s. In a sub-agent's turn, it marks the sub-agent as working and updates its context |
 | `PostCompact` (async) | The context after compaction |
-| `SubagentStart` / `SubagentStop` (async) | `agent.subagents` |
-| `PostToolUse` of `close_agent` / `resume_agent` (async) | `agent.subagents` |
+| `SubagentStart` / `SubagentStop` (async) | `agent.subagents`, `agent.subagents_meta` |
+| `PostToolUse` of `close_agent` / `resume_agent` (async) | `agent.subagents`, `agent.subagents_meta` |
 | `Stop` (async) | Every label again, and the limits |
 | `SessionEnd` (3 s) | Removes every label it set |
 
 - **Whose hook is it?** Labels are written only when the terminal's foreground program is one of the hook's nearest ancestors, with no `codex app-server` in between. That is the embedded Codex, whose hooks are its own children. The daemon's hooks fail this check even in the terminal that started the daemon, which is its parent. They also need an interactive session (`session_meta.source` `cli` or `vscode`), so a `codex exec` run inside the terminal never touches its labels.
 - Only changed labels are sent: the hook compares with the labels `terminal.get` returned. Small state files in `$PLUGIN_DATA` hold the last context per terminal, the sub-agents' turns per session and which limit readings were written. They are locked against concurrent hooks.
-- Sub-agents run inside Codex. `SubagentStart` and a sub-agent's model requests mark one of its turns as working; `SubagentStop` marks that turn done. Turn ids rather than times decide this, because a turn's last model-request hook can start after its `SubagentStop` hook. An agent that Codex's state database lists as closed never counts.
+- Sub-agents run inside Codex. `SubagentStart` and a sub-agent's model requests mark one of its turns as working; `SubagentStop` marks that turn done. Turn ids rather than times decide this, because a turn's last model-request hook can start after its `SubagentStop` hook. An agent that Codex's state database lists as closed never counts. Neither does a turn that the sub-agent's own rollout shows as over (`task_complete`, `turn_aborted`, or a later turn already started). An interrupt fires no `SubagentStop`, so this is how an interrupted sub-agent goes away at the next hook.
+- **A sub-agent is listed only while one of its turns runs.** When the turn ends it disappears, as a finished Claude subagent does. Codex keeps a sub-agent resumable until `close_agent`, which models rarely call, so an "idle" row could stay forever. If the sub-agent gets more work (`followup_task`, `send_input`), it shows up again from its next request. Its `since` is then that turn's start, and its `started` is still the spawn time.
+- A sub-agent's row comes from its own rollout, which `SubagentStart`, its model requests and `SubagentStop`'s `agent_transcript_path` point to. The plugin uses that rollout only if its `session_meta` names the agent. From that rollout it takes the task path, nickname and spawn time (`session_meta`), the model and effort (the latest `turn_context`), the turn's start (`task_started`) and the context and window (`token_count`). The context from its latest `PostModelRequest` wins when it is newer.
 
 ## Limits and pitfalls
 
@@ -102,7 +106,8 @@ Each hook runs `python3 hooks/herdr.py <event>` with the hook's JSON on stdin. I
 - A `/model` or effort change between turns shows at the next prompt.
 - `hc send <t> "/exit"` doesn't run a command: hc wraps what it pastes in `<hc from=…>` tags, so Codex gets a message. Type commands as keys: `hc keys <t> / e x i t`, then `hc keys <t> enter`.
 - In daemon mode (plain `codex`), there are no labels, and `SessionEnd` only fires when the daemon stops.
-- Sub-agents show up only as a count.
+- Codex encrypts a sub-agent's task text in the rollout, and the hooks don't carry it either. A row is titled by the task path the model chose (`task_name`), not by the task.
+- If `codex plugin add` reinstalls the plugin (with changes) under a running Codex, that Codex runs none of its hooks from then on. There are no new labels, and no `SessionEnd` removes the old ones. Seen on 0.170.0. Restart Codex and trust the hooks again.
 - Without `python3` on the login shell's `PATH`, the hooks do nothing.
 - The hooks run as `$SHELL -lc '…'`. Anything your login profile prints on stdout would reach `SessionStart` / `UserPromptSubmit` output, which Codex adds to the model's context.
 

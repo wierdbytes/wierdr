@@ -38,11 +38,18 @@ class Hook(unittest.TestCase):
         self.core.close()
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def sub_rollout(self):
-        path = os.path.join(self.root, "sub.jsonl")
-        with open(path, "w") as f:
-            f.write(h.session_meta(source={"subagent": {"thread_spawn": {"parent_thread_id": h.SESSION, "depth": 1}}}))
+    def sub_rollout(self, agent_id="child", lines=(), append=False, **meta):
+        """A sub-agent's rollout: its real-shaped session_meta, then `lines`."""
+        path = os.path.join(self.root, "sub-%s.jsonl" % agent_id)
+        with open(path, "a" if append else "w") as f:
+            if not append:
+                f.write(h.subagent_meta(agent_id, **meta))
+            f.write("".join(lines))
         return path
+
+    def rows(self):
+        raw = self.core.labels.get("agent.subagents_meta")
+        return json.loads(raw) if raw else None
 
     def write_rollout(self, lines, append=False):
         with open(self.rollout, "a" if append else "w") as f:
@@ -108,14 +115,19 @@ class Hook(unittest.TestCase):
         # A sub-agent at work, then done.
         self.hook("subagent-start", {"hook_event_name": "SubagentStart", "agent_id": "child", "turn_id": "c1", "agent_type": "default", "transcript_path": self.sub_rollout()})
         self.assertEqual(self.core.labels["agent.subagents"], "1")
-        self.assertEqual(self.core.label_requests()[-1], {"agent.subagents": "1"})
-        # Its own model requests don't touch the session's context.
+        self.assertEqual(set(self.core.label_requests()[-1]), {"agent.subagents", "agent.subagents_meta"})
+        self.assertEqual(self.rows()["child"]["title"], "probe")
+        # Its own model requests don't touch the session's context, only its row's.
         before = len(self.core.label_requests())
-        self.hook("post-model-request", {"agent_id": "child", "turn_id": "c1", "status": "completed", "token_usage": {"total_tokens": 5}, "transcript_path": self.sub_rollout()})
-        self.assertEqual(len(self.core.label_requests()), before)
+        self.hook("post-model-request", {"agent_id": "child", "turn_id": "c1", "status": "completed", "token_usage": {"total_tokens": 5}, "transcript_path": self.sub_rollout(lines=[], append=True)})
+        self.assertEqual(len(self.core.label_requests()), before + 1)
+        self.assertEqual(set(self.core.label_requests()[-1]), {"agent.subagents_meta"})
+        self.assertEqual(self.rows()["child"]["ctx"], 5)
         self.assertEqual(self.core.labels["agent.ctx"], "16356")
-        self.hook("subagent-stop", {"hook_event_name": "SubagentStop", "agent_id": "child", "agent_type": "default", "turn_id": "c1"})
+        self.hook("subagent-stop", {"hook_event_name": "SubagentStop", "agent_id": "child", "agent_type": "default", "turn_id": "c1",
+                                    "agent_transcript_path": self.sub_rollout(lines=[], append=True)})
         self.assertNotIn("agent.subagents", self.core.labels)
+        self.assertNotIn("agent.subagents_meta", self.core.labels)
         # The turn's last model request, late: still done.
         self.hook("post-model-request", {"agent_id": "child", "turn_id": "c1", "status": "completed", "token_usage": {"total_tokens": 5}, "transcript_path": self.sub_rollout()})
         self.assertNotIn("agent.subagents", self.core.labels)
@@ -128,6 +140,7 @@ class Hook(unittest.TestCase):
         db.close()
         self.hook("agent-tool", {"hook_event_name": "PostToolUse", "tool_name": "close_agent"})
         self.assertNotIn("agent.subagents", self.core.labels)
+        self.assertNotIn("agent.subagents_meta", self.core.labels)
 
         # /model between turns: the next prompt shows it.
         self.write_rollout([h.settings_applied("2026-11-18T19:08:00.000Z", effort="high")], append=True)
@@ -137,6 +150,117 @@ class Hook(unittest.TestCase):
         # Quitting removes every label it set, and only those.
         self.hook("session-end", {"hook_event_name": "SessionEnd", "reason": "other"}, via_shell=True)
         self.assertEqual(self.core.labels, {"where": "x"})
+
+    # ---- agent.subagents_meta ----
+
+    def start_session(self):
+        self.hook("session-start", {"source": "startup"})
+        self.assertNotIn("agent.subagents_meta", self.core.labels)
+
+    def sub(self, event, agent_id, turn, **payload):
+        body = {"agent_id": agent_id, "turn_id": turn, "agent_type": "default", "model": "gpt-6-luna"}
+        if event == "subagent-stop":
+            body["agent_transcript_path"] = os.path.join(self.root, "sub-%s.jsonl" % agent_id)  # transcript_path: the parent's
+        else:
+            body["transcript_path"] = os.path.join(self.root, "sub-%s.jsonl" % agent_id)
+        body.update(payload)
+        self.hook(event, body)
+
+    def test_a_sub_agent_row_from_start_to_stop(self):
+        self.start_session()
+        self.sub_rollout("a1", [h.task_started("2026-11-18T19:11:53.400Z", turn="c1"), h.turn_context("2026-11-18T19:11:53.500Z", effort="low", turn="c1")])
+        self.sub("subagent-start", "a1", "c1")
+        row = self.rows()["a1"]
+        since = int(__import__("rollout").iso_to_unix("2026-11-18T19:11:53.400Z") * 1000)
+        self.assertEqual(row, {"title": "probe", "name": "Euler", "status": "running", "since": since, "model": "GPT-6 Luna",
+                               "model_id": "gpt-6-luna", "effort": "low", "ctx_max": 258400, "started": row["started"]})
+        spawned = int(__import__("rollout").iso_to_unix("2026-11-18T19:11:53.376Z") * 1000)
+        self.assertEqual(row["started"], spawned, "started: when its thread was made (its rollout's first line)")
+        self.assertEqual(self.core.labels["agent.subagents"], "1")
+        # Its request starts and answers: the context.
+        self.sub("pre-model-request", "a1", "c1", hook_event_name="PreModelRequest")
+        self.sub("post-model-request", "a1", "c1", status="completed", token_usage={"total_tokens": 16268})
+        self.assertEqual(self.rows()["a1"]["ctx"], 16268)
+        self.assertEqual(self.rows()["a1"]["since"], since)
+        # Its turn ends: no row, no label.
+        self.sub_rollout("a1", [h.token_count("2026-11-18T19:11:55.000Z", 16268), h.task_complete("2026-11-18T19:11:55.100Z", turn="c1")], append=True)
+        self.sub("subagent-stop", "a1", "c1", last_assistant_message="sub-ok")
+        self.assertIsNone(self.rows())
+        self.assertNotIn("agent.subagents", self.core.labels)
+        # The late last model-request hook doesn't bring it back.
+        self.sub("post-model-request", "a1", "c1", status="completed", token_usage={"total_tokens": 16268})
+        self.assertIsNone(self.rows())
+
+    def test_two_sub_agents(self):
+        self.start_session()
+        self.sub_rollout("a1", [h.task_started("2026-11-18T19:11:53.400Z", turn="c1")])
+        self.sub_rollout("a2", [h.task_started("2026-11-18T19:11:54.000Z", turn="d1"), h.turn_context("2026-11-18T19:11:54.100Z", model="gpt-6.1-sol", effort="high", turn="d1")],
+                         agent_path="/root/review", nickname="Noether", role="explorer")
+        self.sub("subagent-start", "a1", "c1")
+        self.sub("subagent-start", "a2", "d1", agent_type="explorer", model="gpt-6.1-sol")
+        rows = self.rows()
+        self.assertEqual(sorted(rows), ["a1", "a2"])
+        self.assertEqual(self.core.labels["agent.subagents"], "2")
+        self.assertEqual((rows["a2"]["title"], rows["a2"]["name"], rows["a2"]["model"], rows["a2"]["effort"]), ("review", "Noether", "GPT-6.1 Sol", "high"))
+        # Without a turn_context yet: the hook's model, the model's default effort.
+        self.assertEqual((rows["a1"]["model"], rows["a1"]["effort"]), ("GPT-6 Luna", "medium"))
+        self.assertTrue(self.core.labels["agent.subagents_meta"].startswith('{"a1":'), "compact, ids sorted")
+        self.assertNotIn(" ", self.core.labels["agent.subagents_meta"].replace("GPT-6 Luna", "").replace("GPT-6.1 Sol", ""))
+        self.sub("subagent-stop", "a1", "c1")
+        self.assertEqual(sorted(self.rows()), ["a2"])
+        self.assertEqual(self.core.labels["agent.subagents"], "1")
+        # Quitting clears it with the others.
+        self.hook("session-end", {"reason": "other"})
+        self.assertNotIn("agent.subagents_meta", self.core.labels)
+        self.assertNotIn("agent.app", self.core.labels)
+
+    def test_a_resumed_sub_agent_shows_again_from_its_new_turn(self):
+        self.start_session()
+        self.sub_rollout("a1", [h.task_started("2026-11-18T19:11:53.400Z", turn="c1"), h.task_complete("2026-11-18T19:11:55.100Z", turn="c1")])
+        self.sub("subagent-start", "a1", "c1")
+        self.sub("subagent-stop", "a1", "c1")
+        self.assertIsNone(self.rows())
+        started = int(__import__("rollout").iso_to_unix("2026-11-18T19:11:53.376Z") * 1000)
+        # send_message / followup_task wakes it: its next request is the news (no SubagentStart).
+        self.sub("pre-model-request", "a1", "c2")
+        row = self.rows()["a1"]
+        self.assertEqual(row["started"], started, "started stays the spawn's")
+        self.assertGreater(row["since"], started, "since: when the new turn was first seen")
+        self.sub_rollout("a1", [h.task_started("2026-11-18T19:20:00.000Z", turn="c2")], append=True)
+        self.sub("post-model-request", "a1", "c2", status="completed", token_usage={"total_tokens": 17000})
+        row = self.rows()["a1"]
+        self.assertEqual(row["since"], int(__import__("rollout").iso_to_unix("2026-11-18T19:20:00.000Z") * 1000), "the rollout's turn start")
+        self.assertEqual(row["ctx"], 17000)
+        self.sub("subagent-stop", "a1", "c2")
+        self.assertIsNone(self.rows())
+
+    def test_an_interrupted_turn_goes_at_the_next_hook(self):
+        # An interrupt fires no SubagentStop; the sub-agent's rollout says the turn is over.
+        self.start_session()
+        self.sub_rollout("a1", [h.task_started("2026-11-18T19:11:53.400Z", turn="c1")])
+        self.sub("subagent-start", "a1", "c1")
+        self.assertIn("a1", self.rows())
+        self.sub_rollout("a1", [h.turn_aborted("2026-11-18T19:11:58.000Z", turn="c1")], append=True)
+        self.hook("prompt", {"prompt": "next"})
+        self.assertIsNone(self.rows())
+        self.assertNotIn("agent.subagents", self.core.labels)
+
+    def test_someone_elses_rollout_isnt_its_own(self):
+        # A transcript that isn't the agent's (the parent's): no title from it, the row still there.
+        self.start_session()
+        t0 = time.time() * 1000
+        self.sub("subagent-start", "a9", "c1", transcript_path=self.rollout)
+        row = self.rows()["a9"]
+        self.assertEqual(row["status"], "running")
+        self.assertNotIn("title", row)
+        # No rollout of its own: started and since are when its SubagentStart ran.
+        self.assertTrue(t0 - 1 <= row["started"] <= time.time() * 1000 + 1)
+        self.assertEqual(row["since"], row["started"])
+
+    def test_the_main_agents_pre_model_request_does_nothing(self):
+        before = len(self.core.requests)
+        self.hook("pre-model-request", {"turn_id": "t"})
+        self.assertEqual(len(self.core.requests), before)
 
     def test_not_the_foreground_writes_no_labels_but_limits(self):
         # The daemon case: the terminal's foreground isn't this hook's ancestor.
