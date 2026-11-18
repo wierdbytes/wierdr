@@ -10,10 +10,10 @@ import WierdrModel
 /// glass container as the bars'), ⏎ with the send button's accent pill inside
 /// it. Each time it opens, ⏎ comes to the height the swipe began (with the
 /// keyboard up, to the column's bottom), where the keys an agent asks for are
-/// (⏎, esc, arrows, tab, 1 2 3, y n), with ctrl keys and Paste above (and Hide
+/// (⏎, space, esc, arrows, tab, 1 2 3, y n), with ctrl keys and Paste above (and Hide
 /// over Paste while a keyboard is up). A scroll past either end comes back to
 /// where the end key shows whole and the next one half: ⏎ at the column's top
-/// with half of esc, or the first key at its bottom with half of the next one
+/// with half of space, or the first key at its bottom with half of the next one
 /// (`restRange`). Less room for the column (the keyboard, a taller message
 /// field) moves the keys only when that breaks these limits, to the nearest
 /// place that keeps them, animated; more room leaves them where they are.
@@ -107,7 +107,7 @@ struct PhoneKeyPanel: View {
 
     /// The keys, top to bottom: Hide while a keyboard is up (its place kept
     /// empty otherwise, so nothing moves when it comes), Paste, ctrl keys,
-    /// ! @ /, n y 3 2 1, ⇧tab tab, the arrows, esc and ⏎.
+    /// ! @ /, n y 3 2 1, ⇧tab tab, the arrows, esc, space and ⏎.
     private func keys(_ session: TerminalSession?, typing: Bool) -> some View {
         VStack(spacing: Self.groupSpacing) {
             group {
@@ -153,6 +153,7 @@ struct PhoneKeyPanel: View {
             }
             group {
                 key("esc", .escape, a11y: "Escape")
+                key("␣", .text(" "), symbol: "space", a11y: "Space")
                 key("⏎", .enter, symbol: "return", prominent: true, a11y: "Return")
             }
             .padding(.bottom, Self.bottomMargin)
@@ -191,16 +192,16 @@ struct PhoneKeyPanel: View {
     }
 
     /// The offsets the column may rest at: up to where ⏎ shows whole at its top,
-    /// with half of esc above it, and down to where the first key shows whole at
+    /// with half of space above it, and down to where the first key shows whole at
     /// its bottom, with half of the next one under it (with the keyboard up, Hide
     /// and Paste; without, Paste and ^R, past Hide's empty place and a group's gap).
     private func restRange(typing: Bool) -> ClosedRange<CGFloat> {
         let h = frame.height, k = Self.keyHeight
         guard h > 0, keysHeight > 0 else { return 0...(.greatestFiniteMagnitude) }
-        // The middles of the second key and of esc, in the content.
+        // The middles of the second key and of the one above ⏎ (space), in the content.
         let second = Self.room + (typing ? k + Self.spacing : 2 * k + Self.spacing + Self.groupSpacing) + k / 2
-        let esc = Self.room + keysHeight - Self.bottomMargin - k - Self.spacing - k / 2
-        return (second - h)...max(second - h, esc)
+        let aboveEnter = Self.room + keysHeight - Self.bottomMargin - k - Self.spacing - k / 2
+        return (second - h)...max(second - h, aboveEnter)
     }
 
     private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
