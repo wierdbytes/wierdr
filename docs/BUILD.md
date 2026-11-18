@@ -129,6 +129,34 @@ make ipa && scripts/iphone.sh install # поставить dist/Wierdr.ipa и з
   этот момент им пользуется (iPhone — почти всегда), спроси сначала. `type` печатает туда,
   где фокус клавиатуры; если фокус в терминале, текст уйдёт в живую сессию.
 
+## Замер плавности на iPhone
+
+Instruments пишет и по сети (iPhone в той же Wi‑Fi, `transportType` — `localNetwork`; проверено
+на iOS 27.2.1), `--launch` перезапускает Wierdr (аргументы — после bundle id) и в конце
+завершает его:
+
+```sh
+xcrun xctrace record --template "Time Profiler" --instrument Hitches \
+  --device <UDID> --time-limit 45s --output /tmp/x.trace --launch -- pw.xff.wierdr
+xcrun xctrace export --input /tmp/x.trace --xpath \
+  '/trace-toc/run[@number="1"]/data/table[@schema="hitches-renders"]' > renders.xml
+```
+
+- Запись запускай отвязанной (`nohup … > log 2>&1 < /dev/null &`), иначе прерванная оболочка
+  оставит трассу без шаблона («Document Missing Template»); сохраняется она по сети до минуты.
+- Жесты — WDA: `scripts/iphone.sh swipe 214 760 214 260 120` — бросок. Снимок доступности WDA
+  (~0,4 с главного потока) идёт до жеста, не во время движения; но с WDA в приложении включена
+  доступность, и SwiftUI ведёт её дерево (сверху ~10–20 % главного потока) — сравнивай замеры с
+  WDA только между собой. Бросок к началу, когда список уже у начала, — вытягивание Go to:
+  чередуй броски к концу и к началу.
+- Таблицы: `hitches-renders` — кадры render server (интервалы 8,33 мс — 120 Гц, 12,5 — 80,
+  16,7 — 60; время кадра, offscreen‑проходы), `hitches` — пропуски, `time-profile` — сэмплы
+  потоков (по 1 мс, только пока поток работает), `os-signpost` — свои signpost'ы (Points of
+  Interest). Ритм render server — не ритм содержимого: шаги самого списка видно по временному
+  `os_signpost(.event, …)` в `scrollViewDidScroll`.
+- Эталон для сравнения — тот же бросок в Telegram и в Настройках (WDA `/wda/apps/launch`,
+  render server пишет кадры всего дисплея).
+
 ## Проверка в симуляторе iPhone
 
 `scripts/iphone-sim.sh` — то же, что `ipad.sh`, для симулятора «Wierdr iPhone 13 Pro Max»

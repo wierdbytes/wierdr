@@ -130,6 +130,15 @@ final class SpacesListStatusBarTarget: UIScrollView, UIScrollViewDelegate {
     }
 }
 
+/// The list's blocks, in one view that a scroll step moves (`SpacesListController`); a touch
+/// off them goes on to the list.
+final class SpacesListBlocksView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
+    }
+}
+
 extension UIGestureRecognizer {
     /// A scroll view's own pan, wherever it is: the sidebar's list moves its scroller's onto
     /// its own view (`SpacesListScroller`), so its `view` is no scroll view. The pan's
@@ -184,6 +193,17 @@ final class SpacesListView: UIView {
 /// drifts. So the scroller never has an estimate that changes under a fling, and its own
 /// rubber band and bounce happen at the real ends.
 ///
+/// A scroll step moves the blocks' container (`content`) by its layer alone, not each host:
+/// UIKit tells a hosting view of every move of it or its ancestors, and SwiftUI updates the
+/// whole block for it (its transform), and the hosts' controllers their safe area: every block
+/// on screen and round it, every frame, about two thirds of the main thread's time in a fling
+/// (measured on the iPhone 13 Pro Max). UIKit hears where the container is once the list is at
+/// rest (`announceContentOrigin`). While a finger scrolls it and as it decelerates, a display
+/// link asks for the display's top rate (`boost`), as Telegram's list does (its auxiliary
+/// display link): else the hidden scroller decelerates at 80 Hz, then 60 and 48. At rest the
+/// blocks within two screens are built ahead, one a run-loop turn (`schedulePrefetch`), so a
+/// fling over them builds none (a card takes up to 14 ms); they're let go past three.
+///
 /// Whatever grows, comes or goes keeps the bottom of the built run where it is (what's under
 /// stays, what's over moves), as the old inverted stack did. A block that changes its own
 /// height animates it in SwiftUI inside its host (a card's fold, `SpaceCard.fold`); its host
@@ -205,6 +225,8 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
 
     private let scroller = SpacesListScroller()
     private let statusBarTarget = SpacesListStatusBarTarget()
+    /// The blocks' hosts, moved as one (`moveContent`).
+    private let content = SpacesListBlocksView()
     private let indicator = UIView()
     private lazy var interactions = SpaceListDragDrop(drag: drag)
     private var listView: SpacesListView { view as! SpacesListView }
@@ -215,6 +237,12 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
     private var bottomInset: CGFloat = 0
     /// The lowest built block's bottom, laid out (its move's shift aside), in the list.
     private var anchor: CGFloat = 0
+    /// Where the hosts are in their container: a block's bottom less `anchor`, plus this,
+    /// which changes with `anchor` when the lowest built block does, so they stay put while
+    /// the list scrolls (the container moves, to this less `anchor`).
+    private var contentShift: CGFloat = 0
+    /// The container's origin UIKit last heard of (`announceContentOrigin`).
+    private var heardOrigin: CGFloat = 0
     /// The scroller's offset last seen: a finger's step is the change.
     private var lastOffset: CGFloat = 0
     private var width: CGFloat = 0
@@ -222,6 +250,9 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
     private var ignoreScrolling = false
     private var laying = false
     private var link: CADisplayLink?
+    /// While a finger scrolls the list and as it decelerates: asks for the display's top rate.
+    private var boost: CADisplayLink?
+    private var prefetchScheduled = false
     private var scrollAnimation: ScrollAnimation?
     private var indicatorHide: DispatchWorkItem?
 
@@ -231,6 +262,11 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
     static let infinite: CGFloat = 10_000
     /// What a block never built is taken to be (the indicator, a scroll to it).
     static let estimate: CGFloat = 120
+    /// Blocks are built within this many screens of the screen: as they come (moving), and
+    /// ahead (at rest); let go past `release`.
+    static let reach: CGFloat = 0.5
+    static let prefetch: CGFloat = 2
+    static let release: CGFloat = 3
 
     init(host: PhoneHostContext, drag: SpaceDrag, swipes: PhoneRowSwipes) {
         self.host = host
@@ -257,6 +293,7 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
         view.addSubview(scroller)
         statusBarTarget.tapped = { [weak self] in self?.scrollToStart() }
         view.insertSubview(statusBarTarget, at: 0)
+        view.insertSubview(content, aboveSubview: statusBarTarget)
         // Telegram's: the scroller's pan on the list's view, where the touches are.
         view.addGestureRecognizer(scroller.panGestureRecognizer)
         // A tap off the blocks (under short content, over the top one) closes an open row.
@@ -276,6 +313,8 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
     func teardown() {
         link?.invalidate()
         link = nil
+        boost?.invalidate()
+        boost = nil
         interactions.detach()
     }
 
@@ -409,7 +448,7 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
         guard item.host == nil else { return }
         let host = item.makeHost()
         addChild(host)
-        view.insertSubview(host.view, belowSubview: indicator)
+        content.addSubview(host.view)
         host.didMove(toParent: self)
         item.measure(width: width)
     }
@@ -424,13 +463,22 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
 
     /// Later blocks (higher up) over earlier ones, those going out under all.
     private func orderSubviews() {
-        for item in items where !item.leaving { if let v = item.host?.view { view.insertSubview(v, belowSubview: indicator) } }
-        for item in items where item.leaving { if let v = item.host?.view { view.insertSubview(v, at: 0) } }
+        for item in items where !item.leaving { if let v = item.host?.view { content.addSubview(v) } }
+        for item in items where item.leaving { if let v = item.host?.view { content.insertSubview(v, at: 0) } }
     }
 
     /// A block's height as SwiftUI draws it (mid-animation, frame by frame).
     fileprivate func drawn(_ item: Item, _ height: CGFloat) {
         guard item.host != nil, abs(item.apparent - height) > 0.01 else { return }
+        // Wholly under the screen (scrolled away from), it changes downward, so what's on screen
+        // stays: else an agent's row coming or going down there moved the cards in view (and
+        // as they're kept within the list's end only when it shrinks, they crept on).
+        if let bottom = layout().first(where: { $0.0 === item })?.1,
+           bottom + item.shift.value - item.drawnHeight >= view.bounds.height {
+            let step = (height - item.apparent) * item.presence.value
+            anchor += step
+            contentShift += step
+        }
         item.apparent = height
         relayout(reporting: item)
     }
@@ -477,6 +525,9 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
 
     private var interacting: Bool { scroller.isTracking || scroller.isDecelerating }
 
+    /// Nothing moves the list: no finger, no deceleration, none of its own animations.
+    private var atRest: Bool { !interacting && scrollAnimation == nil && link == nil }
+
     /// Everything in its place: the list's own scroll's step, the ends kept at rest, the
     /// blocks built and let go round the screen, the scroller's size and offset, each host's
     /// frame (Telegram's `updateScrollViewDidScroll`, `updateScroller`, its items' frames).
@@ -504,11 +555,54 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
         }
         updateScroller()
         let scale = max(1, view.traitCollection.displayScale)
+        func px(_ v: CGFloat) -> CGFloat { (v * scale).rounded() / scale }
         for (item, bottom) in layout() {
-            item.place(bottom: ((bottom + item.shift.value) * scale).rounded() / scale, width: width)
+            item.place(bottom: px(bottom + item.shift.value - anchor + contentShift), width: width)
         }
+        moveContent(to: px(contentShift - anchor))
+        if !interacting, scrollAnimation == nil { announceContentOrigin() }
         placeIndicator()
         events.overscroll(startEdge.map { max(0, (h - bottomInset) - $0) } ?? 0)
+        if atRest { schedulePrefetch() }
+    }
+
+    /// Moves the blocks' container to `origin` (its bounds' top), by its layer: UIKit doesn't
+    /// hear of it, so the hosts and their controllers don't either (see the class's notes).
+    private func moveContent(to origin: CGFloat) {
+        let b = view.bounds
+        let center = CGPoint(x: b.midX, y: b.midY)
+        if content.bounds.size != b.size || content.center != center {
+            content.center = center
+            content.bounds = CGRect(x: 0, y: origin, width: b.width, height: b.height)
+            heardOrigin = origin
+        } else if content.layer.bounds.minY != origin {
+            content.layer.bounds.origin.y = origin
+        }
+    }
+
+    /// At rest UIKit hears where the container is, from where it last heard (so it notices):
+    /// SwiftUI in the hosts knows again where they are on screen, the controllers their
+    /// safe area. Once a scroll, for the blocks built.
+    private func announceContentOrigin() {
+        let origin = content.layer.bounds.minY
+        guard origin != heardOrigin else { return }
+        content.layer.bounds.origin.y = heardOrigin
+        UIView.performWithoutAnimation { content.bounds.origin.y = origin }
+        heardOrigin = origin
+    }
+
+    /// At rest, builds the next blocks within `prefetch` screens, one a run-loop turn.
+    private func schedulePrefetch() {
+        guard !prefetchScheduled, view.window != nil else { return }
+        prefetchScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.prefetchScheduled = false
+            guard self.atRest, self.width > 0,
+                  self.fill(keeping: nil, reach: self.view.bounds.height * Self.prefetch) else { return }
+            // The next one, next turn.
+            self.relayout()
+        }
     }
 
     /// At rest the content stays within its known ends: its start not over the header's
@@ -528,29 +622,32 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
         }
     }
 
-    /// Builds the blocks coming within half a screen of it, lets go those past a screen
-    /// (not while they move); true when something changed.
-    private func fill(keeping busy: Item?) -> Bool {
+    /// Builds a block coming within `reach` of the screen (half a screen; ahead at rest, two),
+    /// or lets go one past three (not while it moves); true when something changed.
+    private func fill(keeping busy: Item?, reach: CGFloat? = nil) -> Bool {
         guard let (lo, hi) = realized else { return false }
         let h = view.bounds.height
-        let near = h * 0.5, far = h * 1.0
-        var changed = false
-        // Under: the lowest built one's bottom over the screen's bottom (and half a screen).
+        let near = reach ?? h * Self.reach, far = h * Self.release
+        // Under: the lowest built one's bottom over the screen's bottom (and `near`). The hosts
+        // stay where they are in their container (`contentShift` follows `anchor`).
         if lo > 0, anchor < h + near {
             let item = items[lo - 1]
             realize(item)
             anchor += item.drawnHeight
-            changed = true
+            contentShift += item.drawnHeight
+            orderSubviews()
+            return true
         }
         let top = items[lo...hi].reduce(anchor) { $0 - $1.drawnHeight }
         if hi < items.count - 1, top > -near {
             realize(items[hi + 1])
-            changed = true
+            orderSubviews()
+            return true
         }
-        if changed { orderSubviews(); return true }
-        // Let go: wholly a screen past the bottom or the top.
+        // Let go: wholly `far` past the bottom or the top.
         if lo < hi, anchor - items[lo].drawnHeight > h + far, !items[lo].moving, items[lo] !== busy {
             anchor -= items[lo].drawnHeight
+            contentShift -= items[lo].drawnHeight
             unrealize(items[lo])
             return true
         }
@@ -630,10 +727,32 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
         }
     }
 
+    /// The display's top rate while a finger scrolls the list and as it decelerates (Telegram's
+    /// auxiliary display link, without its dot: asking is enough). UIKit decelerates the hidden
+    /// scroller at 80 Hz else, 60 and 48 as it slows (measured: a fling had 6 of 70 frames at
+    /// 120 Hz; with this, 74 of 96, the rest its last slow points at 60).
+    private func boostFrameRate() {
+        guard boost == nil else { return }
+        let link = CADisplayLink(target: LinkTarget(self), selector: #selector(LinkTarget.boostTick))
+        link.preferredFrameRateRange = PhoneMotion.frameRate
+        link.add(to: .main, forMode: .common)
+        boost = link
+    }
+
+    /// Stops asking once the list stops, whatever stopped it (a finger that caught it and let
+    /// go unmoved tells the delegate nothing): it's at rest, laid out as such.
+    fileprivate func boostTick() {
+        guard !interacting else { return }
+        boost?.invalidate()
+        boost = nil
+        scrollEnded()
+    }
+
     private final class LinkTarget: NSObject {
         weak var list: SpacesListController?
         init(_ list: SpacesListController) { self.list = list }
         @objc func tick() { MainActor.assumeIsolated { list?.tick() } }
+        @objc func boostTick() { MainActor.assumeIsolated { list?.boostTick() } }
     }
 
     // MARK: Scrolling
@@ -648,6 +767,7 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
     }
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        boostFrameRate()
         stopScrollAnimation()
         // Scrolling closes an open row (Telegram: as the list's drag begins).
         if swipes.openID != nil { swipes.closeAll() }
@@ -847,7 +967,7 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
         let area = view.bounds
         return items
             .compactMap { $0.leaving ? nil : $0.host?.view }
-            .filter { $0.frame.intersects(area) }
+            .filter { content.convert($0.frame, to: view).intersects(area) }
             .sorted { $0.frame.minY < $1.frame.minY }
     }
 

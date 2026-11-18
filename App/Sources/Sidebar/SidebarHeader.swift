@@ -358,13 +358,11 @@ struct PhoneEdgeFade: View {
         let total = height + 14
         let fade = min(54, total)
         let solid = (total - fade) / total
-        Rectangle()
-            .fill(theme.chrome.opacity(0.85))
-            .mask {
-                LinearGradient(stops: Self.fade.map { at, alpha in
-                    Gradient.Stop(color: .black.opacity(alpha), location: solid + at * fade / total)
-                }, startPoint: edge == .top ? .top : .bottom, endPoint: edge == .top ? .bottom : .top)
-            }
+        // The chrome's color fading, rather than the chrome masked by a fade: a mask is an
+        // offscreen pass of the render server every frame the list under it moves.
+        LinearGradient(stops: Self.fade.map { at, alpha in
+            Gradient.Stop(color: theme.chrome.opacity(0.85 * alpha), location: solid + at * fade / total)
+        }, startPoint: edge == .top ? .top : .bottom, endPoint: edge == .top ? .bottom : .top)
             .frame(height: total)
             .frame(maxWidth: .infinity)
             .allowsHitTesting(false)
