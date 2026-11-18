@@ -6,8 +6,9 @@ import WierdrModel
 /// chevron), nearest the thumb; over it, unless folded, its rows in the iPhone's chat-row
 /// style (`PhoneListRow`), in `PhoneListLine.lines` on the space's `Workspace.phoneList`:
 /// its pinned agents lowest, right over the header (the newest pin at the bottom), over
-/// them the rest by their latest status change, the oldest on top; an agent's sub-agents
-/// over it (`TreeLines.upward`); the space's terminals and desktop panels over its agents.
+/// them the rest by their latest status change, the oldest on top; an agent's tree (its
+/// sub-agents, terminals and records) over it (`TreeLines.upward`); the space's terminals
+/// and desktop panels over its agents.
 ///
 /// One block of the list (in its own host, `SpacesListController`), so a fold or a pin
 /// animates inside it and a drag lifts it whole (`SpaceDrag`): dragged, it is its own slot, a
@@ -103,6 +104,12 @@ struct SpaceCardLine: View {
                          menu: { kidMenu(kid, parent: parent) }) {
                 PhoneKidRowContent(kid: kid, adjacent: adjacent)
             }
+        case .record(let record, let parent, let adjacent):
+            // No terminal of its own: no swipes, no menu, never selected; a tap opens its terminal.
+            PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
+                         edgeSwipesOnly: false, tap: { controller.open(record, in: parent.row) }) {
+                PhoneRecordRowContent(kid: record, adjacent: adjacent)
+            }
         case .header(let title):
             Text(title)
                 .font(.ui(12))
@@ -138,7 +145,7 @@ struct SpaceCardLine: View {
                          edgeSwipesOnly: false, tap: { controller.focus(pane: item.row.paneID) },
                          menu: { paneMenu(item.row) }) {
                 PhoneAgentRowContent(terminal: t, tab: controller.workspace.tab(item.row.tabID), space: item.space,
-                                     showsSpace: false, subtree: item.row.subtree,
+                                     showsSpace: false, tree: item.row.tree,
                                      open: controller.showsKids(of: item.row))
             }
         }
@@ -254,6 +261,8 @@ struct PhoneListLine: Identifiable {
         case agent(Item)
         /// `adjacent`: right over its agent.
         case kid(SubAgent, parent: Item, adjacent: Bool)
+        /// A record a terminal of the agent's tree reports (`RecordKid`).
+        case record(RecordKid, parent: Item, adjacent: Bool)
         case header(String)
         case pane(Item)
     }
@@ -281,10 +290,13 @@ struct PhoneListLine: Identifiable {
             let pinned = item.row.terminal?.pinned == true
             var block: [PhoneListLine] = []
             if showsKids(item.row) {
-                let kids = item.row.subtree
-                block += kids.enumerated().reversed().map { k, kid in
-                    PhoneListLine(kind: .kid(kid, parent: item, adjacent: k == 0),
-                                  id: "kid:\(kid.terminal.address)", pinned: pinned)
+                block += item.row.tree.enumerated().reversed().map { k, node in
+                    switch node {
+                    case .kid(let kid):
+                        PhoneListLine(kind: .kid(kid, parent: item, adjacent: k == 0), id: node.id, pinned: pinned)
+                    case .record(let record):
+                        PhoneListLine(kind: .record(record, parent: item, adjacent: k == 0), id: node.id, pinned: pinned)
+                    }
                 }
             }
             // Under the block: the one drawn under it (the one before it in the list's order).

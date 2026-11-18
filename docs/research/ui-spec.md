@@ -435,8 +435,26 @@ instead of "1", still non-empty, for the iPhone list's pin order). A terminal be
 ```
 Record fields (schema `Status`): `state` (idle|working|done|blocked|error, required), `app`,
 `msg`, `title`, `kind` (permission|question|auth, blocked only), `progress` (0–100).
-`records` (other 7501 records by id) is **empty/absent on every live terminal** today – nothing
-in these mods reads it. The rich agent data comes from **labels** (below), not records.
+`records` (other 7501 records by id) was empty on every terminal until Claude Code (2.1.327,
+`app: "claude-code"`) started reporting its running background work there, keyed by id, as
+`hc get <t> --json` shows it while it ran two background sub-agents and a background shell:
+```json
+"records": {"a445e47c8be43ef46": {"app": "claude-code", "state": "working", "title": "Count to five slowly"},
+            "a8324c80d4747b666": {"app": "claude-code", "state": "working", "title": "Sleep twenty"},
+            "bcq5ektlx": {"app": "claude-code", "state": "working", "title": "Sleep for 25 seconds in background"}}
+```
+Records come and go with the work (`records: null` / absent when none; also in the `status`
+event's `records`); titles arrive decoded; state `working`, or `blocked` with `kind`
+question/permission when a remote agent needs input. Ids: sub-agents `a` + 16 hex, shells
+`b` + 8 base36. Wierdr shows them as rows of the agent's sub-agent tree (`TaskRecord`, no
+terminal: a tap opens the agent; they count in no status). pi and the desktop mods don't
+use records. The rich agent data comes from **labels** (below), not records.
+
+Claude Code's root record: `msg` is a passing detail, not a name: while working an occasional
+progress note or "1 shell still running", done sometimes a turn summary, blocked the question
+or permission ("approve Bash: rm -rf build", `kind` permission|question|auth), error the
+error's first line. Its session's stable title (AI-made or `/rename`) is the terminal title
+(OSC 0/2, `"Ok reply test"`, spinner glyphs in front while busy).
 
 ### 10.3 `agent.*` labels written by pi (`@wierdbytes/pi-herdr`), live values
 ```
@@ -448,18 +466,30 @@ agent.pid=55908              agent.subagents=2 (only when >0)
 herdr.seen=0  herdr.space=sp…  herdr.tab=tb…  [herdr.pinned=1]
 ```
 All strings. Trust them only if `agent.app` is set **and** `agent.pid == foreground.pid` (stale
-labels from a crashed pi are ignored). Claude Code/Codex/etc. have no `agent.*` labels → their
-rows show the program name in the model slot and no bar/number.
+labels from a crashed pi are ignored).
+
+Claude Code writes the same labels through Wierdr's plugin `cc@wierdr`
+(`Integrations/claude-code`, [claude-code.md](../claude-code.md)):
+```
+agent.app=claude-code        agent.model=Claude Opus 5.5    agent.model_id=claude-opus-5-5
+agent.provider=anthropic     agent.effort=high (low|medium|high|xhigh|max)
+agent.ctx=84312              agent.ctx_max=200000           agent.session=<Claude session id>
+agent.cache_until=<epoch ms> agent.cache_ttl=3600000 (1 h on a subscription)
+agent.pid=<Claude's pid = the terminal's foreground pid>
+agent.subagents=1 (its in-process sub-agents pending/running/waiting)
+```
+Codex etc. have no `agent.*` labels (nor Claude Code without the plugin) → their rows show the
+program name in the model slot and no ring.
 
 ### 10.4 Agent row, field by field
 | UI | source | transform |
 |---|---|---|
 | status mark + row tint | `status.state`, `turn`, `herdr.seen` | §10.1 |
-| title "Wierdr iPad-приложение для herdr-core" | `status.msg` (pi's session name; a question while blocked) | strip leading non-letter/digit chars, trim. Fallbacks: tab name if the tab was named and ≠ program name; terminal `title` if "telling" (not program name/key, not starting with `~` or `/`, no `@`); program name; tab name; address |
+| title "Wierdr iPad-приложение для herdr-core" | `status.msg` (pi's session name; a question while blocked) | strip leading non-letter/digit chars, trim. Fallbacks: tab name if the tab was named and ≠ program name; terminal `title` if "telling" (not program name/key, not starting with `~` or `/`, no `@`); program name; tab name; address. `status.app == "claude-code"`: blocked/error with a `msg` → the `msg`; else a telling terminal `title` (its session's title) first, then `msg`, then the fallbacks |
 | provider mark (Anthropic "A\\") | `agent.provider` | regex map → `providers/<mark>.svg` (anthropic, openai\|chatgpt→openai, google\|gemini\|vertex→google, opencode, openrouter, *copilot*→github-copilot, …, see `meta.js PROVIDERS`); none → program icon |
 | model "Opus 5.5" | `agent.model` | drop `"Vendor: "` prefix and `vendor/` id prefix; drop leading `Claude ` under anthropic, `GPT ` under openai, `Kimi ` under kimi/moonshot. No label → program name ("Claude Code") |
 | "@xhigh" | `agent.effort` | `"@"+word`, color per level (§0) |
-| sub-agent badge "⑂ 2" | `agent.subagents` + count of live terminals whose `parent` == this address and that report a status | |
+| sub-agent badge "⑂ 2" | `agent.subagents` + count of live terminals whose `parent` == this address and that report a status | Wierdr: sub-agents with a terminal + per terminal of the block max(`agent.subagents`, its sub-agent records); `>_`: terminals + background-shell records |
 | context "59.4k" / "105k" | `agent.ctx` | `<1000`: integer; `<100k`: one decimal + `k` (`.0` dropped); `<1M`: integer `k`; else `x.yM`. Hidden when 0/absent |
 | its color | `agent.cache_until` vs now | warm green; ≤30 s left yellow; expired `muted` |
 | bar fill | `agent.ctx / agent.ctx_max` | clamp 0–1; color ≤60 green / ≤80 yellow / >80 red (by floor %) |

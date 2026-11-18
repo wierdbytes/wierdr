@@ -264,6 +264,31 @@ private let channels = [lane.key: "CHAN=="]
         #expect(s.top == .blocked)
     }
 
+    /// Claude Code's row: its session's title (the terminal's) while it works, its
+    /// question while it needs you; its records count as no agents.
+    @Test func claudeCodeTitlesAndRecords() {
+        let claude = Program(key: "claude", name: "Claude Code", iconAsset: "program.claude", tint: false, isAgent: true)
+        let space = Space(id: "sp1", machine: nil, name: "", displayName: "wierdr", folder: "/x", tabs: [])
+        let records = [TaskRecord(id: "a445e47c8be43ef46", app: "claude-code", state: "blocked", title: "Count to five"),
+                       TaskRecord(id: "bcq5ektlx", app: "claude-code", state: "working", title: "Sleep")]
+        func term(_ a: String, _ s: AgentStatus, msg: String) -> TerminalInfo {
+            TerminalInfo(address: a, title: "Ok reply test", program: claude, status: s, message: msg, app: "claude-code",
+                         records: records)
+        }
+        func item(_ t: TerminalInfo) -> InboxItem {
+            let tree = t.records.map { TreeNode.record(RecordKid(record: $0, owner: t.address, lines: [.tee])) }
+            return InboxItem(row: SidebarRow(kind: .agent, paneID: "p" + t.address, tabID: "tb1", terminal: t, tree: tree), space: space)
+        }
+        let inbox = [
+            InboxGroup(status: .blocked, items: [item(term("t1", .blocked, msg: "approve Bash: rm -rf build"))]),
+            InboxGroup(status: .working, items: [item(term("t2", .working, msg: "1 shell still running"))]),
+        ]
+        let s = ActivitySummary.state(of: inbox, tab: { _ in nil }, now: Date(timeIntervalSince1970: 5))
+        #expect(s.agents.map(\.title) == ["approve Bash: rm -rf build", "Ok reply test"])
+        let counts: [Int] = [s.blocked, s.done, s.working, s.idle]
+        #expect(counts == [1, 0, 1, 0])
+    }
+
     @Test func subAgentsCountAsAgents() {
         let space = Space(id: "sp1", machine: nil, name: "", displayName: "wierdr", folder: "/x", tabs: [])
         func term(_ a: String, _ s: AgentStatus?) -> TerminalInfo {

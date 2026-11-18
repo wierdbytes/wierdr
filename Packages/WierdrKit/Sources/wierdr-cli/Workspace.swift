@@ -128,12 +128,17 @@ func render(_ ws: Workspace) -> [String] {
                     if ws.isNested(a) { line += " (nested under its parent)" }
                     out.append(line)
                     if ws.isNested(a) { return }
-                    for kid in ws.subtree(of: a) {
-                        let lead = kid.lines.map { l -> String in
+                    for node in ws.tree(of: a) {
+                        let lead = node.lines.map { l -> String in
                             switch l { case .tee: return "├ "; case .elbow: return "└ "; case .pipe: return "│ "; case .blank: return "  " }
                         }.joined()
-                        let k = kid.terminal
-                        out.append("\(pad)  \(lead)\(k.address) \(k.name ?? k.program.name) \(status(k.kidStatus))\(kid.paneID.map { " kept in \($0)" } ?? "")")
+                        switch node {
+                        case .kid(let kid):
+                            let k = kid.terminal
+                            out.append("\(pad)  \(lead)\(k.address) \(k.name ?? k.program.name) \(status(k.kidStatus))\(kid.paneID.map { " kept in \($0)" } ?? "")")
+                        case .record(let r):
+                            out.append("\(pad)  \(lead)record \(r.record.id) [\(r.record.kind)] \(status(r.record.status)) \"\(r.record.title.prefix(50))\"")
+                        }
                     }
                 }
             }
@@ -145,6 +150,11 @@ func render(_ ws: Workspace) -> [String] {
         .sorted { $0.address < $1.address }
     if !loose.isEmpty {
         out.append("terminals without a pane: " + loose.map { "\($0.address)(\($0.program.key))" }.joined(separator: " "))
+        for t in loose where !t.records.isEmpty {
+            out.append("  \(t.address) title=\"\(AgentText.title(t, tab: nil))\" records: " + t.records.map {
+                "\($0.id) [\($0.kind)] \(status($0.status)) \"\($0.title)\""
+            }.joined(separator: ", "))
+        }
     }
     return out
 }

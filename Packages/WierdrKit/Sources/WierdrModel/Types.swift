@@ -146,6 +146,9 @@ public struct TerminalInfo: Identifiable, Hashable, Sendable {
     /// Qualified space/tab ids from `herdr.space` / `herdr.tab` labels.
     public var spaceID: String?
     public var tabID: String?
+    /// Work its program runs in-process and reports as 7501 records of its own (Claude
+    /// Code's background sub-agents and shells), by id; none once it ended.
+    public var records: [TaskRecord]
 
     public init(address: String, machine: String? = nil, name: String? = nil, template: String? = nil,
                 createdAt: Date? = nil, title: String = "",
@@ -154,17 +157,28 @@ public struct TerminalInfo: Identifiable, Hashable, Sendable {
                 message: String? = nil, app: String? = nil, turn: Int = 0,
                 statusChangedAt: Date? = nil, parent: String? = nil, labels: [String: String] = [:],
                 pinned: Bool = false, pinnedAt: Date? = nil, meta: AgentMeta? = nil, spaceID: String? = nil,
-                tabID: String? = nil) {
+                tabID: String? = nil, records: [TaskRecord] = []) {
         self.address = address; self.machine = machine; self.name = name; self.title = title
         self.template = template; self.createdAt = createdAt
         self.cwd = cwd; self.processName = processName; self.program = program; self.isLive = isLive
         self.status = status; self.state = state; self.message = message; self.app = app
         self.turn = turn; self.statusChangedAt = statusChangedAt; self.parent = parent
         self.labels = labels; self.pinned = pinned; self.pinnedAt = pinnedAt; self.meta = meta
-        self.spaceID = spaceID; self.tabID = tabID
+        self.spaceID = spaceID; self.tabID = tabID; self.records = records
     }
 
     public var isAgent: Bool { status != nil }
+
+    /// The sub-agents it runs in-process: what it says (`agent.subagents`) or the
+    /// sub-agent records it reports, whichever is more (the same work, told twice).
+    public var inProcessAgents: Int {
+        max(meta?.subagents ?? 0, records.filter { $0.kind == .agent }.count)
+    }
+
+    /// The background shells it reports (records).
+    public var backgroundShells: Int {
+        records.filter { $0.kind == .shell }.count
+    }
 
     /// Its status as a sub-agent reads under its parent (`kidStatus`): never
     /// done, it reports to its parent and the parent's done is the news
@@ -195,6 +209,133 @@ public struct SubAgent: Identifiable, Hashable, Sendable {
 
     public var isAgent: Bool { terminal.isAgent }
     public var depth: Int { lines.count }
+}
+
+/// A piece of work a terminal's program runs in-process and reports as an OSC 7501
+/// record of its own (`Terminal.records`, keyed by id), next to its root status:
+/// Claude Code's background sub-agents and shells. It has no terminal: it shows as a
+/// row of its terminal's tree, and a tap opens that terminal.
+public struct TaskRecord: Identifiable, Hashable, Sendable {
+    /// What it is, as far as its id tells: Claude Code's background shells are `b` and
+    /// 8 base-36 characters (its sub-agents `a` and 16 hex); anything else is taken for
+    /// a sub-agent.
+    public enum Kind: Hashable, Sendable { case agent, shell }
+
+    /// Its record's key (`a445e47c8be43ef46`, `bcq5ektlx`).
+    public var id: String
+    public var app: String?
+    /// Raw 7501 word: `working`, `blocked` …
+    public var state: String
+    /// What it does (`title`, else `msg`, else its id).
+    public var title: String
+    /// `msg` (a blocked one's question).
+    public var message: String?
+    /// 7501 `kind` of a blocked one: `permission`, `question`, `auth`.
+    public var blockedKind: String?
+    public var progress: Int?
+    public var kind: Kind
+
+    public init(id: String, app: String? = nil, state: String, title: String, message: String? = nil,
+                blockedKind: String? = nil, progress: Int? = nil, kind: Kind? = nil) {
+        self.id = id; self.app = app; self.state = state; self.title = title; self.message = message
+        self.blockedKind = blockedKind; self.progress = progress
+        self.kind = kind ?? Self.kind(id: id, app: app)
+    }
+
+    /// Its dot, as a sub-agent's (`kidStatus`): working, blocked (`blocked`/`error`),
+    /// else idle (it reports to its terminal, whose own status is the news).
+    public var status: AgentStatus {
+        switch state {
+        case "working": return .working
+        case "blocked", "error": return .blocked
+        default: return .idle
+        }
+    }
+
+    static func kind(id: String, app: String?) -> Kind {
+        guard app == "claude-code", id.count == 9, id.first == "b" else { return .agent }
+        return id.dropFirst().allSatisfy { ($0.isASCII && $0.isNumber) || ("a"..."z").contains($0) } ? .shell : .agent
+    }
+}
+
+/// A record in an agent's tree, under the terminal that reports it.
+public struct RecordKid: Identifiable, Hashable, Sendable {
+    public var id: String { "\(owner)#\(record.id)" }
+    public var record: TaskRecord
+    /// The terminal that reports it: the row's agent or one of its sub-agents.
+    public var owner: String
+    /// As `SubAgent.lines`.
+    public var lines: [SubAgent.Line]
+
+    public init(record: TaskRecord, owner: String, lines: [SubAgent.Line]) {
+        self.record = record; self.owner = owner; self.lines = lines
+    }
+}
+
+/// A row of an agent's tree, depth first: a terminal it started (`SubAgent`), or a
+/// record a terminal of the tree reports (after that terminal's own children).
+public enum TreeNode: Identifiable, Hashable, Sendable {
+    case kid(SubAgent)
+    case record(RecordKid)
+
+    public var id: String {
+        switch self {
+        case .kid(let k): return "kid:\(k.terminal.address)"
+        case .record(let r): return "record:\(r.id)"
+        }
+    }
+
+    public var lines: [SubAgent.Line] {
+        switch self {
+        case .kid(let k): return k.lines
+        case .record(let r): return r.lines
+        }
+    }
+
+    public var kid: SubAgent? { if case .kid(let k) = self { return k } else { return nil } }
+    public var record: RecordKid? { if case .record(let r) = self { return r } else { return nil } }
+}
+
+/// What an agent row's badges count: its tree's sub-agents (with a terminal, and those
+/// the block's terminals run in-process: per terminal `inProcessAgents`) and terminals
+/// (plain ones it started, and the background shells the block's terminals report).
+public struct KidCounts: Hashable, Sendable {
+    public var terminalAgents = 0
+    public var inProcess = 0
+    public var terminals = 0
+    public var shells = 0
+    /// One of its sub-agents (or records) needs you.
+    public var alert = false
+
+    public var agents: Int { terminalAgents + inProcess }
+    public var allTerminals: Int { terminals + shells }
+
+    public init() {}
+
+    /// For an agent `terminal` and its tree.
+    public init(terminal: TerminalInfo?, tree: [TreeNode]) {
+        var seen: Set<String> = []
+        func own(_ t: TerminalInfo) {
+            guard seen.insert(t.address).inserted else { return }
+            inProcess += t.inProcessAgents
+            shells += t.backgroundShells
+        }
+        if let terminal { own(terminal) }
+        for node in tree {
+            switch node {
+            case .kid(let k):
+                if k.isAgent {
+                    terminalAgents += 1
+                    if k.terminal.status == .blocked { alert = true }
+                } else {
+                    terminals += 1
+                }
+                own(k.terminal)
+            case .record(let r):
+                if r.record.status == .blocked { alert = true }
+            }
+        }
+    }
 }
 
 // MARK: - Layout: spaces, tabs, panes
@@ -360,18 +501,26 @@ public struct SidebarRow: Identifiable, Hashable, Sendable {
     /// An agent's sub-agents and terminals, depth first (kept ones too: they show
     /// here, not as rows of their own tab).
     public var subtree: [SubAgent]
+    /// What its tree shows, depth first: `subtree` and the records its terminals report,
+    /// each terminal's after its own children (the lines drawn for both).
+    public var tree: [TreeNode]
     /// The most urgent of its own status and its sub-agents' (what the sidebar sorts by).
     public var urgency: AgentStatus?
 
     public init(kind: Kind, paneID: String, tabID: String, terminal: TerminalInfo?, mod: String? = nil,
-                tabIsSplit: Bool = false, subtree: [SubAgent] = [], urgency: AgentStatus? = nil) {
+                tabIsSplit: Bool = false, subtree: [SubAgent] = [], tree: [TreeNode]? = nil,
+                urgency: AgentStatus? = nil) {
         self.kind = kind; self.paneID = paneID; self.tabID = tabID; self.terminal = terminal
         self.mod = mod; self.tabIsSplit = tabIsSplit; self.subtree = subtree
+        self.tree = tree ?? subtree.map(TreeNode.kid)
         self.urgency = urgency ?? terminal?.status
     }
 
     /// This row's pane, then its kept sub-agents' panes (the order ⌘] steps through).
     public var paneIDs: [String] { [paneID] + subtree.compactMap(\.paneID) }
+
+    /// What its badges count (an agent's row).
+    public var kidCounts: KidCounts { KidCounts(terminal: terminal, tree: tree) }
 }
 
 // MARK: - Agent counts
@@ -416,9 +565,10 @@ public struct SpaceTally: Hashable, Sendable {
     /// Its agents with a pane (rows of their own).
     public var agents: Int
     /// Their sub-agents: those with a terminal (under them in the list) and those
-    /// pi runs in-process (`AgentMeta.subagents`), as the rows' badges count them.
+    /// they run in-process (`TerminalInfo.inProcessAgents`: pi's `agent.subagents`,
+    /// Claude Code's sub-agent records), as the rows' badges count them.
     public var subAgents: Int
-    /// Its plain terminals and those its agents started.
+    /// Its plain terminals, those its agents started and the background shells they report.
     public var terminals: Int
 
     public init(agents: Int = 0, subAgents: Int = 0, terminals: Int = 0) {
@@ -430,13 +580,24 @@ extension Sequence where Element == SidebarRow {
     /// How many agents, sub-agents and terminals these rows show, each terminal once.
     public var tally: SpaceTally {
         var agents: Set<String> = [], kids: Set<String> = [], terminals: Set<String> = []
-        var inner = 0
+        var inner = 0, shells = 0
+        // Each terminal's in-process work once (one in two panes has two rows).
+        var owners: Set<String> = []
+        func own(_ t: TerminalInfo) {
+            guard owners.insert(t.address).inserted else { return }
+            inner += t.inProcessAgents
+            shells += t.backgroundShells
+        }
         for row in self {
             switch row.kind {
             case .agent:
-                if let t = row.terminal, agents.insert(t.address).inserted { inner += t.meta?.subagents ?? 0 }
+                if let t = row.terminal {
+                    agents.insert(t.address)
+                    own(t)
+                }
                 for kid in row.subtree {
                     if kid.isAgent { kids.insert(kid.terminal.address) } else { terminals.insert(kid.terminal.address) }
+                    own(kid.terminal)
                 }
             case .terminal:
                 terminals.insert(row.terminal?.address ?? row.paneID)
@@ -444,7 +605,7 @@ extension Sequence where Element == SidebarRow {
                 break
             }
         }
-        return SpaceTally(agents: agents.count, subAgents: kids.count + inner, terminals: terminals.count)
+        return SpaceTally(agents: agents.count, subAgents: kids.count + inner, terminals: terminals.count + shells)
     }
 }
 

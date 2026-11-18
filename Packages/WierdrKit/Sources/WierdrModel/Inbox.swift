@@ -20,10 +20,23 @@ public enum AgentText {
         return true
     }
 
+    /// The 7501 app of Claude Code.
+    public static let claudeCode = "claude-code"
+
     /// Agent row title: status message, else tab name (named and ≠ program),
     /// else a telling title, else program name, else tab name, else address.
+    ///
+    /// Claude Code (7501 app `claude-code`): its `msg` is a passing detail (a progress
+    /// note, "1 shell still running", a turn's summary), its session's title (made up by
+    /// it or `/rename`) is the terminal's title. So while it needs you (blocked, error)
+    /// its message (the question, the error) if any; otherwise a telling title first,
+    /// then the message, then the same fallbacks.
     public static func title(_ t: TerminalInfo, tab: Tab?) -> String {
         let msg = cleanTitle(t.message)
+        if t.app == claudeCode {
+            if t.status == .blocked, !msg.isEmpty { return msg }
+            if isTelling(t.title, program: t.program) { return cleanTitle(t.title) }
+        }
         if !msg.isEmpty { return msg }
         if let tab, !tab.name.isEmpty, tab.name.lowercased() != t.program.name.lowercased() { return tab.name }
         if isTelling(t.title, program: t.program) { return cleanTitle(t.title) }

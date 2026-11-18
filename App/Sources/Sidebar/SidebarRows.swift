@@ -2,9 +2,9 @@ import SwiftUI
 import WierdrModel
 
 extension WorkspaceController {
-    /// An agent's sub-agents show under it (unless its badge folded them).
+    /// An agent's tree (sub-agents, terminals, records) shows under it (unless its badge folded it).
     func showsKids(of row: SidebarRow) -> Bool {
-        row.kind == .agent && !row.subtree.isEmpty && !foldedAgents.contains(row.terminal?.address ?? "")
+        row.kind == .agent && !row.tree.isEmpty && !foldedAgents.contains(row.terminal?.address ?? "")
     }
 }
 

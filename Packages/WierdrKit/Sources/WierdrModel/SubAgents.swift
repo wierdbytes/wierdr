@@ -61,16 +61,31 @@ struct SubAgentIndex {
     }
 
     /// The live terminals `address` started, and theirs, depth first, each with
-    /// the tree lines in front of it.
+    /// the tree lines in front of it (drawn with the records, `tree(of:)`).
     func subtree(of address: String) -> [SubAgent] {
-        var out: [SubAgent] = []
+        tree(of: address).compactMap(\.kid)
+    }
+
+    /// `subtree(of:)` with the records its terminals report (`TerminalInfo.records`):
+    /// under each terminal (`address` itself too) its children, each followed by its
+    /// own, then its records, by id. Records last: they come and go with each
+    /// background job, and so leave the rows of the terminals they share a level with
+    /// where they were.
+    func tree(of address: String) -> [TreeNode] {
+        var out: [TreeNode] = []
         var seen: Set<String> = [address]
         func walk(_ addr: String, _ lead: [SubAgent.Line]) {
             let kids = (children[addr] ?? []).filter { seen.insert($0.address).inserted }
+            let records = terminals[addr].map { $0.isLive ? $0.records : [] } ?? []
+            let count = kids.count + records.count
             for (i, k) in kids.enumerated() {
-                let last = i == kids.count - 1
-                out.append(SubAgent(terminal: k, lines: lead + [last ? .elbow : .tee], paneID: placed[k.address]?.pane))
+                let last = i == count - 1
+                out.append(.kid(SubAgent(terminal: k, lines: lead + [last ? .elbow : .tee], paneID: placed[k.address]?.pane)))
                 walk(k.address, lead + [last ? .blank : .pipe])
+            }
+            for (j, r) in records.enumerated() {
+                let last = kids.count + j == count - 1
+                out.append(.record(RecordKid(record: r, owner: addr, lines: lead + [last ? .elbow : .tee])))
             }
         }
         walk(address, [])

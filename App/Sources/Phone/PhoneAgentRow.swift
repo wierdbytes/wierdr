@@ -24,7 +24,8 @@ enum PhoneRowMetrics {
 ///    it has been in its state, on a pill of its status's color: needs you (red),
 ///    done (green), working (yellow), plain while idle (`PhoneAgeLabel`);
 /// 2. its context's ring, its model (cut first when room runs out), @effort, its
-///    sub-agents and terminals (tap: fold or unfold them); on the right its space's name
+///    sub-agents and terminals (`KidCounts`: with those it runs in-process and its
+///    background shells; tap: fold or unfold its tree); on the right its space's name
 ///    on a gray chip as theirs (in Go to; cut when room runs out) and the pin glyph.
 struct PhoneAgentRowContent: View {
     var terminal: TerminalInfo
@@ -32,7 +33,8 @@ struct PhoneAgentRowContent: View {
     var space: Space
     /// The space's name on line 2 (Go to, where rows of all spaces mix; a card names its space).
     var showsSpace: Bool
-    var subtree: [SubAgent]
+    /// Its tree (`SidebarRow.tree`): sub-agents, terminals, records.
+    var tree: [TreeNode]
     /// Its sub-agents show under it.
     var open: Bool
     /// The title's letters a search matched (`Fuzzy`), drawn in the accent color.
@@ -65,7 +67,7 @@ struct PhoneAgentRowContent: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText(now: now))
         .accessibilityActions {
-            if !subtree.isEmpty {
+            if !tree.isEmpty {
                 Button(open ? "Hide Sub-agents" : "Show Sub-agents") { toggleKids() }
             }
         }
@@ -96,22 +98,19 @@ struct PhoneAgentRowContent: View {
     /// The context's ring, model, @effort (the model gives way first), the sub-agents' and
     /// terminals' chips, then on the right the space (Go to) and the pin.
     private var secondLine: some View {
-        let kidAgents = subtree.filter(\.isAgent)
-        let kidTerms = subtree.count - kidAgents.count
-        // pi's own in-process sub-agents (pi-herdr's count) have no terminal: they only add to the count.
-        let inner = terminal.meta?.subagents ?? 0
+        let counts = KidCounts(terminal: terminal, tree: tree)
+        // A tap folds the whole tree; in-process sub-agents without records (pi's) have no rows.
+        let fold: (() -> Void)? = tree.isEmpty ? nil : toggleKids
         return HStack(spacing: 8) {
             PhoneModelLine(terminal: terminal, size: 13, ringFirst: true)
-            if kidAgents.count + inner > 0 {
-                PhoneKidBadge(icon: "bot", count: kidAgents.count + inner, open: open,
-                              alert: kidAgents.contains { $0.terminal.status == .blocked },
-                              label: kidLabel(kidAgents.count, inner),
-                              action: kidAgents.isEmpty ? nil : toggleKids)
+            if counts.agents > 0 {
+                PhoneKidBadge(icon: "bot", count: counts.agents, open: open, alert: counts.alert,
+                              label: kidLabel(counts), action: fold)
                     .fixedSize()
             }
-            if kidTerms > 0 {
-                PhoneKidBadge(icon: "terminal", count: kidTerms, open: open, alert: false,
-                              label: kidTerms == 1 ? "1 terminal" : "\(kidTerms) terminals", action: toggleKids)
+            if counts.allTerminals > 0 {
+                PhoneKidBadge(icon: "terminal", count: counts.allTerminals, open: open, alert: false,
+                              label: terminalLabel(counts), action: fold)
                     .fixedSize()
             }
             Spacer(minLength: 0)
@@ -140,10 +139,18 @@ struct PhoneAgentRowContent: View {
         }
     }
 
-    private func kidLabel(_ agents: Int, _ inner: Int) -> String {
+    private func kidLabel(_ counts: KidCounts) -> String {
         var parts: [String] = []
+        let agents = counts.terminalAgents, inner = counts.inProcess
         if agents > 0 { parts.append(agents == 1 ? "1 sub-agent" : "\(agents) sub-agents") }
-        if inner > 0 { parts.append("\(inner) in pi") }
+        if inner > 0 { parts.append("\(inner) in \(terminal.program.name)") }
+        return parts.joined(separator: " + ")
+    }
+
+    private func terminalLabel(_ counts: KidCounts) -> String {
+        var parts: [String] = []
+        if counts.terminals > 0 { parts.append(counts.terminals == 1 ? "1 terminal" : "\(counts.terminals) terminals") }
+        if counts.shells > 0 { parts.append(counts.shells == 1 ? "1 background shell" : "\(counts.shells) background shells") }
         return parts.joined(separator: " + ")
     }
 
@@ -156,8 +163,9 @@ struct PhoneAgentRowContent: View {
         if let c = Format.context(terminal.meta?.ctx) { parts.append("\(c) context") }
         if let a = Format.age(since: terminal.statusChangedAt, now: now) { parts.append(a) }
         if terminal.pinned { parts.append("pinned") }
-        let kids = subtree.filter(\.isAgent).count + (terminal.meta?.subagents ?? 0)
-        if kids > 0 { parts.append(kids == 1 ? "1 sub-agent" : "\(kids) sub-agents") }
+        let counts = KidCounts(terminal: terminal, tree: tree)
+        if counts.agents > 0 { parts.append(counts.agents == 1 ? "1 sub-agent" : "\(counts.agents) sub-agents") }
+        if counts.shells > 0 { parts.append(counts.shells == 1 ? "1 background shell" : "\(counts.shells) background shells") }
         return parts.joined(separator: ", ")
     }
 }
@@ -433,6 +441,54 @@ struct PhoneKidRowContent: View {
         if let c = Format.context(t.meta?.ctx) { parts.append("\(c) context") }
         if let a = Format.age(since: t.statusChangedAt, now: now) { parts.append(a) }
         if kid.paneID != nil { parts.append("kept") }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// A record in an agent's tree (`RecordKid`): work a terminal of the tree runs in-process
+/// and reports as a 7501 record (Claude Code's background sub-agents and shells). One line
+/// as a plain terminal's (36 pt): the tree's lines, its status's dot (working, needs you),
+/// its title. No age (nothing tells when it started), no swipes, no menu: a tap opens the
+/// terminal reporting it.
+struct PhoneRecordRowContent: View {
+    var kid: RecordKid
+    /// Right over its agent (`PhoneKidRowContent.adjacent`).
+    var adjacent: Bool
+    /// Its title's letters a search matched (`Fuzzy`), in the accent color.
+    var titleMatch: [Int] = []
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        let h = PhoneRowMetrics.kidTerminalHeight
+        let r = kid.record
+        HStack(spacing: 0) {
+            if adjacent {
+                TreeLines(lines: kid.lines, height: h, mid: h / 2, upward: true)
+            } else {
+                TreeLines(lines: kid.lines, height: h - 4, mid: h / 2, upward: true)
+                    .frame(height: h, alignment: .top)
+            }
+            StatusMark(status: r.status)
+                .frame(width: 14)
+                .padding(.trailing, 8)
+            MatchText.text(r.title, matched: titleMatch, color: theme.accent)
+                .font(.ui(15))
+                .foregroundStyle(r.status == .idle ? theme.muted : theme.foreground)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, PhoneRowMetrics.treeLeading)
+        .padding(.trailing, PhoneRowMetrics.inset)
+        .frame(height: h)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.accessibilityText(r))
+        .accessibilityHint("Opens its agent")
+    }
+
+    static func accessibilityText(_ r: TaskRecord) -> String {
+        var parts = [r.kind == .shell ? "Background shell" : "Background sub-agent", r.title, Format.statusWord(r.status)]
+        if r.status == .blocked, let m = r.message, m != r.title { parts.append(m) }
+        if let p = r.progress { parts.append("\(p) percent") }
         return parts.joined(separator: ", ")
     }
 }

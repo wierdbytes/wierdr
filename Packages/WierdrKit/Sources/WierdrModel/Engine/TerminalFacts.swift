@@ -79,6 +79,29 @@ enum StatusRule {
     }
 }
 
+// MARK: - 7501 records
+
+enum StatusRecords {
+    /// A terminal's `records` (`{id: Status}`, as `hc get` shows them) → its work, by id.
+    /// Records without a state (cleared) or an id are left out.
+    static func parse(_ value: JSONValue?) -> [TaskRecord] {
+        guard let object = value?.object else { return [] }
+        func text(_ v: JSONValue?) -> String? {
+            guard let s = v?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+            return s
+        }
+        var out: [TaskRecord] = []
+        for (id, record) in object where !id.isEmpty {
+            guard let state = text(record["state"]) else { continue }
+            let message = text(record["msg"])
+            out.append(TaskRecord(id: id, app: text(record["app"]), state: state,
+                                  title: text(record["title"]) ?? message ?? id, message: message,
+                                  blockedKind: text(record["kind"]), progress: record["progress"]?.int))
+        }
+        return out.sorted { $0.id < $1.id }
+    }
+}
+
 // MARK: - agent.* labels
 
 enum AgentLabels {
@@ -208,7 +231,8 @@ struct TerminalDeriver {
             pinnedAt: Self.pinTime(t.labels[label("pinned")]),
             meta: AgentLabels.meta(labels: t.labels, foregroundPID: t.foreground?.pid),
             spaceID: qualifiedLabel("space"),
-            tabID: qualifiedLabel("tab"))
+            tabID: qualifiedLabel("tab"),
+            records: t.isLive ? StatusRecords.parse(t.records) : [])
     }
 }
 

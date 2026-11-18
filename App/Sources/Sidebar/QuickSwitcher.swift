@@ -110,13 +110,17 @@ struct QuickSwitcher: View {
             if let t = hit.item.row.terminal {
                 listRow(line, next: next, to: .pane(hit.item.row.paneID, hit.item.space)) {
                     PhoneAgentRowContent(terminal: t, tab: controller.workspace.tab(hit.item.row.tabID),
-                                         space: hit.item.space, showsSpace: true, subtree: hit.item.row.subtree,
+                                         space: hit.item.space, showsSpace: true, tree: hit.item.row.tree,
                                          open: hit.showsKids, titleMatch: hit.titleMatch)
                 }
             }
         case .kid(let kid, let parent, let adjacent, let match):
             listRow(line, next: next, to: .kid(kid, from: parent.item.row.paneID, parent.item.space)) {
                 PhoneKidRowContent(kid: kid, adjacent: adjacent, titleMatch: match)
+            }
+        case .record(let record, let parent, let adjacent, let match):
+            listRow(line, next: next, to: .record(record, in: parent.item.row, parent.item.space)) {
+                PhoneRecordRowContent(kid: record, adjacent: adjacent, titleMatch: match)
             }
         }
     }
@@ -217,6 +221,9 @@ struct QuickSwitcher: View {
         case .kid(let kid, let rowPane, let s):
             space = s
             controller.open(kid, from: rowPane)
+        case .record(let record, let row, let s):
+            space = s
+            controller.open(record, in: row)
         }
         if controller.showsMachines { controller.foldedMachines.remove(space.machine ?? "") }
         close()
@@ -232,6 +239,8 @@ enum GoToTarget {
     case pane(String, Space)
     /// A sub-agent, as a tap on its row in the list opens it.
     case kid(SubAgent, from: String, Space)
+    /// A record: the terminal reporting it, as a tap on its row in the list opens it.
+    case record(RecordKid, in: SidebarRow, Space)
 }
 
 /// A space that matched: what it holds and its agents' statuses.
@@ -247,7 +256,7 @@ struct GoToSpaceHit {
 struct GoToAgentHit {
     var item: InboxItem
     var titleMatch: [Int]
-    /// Its sub-agents' matched letters, by address.
+    /// Its tree's matched letters (sub-agents' and records' titles), by `TreeNode.id`.
     var kidMatches: [String: [Int]]
     /// The best of its own score and its sub-agents'.
     var score: Int
@@ -267,6 +276,7 @@ struct GoToLine: Identifiable {
         case agent(GoToAgentHit)
         /// `adjacent`: right over its agent.
         case kid(SubAgent, parent: GoToAgentHit, adjacent: Bool, match: [Int])
+        case record(RecordKid, parent: GoToAgentHit, adjacent: Bool, match: [Int])
     }
 
     var kind: Kind
@@ -311,18 +321,29 @@ struct GoToResults {
             guard let t = item.row.terminal else { continue }
             let own = Fuzzy.match(q, in: Format.agentTitle(t, tab: ws.tab(item.row.tabID)))
             var kidMatches: [String: [Int]] = [:]
-            var bestKid: (kid: SubAgent, score: Int)?
+            var bestKid: (target: GoToTarget, score: Int)?
             if searching {
-                for kid in item.row.subtree where kid.isAgent {
-                    guard let m = Fuzzy.match(q, in: Format.kidTitle(kid.terminal)) else { continue }
-                    kidMatches[kid.terminal.address] = m.indices
-                    if m.score > (bestKid?.score ?? .min) { bestKid = (kid, m.score) }
+                for node in item.row.tree {
+                    let title: String
+                    let target: GoToTarget
+                    switch node {
+                    case .kid(let kid):
+                        guard kid.isAgent else { continue }
+                        title = Format.kidTitle(kid.terminal)
+                        target = .kid(kid, from: item.row.paneID, item.space)
+                    case .record(let record):
+                        title = record.record.title
+                        target = .record(record, in: item.row, item.space)
+                    }
+                    guard let m = Fuzzy.match(q, in: title) else { continue }
+                    kidMatches[node.id] = m.indices
+                    if m.score > (bestKid?.score ?? .min) { bestKid = (target, m.score) }
                 }
             }
             guard own != nil || bestKid != nil else { continue }
             let ownScore = own?.score ?? .min
             let target: GoToTarget = if let bestKid, bestKid.score > ownScore {
-                .kid(bestKid.kid, from: item.row.paneID, item.space)
+                bestKid.target
             } else {
                 .pane(item.row.paneID, item.space)
             }
@@ -362,10 +383,14 @@ struct GoToResults {
             out.append(GoToLine(kind: .header("Agents"), id: "header:agents"))
             for (i, hit) in agents.enumerated().reversed() {
                 if hit.showsKids {
-                    for (k, kid) in hit.item.row.subtree.enumerated().reversed() {
-                        out.append(GoToLine(kind: .kid(kid, parent: hit, adjacent: k == 0,
-                                                       match: hit.kidMatches[kid.terminal.address] ?? []),
-                                            id: "kid:\(kid.terminal.address)"))
+                    for (k, node) in hit.item.row.tree.enumerated().reversed() {
+                        let match = hit.kidMatches[node.id] ?? []
+                        switch node {
+                        case .kid(let kid):
+                            out.append(GoToLine(kind: .kid(kid, parent: hit, adjacent: k == 0, match: match), id: node.id))
+                        case .record(let record):
+                            out.append(GoToLine(kind: .record(record, parent: hit, adjacent: k == 0, match: match), id: node.id))
+                        }
                     }
                 }
                 let separator: PhoneRowSeparator = i > 0 ? .inset(PhoneRowMetrics.inset) : (spaces.isEmpty ? .none : .full)

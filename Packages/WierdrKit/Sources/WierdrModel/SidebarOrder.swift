@@ -26,10 +26,12 @@ enum SidebarOrder {
                     if index.isNested(address) { continue }
                     let info = terminals[address]
                     if let info, info.isAgent {
-                        let subtree = index.subtree(of: address)
+                        let tree = index.tree(of: address)
+                        let subtree = tree.compactMap(\.kid)
+                        // Records don't count: the agent's own status already tells of its work.
                         let urgency = AgentStatus.rollup([info.status] + subtree.map(\.terminal.kidStatus))
                         agents.append(SidebarRow(kind: .agent, paneID: pane.id, tabID: tab.id, terminal: info,
-                                                 subtree: subtree, urgency: urgency))
+                                                 subtree: subtree, tree: tree, urgency: urgency))
                     } else {
                         others.append(SidebarRow(kind: .terminal, paneID: pane.id, tabID: tab.id, terminal: info))
                     }

@@ -106,6 +106,11 @@ public final class Workspace {
         subAgents.subtree(of: address)
     }
 
+    /// The same with the records its terminals report, as the list draws it.
+    public func tree(of address: String) -> [TreeNode] {
+        subAgents.tree(of: address)
+    }
+
     /// Whether a terminal shows under an agent in the sidebar rather than as a row of its own.
     public func isNested(_ address: String) -> Bool {
         subAgents.isNested(address)

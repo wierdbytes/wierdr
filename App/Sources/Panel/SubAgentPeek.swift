@@ -104,7 +104,7 @@ private struct PeekBar: View {
                 .foregroundStyle(theme.foreground)
                 .lineLimit(1)
             if let parent {
-                Text("from \(Format.kidTitle(parent))")
+                Text("from \(parentTitle(parent, ws))")
                     .font(.ui(12.5))
                     .foregroundStyle(theme.dim)
                     .lineLimit(1)
@@ -129,6 +129,13 @@ private struct PeekBar: View {
         .background(theme.surface)
         .overlay(alignment: .bottom) { Hairline() }
         .accessibilityElement(children: .contain)
+    }
+
+    /// Its parent as the list names it: an agent with a pane, by its row's title; else
+    /// (a sub-agent itself) by its sub-agent row's.
+    private func parentTitle(_ parent: TerminalInfo, _ ws: Workspace) -> String {
+        guard let place = ws.pane(showing: parent.address), parent.isAgent else { return Format.kidTitle(parent) }
+        return Format.agentTitle(parent, tab: place.tab)
     }
 
     private func keepHint(_ target: (spaceID: String, after: String?, parent: String?)?, _ ws: Workspace) -> String {

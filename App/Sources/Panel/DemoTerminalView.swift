@@ -235,6 +235,28 @@ struct DemoScript {
             TLine([s("  I'll update "), s("src/dream.ts", .bold), s(" to use "), s("queue.add()", .ansi(4)), s(".")]),
             TLine(),
             TLine([s("● ", .ansi(3)), s("Update", .bold), s("(src/dream.ts)")]),
+        ]
+        // Working (the demo's t8a): its background work runs, as its records tell.
+        if t.status != .blocked {
+            let tasks = t.records
+            lines += [TLine([s("  ⎿  ", .dim), s("Updated ", .dim), s("src/dream.ts", .bold), s(" with 1 addition and 1 removal", .dim)]),
+                      TLine()]
+            for r in tasks {
+                lines.append(TLine([s("● ", .ansi(2)), s(r.kind == .shell ? "Bash" : "Task", .bold), s("(\(r.title))"),
+                                    s(" — running in background", .dim)]))
+            }
+            lines += [
+                TLine(),
+                TLine([s("✻ ", .hex("#d77757")), s("Queueing… ", .hex("#d77757")), s("(3m · ↓ 4.1k tokens · esc to interrupt)", .dim)]),
+                TLine(),
+                TLine([s(String(repeating: "─", count: w), .dim)]),
+                TLine([s("> ", .dim)], cursor: true),
+                TLine([s(String(repeating: "─", count: w), .dim)]),
+                TLine([s("  \(tasks.count) background task\(tasks.count == 1 ? "" : "s") · ? for shortcuts", .dim)]),
+            ]
+            return
+        }
+        lines += [
             TLine(),
             TLine([s(String(repeating: "─", count: w), .ansi(4))]),
             TLine([s(" Edit file", .boldAnsi(4))]),

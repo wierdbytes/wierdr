@@ -237,6 +237,29 @@ struct EngineTests {
         #expect(core.doc("herdr-app")?.version == doc.version)
     }
 
+    /// Claude Code's records come with its record and with `status` events, and go with them.
+    @Test func claudeRecordsFollowStatusEvents() async throws {
+        let core = makeCore()
+        core.state.withLock { s in
+            s.terminals["t1"]?["status"] = ["state": "working", "app": "claude-code"]
+            s.terminals["t1"]?["records"] = ["bcq5ektlx": ["app": "claude-code", "state": "working",
+                                                          "title": "Sleep for 25 seconds in background"]]
+        }
+        let (ws, _) = try await start(core)
+        try await eventually { ws.terminal("t1")?.records.map(\.id) == ["bcq5ektlx"] }
+        let status: JSONValue = ["state": "blocked", "app": "claude-code", "kind": "question", "msg": "Which branch?"]
+        core.emit("status", terminal: "t1", ["status": status, "reported": true, "records": ClaudeCodeTests.records])
+        try await eventually { ws.terminal("t1")?.records.count == 3 }
+        #expect(ws.terminal("t1")?.status == .blocked && ws.terminal("t1")?.message == "Which branch?")
+        let row = try #require(ws.sidebarRows(for: ws.space("spA")!).first { $0.terminal?.address == "t1" })
+        #expect(row.tree.compactMap(\.record).map(\.record.title) == ["Count to five slowly", "Sleep twenty",
+                                                                     "Sleep for 25 seconds in background"])
+        #expect(row.kidCounts.agents == 2 && row.kidCounts.shells == 1)
+        core.emit("status", terminal: "t1", ["status": ["state": "idle", "app": "claude-code"], "reported": true, "records": .null])
+        try await eventually { ws.terminal("t1")?.records.isEmpty == true }
+        #expect(ws.sidebarRows(for: ws.space("spA")!).first { $0.terminal?.address == "t1" }?.tree.isEmpty == true)
+    }
+
     @Test func splitRightAndDown() async throws {
         let core = makeCore()
         let (ws, _) = try await start(core)

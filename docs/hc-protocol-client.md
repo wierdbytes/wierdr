@@ -125,7 +125,8 @@ older cores never break the list). Fields (all `var`): `address`, `name?`,
 `finishedMs?`, `cols`, `rows`, `pid?`, `foreground?` (`Foreground`: `pid`,
 `name`, `argv`, `cwd`), `title`, `status?` (`TerminalStatus`: `state`, `app?`,
 `kind?`, `msg?`, `progress?`, `title?`), `records?` (`JSONValue`, opaque map of
-statuses), `reported`, `statusMs?`, `turn`, `keep`, `parent?`, `reason?`,
+statuses by id; WierdrModel reads it into `TaskRecord`s, `StatusRecords.parse`: Claude
+Code's background sub-agents and shells), `reported`, `statusMs?`, `turn`, `keep`, `parent?`, `reason?`,
 `exitCode?`, `signal?`, `identity`, `screen?`, `template?`, `notify`, `rm`,
 `dieWithParent`, `pasteGapMs?`, `stop?`, `submit?`, `firstMessage?`.
 Helpers: `id` (= address), `isLive`, `isFinished`, `machine` (`lf` for
@@ -264,7 +265,9 @@ never blocks on a slow view.
 - `terminal.list` has `machines` (same shape as `machine.list`); terminals on
   added machines appear as `lf/t1`. A 0.1.14 remote's records have the same fields.
 - `foreground.argv` may contain empty strings (`["pi","",""]`). `records` is
-  omitted when empty. `status_ms` can be set while `status` is null.
+  omitted when empty (`null` in a `status` event once the last record is gone); Claude
+  Code fills it with its running background work (`{"bcq5ektlx": {"app": "claude-code",
+  "state": "working", "title": "…"}}`). `status_ms` can be set while `status` is null.
 - Clients' `hello.features` are only used for core-to-core links today; we
   still advertise `framed attach events resize_notifications automatic_input`.
 - Careful when testing: `hc run` from inside a herdr terminal makes it a child

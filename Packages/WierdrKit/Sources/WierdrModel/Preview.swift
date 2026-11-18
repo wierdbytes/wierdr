@@ -47,7 +47,7 @@ extension Workspace {
                          parent: "t5w"),
             TerminalInfo(address: "t60", name: "scout", createdAt: now.addingTimeInterval(-200), title: "claude",
                          cwd: "/Users/mentor/me/dev/wierdr", processName: "claude", program: claude, status: .blocked,
-                         state: "blocked", message: "Allow reading ~/.ssh/config?", app: "claude", turn: 1,
+                         state: "blocked", message: "Allow reading ~/.ssh/config?", app: "claude-code", turn: 1,
                          statusChangedAt: now.addingTimeInterval(-12), parent: "t5w"),
             TerminalInfo(address: "t6a", title: "π - herdr-app", cwd: "/Users/mentor/me/dev/herdr-app", processName: "pi",
                          program: pi, status: .idle, state: "idle", message: "Исходники мобильного приложения herdr",
@@ -60,9 +60,23 @@ extension Workspace {
                          app: "pi", turn: 2, statusChangedAt: now.addingTimeInterval(-3 * 3600),
                          meta: meta("Opus 5.5", "high", 22_800, cacheLeft: 20)),
             TerminalInfo(address: "t7b", title: "zsh", cwd: "/Users/mentor/me/dev/wierd-limits", processName: "zsh", program: zsh),
-            TerminalInfo(address: "t8a", title: "claude", cwd: "/Users/mentor/me/dev/memory", processName: "claude",
-                         program: claude, status: .blocked, state: "blocked", message: "Allow edits to src/dream.ts?",
-                         app: "claude", turn: 1, statusChangedAt: now.addingTimeInterval(-7 * 3600)),
+            // Claude Code with the cc@wierdr plugin: its session's title is the terminal's
+            // (its `msg` a passing detail), `agent.*` as the plugin writes them (1 h cache),
+            // and its background work as 7501 records: a sub-agent and a shell.
+            TerminalInfo(address: "t8a", title: "Dream jobs on the queue", cwd: "/Users/mentor/me/dev/memory",
+                         processName: "claude", program: claude, status: .working, state: "working",
+                         message: "1 shell still running", app: "claude-code", turn: 2,
+                         statusChangedAt: now.addingTimeInterval(-3 * 60),
+                         meta: AgentMeta(provider: "anthropic", providerAsset: "provider.anthropic", model: "Opus 5.5",
+                                         effort: "high", ctx: 84_300, ctxMax: 200_000,
+                                         cacheUntil: now.addingTimeInterval(52 * 60), cacheTTL: 3600,
+                                         session: "5f0c2a41-7d3e-4b8a-9c61-2e8f4d1a7b30"),
+                         records: [
+                            TaskRecord(id: "a445e47c8be43ef46", app: "claude-code", state: "working",
+                                       title: "Review the queue's retry logic"),
+                            TaskRecord(id: "bcq5ektlx", app: "claude-code", state: "working",
+                                       title: "Run the queue tests in watch mode"),
+                         ]),
             TerminalInfo(address: "lf/t1", machine: "lf", title: "zsh", cwd: "/home/hcagent", processName: "zsh", program: zsh),
         ]
         terms = terms.map { t in

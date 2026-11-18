@@ -196,6 +196,17 @@ final class WorkspaceController {
         }
     }
 
+    /// A record's row was tapped (under the row of `row`): the terminal reporting it
+    /// opens as a tap on its own row would (the row's agent: its pane; a sub-agent: as
+    /// `open(_:from:)`). Records have no terminal of their own.
+    func open(_ record: RecordKid, in row: SidebarRow) {
+        if let kid = row.subtree.first(where: { $0.terminal.address == record.owner }) {
+            open(kid, from: row.paneID)
+        } else {
+            focus(pane: row.paneID)
+        }
+    }
+
     func closePeek() {
         guard peek != nil else { return }
         if composing == peek { closeCompose() }
