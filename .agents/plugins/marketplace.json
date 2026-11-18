@@ -1,0 +1,11 @@
+{
+  "name": "wierdr",
+  "interface": { "displayName": "Wierdr" },
+  "plugins": [
+    {
+      "name": "codex",
+      "source": { "source": "local", "path": "./Integrations/codex" },
+      "category": "productivity"
+    }
+  ]
+}

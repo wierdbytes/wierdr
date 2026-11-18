@@ -1,0 +1,111 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$HC_TERMINAL_SOCKET\" ] && command -v python3 >/dev/null 2>&1 && exec python3 \"$PLUGIN_ROOT/hooks/herdr.py\" session-start; exit 0",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$HC_TERMINAL_SOCKET\" ] && command -v python3 >/dev/null 2>&1 && exec python3 \"$PLUGIN_ROOT/hooks/herdr.py\" prompt; exit 0",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostModelRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$HC_TERMINAL_SOCKET\" ] && command -v python3 >/dev/null 2>&1 && exec python3 \"$PLUGIN_ROOT/hooks/herdr.py\" post-model-request; exit 0",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "(close|resume)_agent$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$HC_TERMINAL_SOCKET\" ] && command -v python3 >/dev/null 2>&1 && exec python3 \"$PLUGIN_ROOT/hooks/herdr.py\" agent-tool; exit 0",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$HC_TERMINAL_SOCKET\" ] && command -v python3 >/dev/null 2>&1 && exec python3 \"$PLUGIN_ROOT/hooks/herdr.py\" post-compact; exit 0",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$HC_TERMINAL_SOCKET\" ] && command -v python3 >/dev/null 2>&1 && exec python3 \"$PLUGIN_ROOT/hooks/herdr.py\" subagent-start; exit 0",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$HC_TERMINAL_SOCKET\" ] && command -v python3 >/dev/null 2>&1 && exec python3 \"$PLUGIN_ROOT/hooks/herdr.py\" subagent-stop; exit 0",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$HC_TERMINAL_SOCKET\" ] && command -v python3 >/dev/null 2>&1 && exec python3 \"$PLUGIN_ROOT/hooks/herdr.py\" stop; exit 0",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -n \"$HC_TERMINAL_SOCKET\" ] && command -v python3 >/dev/null 2>&1 && exec python3 \"$PLUGIN_ROOT/hooks/herdr.py\" session-end; exit 0",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}
