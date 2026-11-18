@@ -23,6 +23,48 @@ public enum AgentText {
     /// The 7501 app of Claude Code.
     public static let claudeCode = "claude-code"
 
+    /// The 7501 app of Codex (the OpenAI Codex CLI).
+    public static let codex = "codex"
+
+    /// What's left of Codex's window title once its own parts are cut: its thread's name,
+    /// `""` when there's none (only the project).
+    ///
+    /// Codex sets the title from `tui.terminal_title` (by default `activity`,
+    /// `thread-name`, `project-name`): `⠙ Fix the login redirect | wierdr`, the spinner (cut
+    /// already, `TerminalText.shownTitle`) only while it works, the thread's name only once
+    /// it has one (the prompt cut short at 48 characters meanwhile). Waiting for you it
+    /// blinks `[ ! ] Action Required | …` / `[ . ] Action Required | …` in front of the same
+    /// parts. This drops that prefix and a last ` | ` part that is the project's name as
+    /// Codex makes it (`terminal_title_project_name`: the folder name of the git root, or
+    /// of the folder holding the project's `.codex`, else of the cwd, cut to 24 characters
+    /// with "..."), i.e. the name of `cwd` or of a folder it's in. Other title items (a
+    /// user's own `terminal_title`) are left as they are.
+    public static func codexTitle(_ title: String, cwd: String?) -> String {
+        var s = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefix = #"^(?:●\s*)?\[ [!.] \] Action Required(?:\s+\|\s+|\s*$)"#
+        if let r = s.range(of: prefix, options: .regularExpression) { s.removeSubrange(r) }
+        var parts = cleanTitle(s).components(separatedBy: " | ")
+        if let last = parts.last, isCodexProject(last.trimmingCharacters(in: .whitespaces), cwd: cwd) {
+            parts.removeLast()
+        }
+        return parts.joined(separator: " | ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Whether `name` is Codex's `project-name` for a session in `cwd`: the name of `cwd`
+    /// or of a folder it's in, cut as Codex cuts it (24 characters, else 21 and "...").
+    static func isCodexProject(_ name: String, cwd: String?) -> Bool {
+        guard !name.isEmpty, let cwd else { return false }
+        func cut(_ s: String) -> String { s.count > 24 ? String(s.prefix(21)) + "..." : s }
+        return cwd.split(whereSeparator: { $0 == "/" || $0 == "\\" }).contains { cut(String($0)) == name }
+    }
+
+    /// Its window title when it tells something (`isTelling`), cleaned; for Codex
+    /// (7501 app `codex`) what's left of it, its thread's name (`codexTitle`).
+    public static func tellingTitle(_ t: TerminalInfo) -> String? {
+        let title = t.app == codex ? codexTitle(t.title, cwd: t.cwd) : t.title
+        return isTelling(title, program: t.program) ? cleanTitle(title) : nil
+    }
+
     /// Agent row title: status message, else tab name (named and ≠ program),
     /// else a telling title, else program name, else tab name, else address.
     ///
@@ -31,17 +73,38 @@ public enum AgentText {
     /// it or `/rename`) is the terminal's title. So while it needs you (blocked, error)
     /// its message (the question, the error) if any; otherwise a telling title first,
     /// then the message, then the same fallbacks.
+    ///
+    /// Codex (7501 app `codex`) sends no message; its telling title is its thread's name,
+    /// cut out of its window title (`codexTitle`): a title that's only the project's name
+    /// leaves the tab's name, else the program's ("Codex").
     public static func title(_ t: TerminalInfo, tab: Tab?) -> String {
         let msg = cleanTitle(t.message)
+        let telling = tellingTitle(t)
         if t.app == claudeCode {
             if t.status == .blocked, !msg.isEmpty { return msg }
-            if isTelling(t.title, program: t.program) { return cleanTitle(t.title) }
+            if let telling { return telling }
         }
         if !msg.isEmpty { return msg }
         if let tab, !tab.name.isEmpty, tab.name.lowercased() != t.program.name.lowercased() { return tab.name }
-        if isTelling(t.title, program: t.program) { return cleanTitle(t.title) }
+        if let telling { return telling }
         if !t.program.name.isEmpty { return t.program.name }
         if let tab { return tab.displayName }
+        return t.address
+    }
+
+    /// A sub-agent's title under its parent (`kidLabel`): its own word (pi's session
+    /// name), else a telling title (Codex's: its thread's name), else its name (`hc run
+    /// --name`), its template, its program's name. `plain`: a terminal that isn't an
+    /// agent (`termRow`): its name, template or program only.
+    public static func kidTitle(_ t: TerminalInfo, plain: Bool = false) -> String {
+        if !plain {
+            let msg = cleanTitle(t.message)
+            if !msg.isEmpty { return msg }
+            if let telling = tellingTitle(t) { return telling }
+        }
+        if let n = t.name, !n.isEmpty { return n }
+        if let n = t.template, !n.isEmpty { return n }
+        if !t.program.name.isEmpty { return t.program.name }
         return t.address
     }
 }

@@ -247,7 +247,7 @@ public final class Workspace {
 
     /// "Mark unread": `herdr.seen = turn - 1`.
     public func markUnread(_ address: String) {
-        if isLocal { return changeHere(address) { if $0.status == .idle { $0.status = .done } } }
+        if isLocal { return changeHere(address) { if $0.canMarkUnread { $0.status = .done } } }
         backend?.markUnread(address)
     }
 

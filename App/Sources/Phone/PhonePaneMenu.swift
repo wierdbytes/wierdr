@@ -88,7 +88,7 @@ struct PhonePaneMenu: View {
                 var rows = [Row(id: "pin", title: t.pinned ? "Unpin" : "Pin", glyph: .asset(t.pinned ? "pin-off" : "pin"),
                                 kind: .action { controller.setPinned(t.address, !t.pinned) })]
                 switch t.status {
-                case .idle:
+                case .idle where t.canMarkUnread:
                     rows.append(Row(id: "unread", title: "Mark Unread", glyph: .system("circle.fill"),
                                     kind: .action { controller.markUnread(t.address) }))
                 case .done:

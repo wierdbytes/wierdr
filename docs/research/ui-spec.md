@@ -421,7 +421,9 @@ herdr-core already exposes what the desktop mods read. The app's `agents()`/`ter
 
 Agent status as shown (docs/labels.md, `model.rs::status`): `status.state` `working` → working;
 `blocked`/`error` → blocked; otherwise **done if `turn > labels["herdr.seen"]`** (no label →
-client's own rule), else idle. The iPad should also **write** `herdr.seen=<turn>` via
+client's own rule), else idle. Wierdr, for `status.app == "codex"`: `idle` → idle whatever the
+turn (herdr-core's `turn` grows for Codex without a finished turn: at launch, on `/new`, on
+each approval), `done` → done while `turn > herdr.seen`, else idle. The iPad should also **write** `herdr.seen=<turn>` via
 `terminal.label` once per turn while an agent is really on screen (only raising it), so "done"
 clears on every client; "mark unread" = `turn-1`. Pinned = `labels["herdr.pinned"]` non-empty;
 pin/unpin = `terminal.label {herdr.pinned:"1"|""}` (Wierdr writes the pin's Unix time in seconds
@@ -449,6 +451,18 @@ question/permission when a remote agent needs input. Ids: sub-agents `a` + 16 he
 `b` + 8 base36. Wierdr shows them as rows of the agent's sub-agent tree (`TaskRecord`, no
 terminal: a tap opens the agent; they count in no status). pi and the desktop mods don't
 use records. The rich agent data comes from **labels** (below), not records.
+
+Codex (0.170.0) reports its root record itself, `app: "codex"`, never `msg`, `progress` or
+`records`: `{"app":"codex","state":"working"}`; `state` idle|working|blocked|done|error,
+`kind` permission|question|auth while blocked. It sends a real `done` when a turn finishes
+and goes back to `idle` on the next key, paste or click in its TUI. Its window title (OSC 0,
+`tui.terminal_title`, default items activity, thread-name, project-name joined by ` | `, the
+spinner by a space; braille frames ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏): `⠙ wierdrtest-codex` (no thread name yet),
+`⠋ Spawn exactly one sub-agent with your spawn_a... | wierdrtest-codex` (the prompt cut at 48
+while the name is made), `Reply with exactly ok | wierdrtest-codex`; blocked, blinking once a
+second, `[ ! ] Action Required | Create approval marker | wierdrtest-codex` and `[ . ] Action
+Required | …`. Its project name is the folder name of the git root (nearest `.git`), else of
+the folder holding the project's `.codex`, else of the cwd, cut to 24 graphemes (21 + `...`).
 
 Claude Code's root record: `msg` is a passing detail, not a name: while working an occasional
 progress note or "1 shell still running", done sometimes a turn summary, blocked the question
@@ -478,17 +492,32 @@ agent.cache_until=<epoch ms> agent.cache_ttl=3600000 (1 h on a subscription)
 agent.pid=<Claude's pid = the terminal's foreground pid>
 agent.subagents=1 (its in-process sub-agents pending/running/waiting)
 ```
-Codex etc. have no `agent.*` labels (nor Claude Code without the plugin) → their rows show the
-program name in the model slot and no ring.
+Codex writes them through Wierdr's plugin `codex@wierdr` (`Integrations/codex`, its hooks,
+[codex.md](../codex.md)):
+```
+agent.app=codex              agent.model=GPT-6.1 Sol        agent.model_id=gpt-6.1-sol
+agent.provider=openai        agent.effort=high (none|minimal|low|medium|high|xhigh|max|ultra)
+agent.ctx=16356              agent.ctx_max=258400           agent.session=<Codex thread id>
+agent.pid=<the TUI's pid = the terminal's foreground pid>
+agent.subagents=2 (its in-process sub-agents: no terminal, no records)
+agent.subagents_meta={"<sub-agent thread id>":{"title":"probe","name":"Kepler","status":"running",
+  "since":…,"model":"GPT-6 Luna","model_id":"gpt-6-luna","effort":"low","ctx":16545,"ctx_max":258400,
+  "started":…}}  (JSON, every sub-agent while one of its turns runs)
+```
+No cache labels. Its limits: account `codex.<slug>` in `limits` (windows 5h/7d, plan, label
+the e-mail), as pi-herdr writes them.
+
+Other agents have no `agent.*` labels (nor Claude Code or Codex without their plugins) → their
+rows show the program name in the model slot and no ring.
 
 ### 10.4 Agent row, field by field
 | UI | source | transform |
 |---|---|---|
 | status mark + row tint | `status.state`, `turn`, `herdr.seen` | §10.1 |
-| title "Wierdr iPad-приложение для herdr-core" | `status.msg` (pi's session name; a question while blocked) | strip leading non-letter/digit chars, trim. Fallbacks: tab name if the tab was named and ≠ program name; terminal `title` if "telling" (not program name/key, not starting with `~` or `/`, no `@`); program name; tab name; address. `status.app == "claude-code"`: blocked/error with a `msg` → the `msg`; else a telling terminal `title` (its session's title) first, then `msg`, then the fallbacks |
+| title "Wierdr iPad-приложение для herdr-core" | `status.msg` (pi's session name; a question while blocked) | strip leading non-letter/digit chars, trim. Fallbacks: tab name if the tab was named and ≠ program name; terminal `title` if "telling" (not program name/key, not starting with `~` or `/`, no `@`); program name; tab name; address. `status.app == "claude-code"`: blocked/error with a `msg` → the `msg`; else a telling terminal `title` (its session's title) first, then `msg`, then the fallbacks. `status.app == "codex"`: the terminal `title` used is what's left without the `[ ! ] / [ . ] Action Required \| ` prefix and a last ` \| <project>` part matching the cwd's folder or one it's in (its thread's name; only the project → none: tab name, else "Codex") |
 | provider mark (Anthropic "A\\") | `agent.provider` | regex map → `providers/<mark>.svg` (anthropic, openai\|chatgpt→openai, google\|gemini\|vertex→google, opencode, openrouter, *copilot*→github-copilot, …, see `meta.js PROVIDERS`); none → program icon |
 | model "Opus 5.5" | `agent.model` | drop `"Vendor: "` prefix and `vendor/` id prefix; drop leading `Claude ` under anthropic, `GPT ` under openai, `Kimi ` under kimi/moonshot. No label → program name ("Claude Code") |
-| "@xhigh" | `agent.effort` | `"@"+word`, color per level (§0) |
+| "@xhigh" | `agent.effort` | `"@"+word`, color per level (§0); Wierdr: Codex's `none` as `off`, `ultra` in `max`'s gradient |
 | sub-agent badge "⑂ 2" | `agent.subagents` + count of live terminals whose `parent` == this address and that report a status | Wierdr: sub-agents with a terminal + per terminal of the block max(`agent.subagents`, its sub-agent records); `>_`: terminals + background-shell records |
 | context "59.4k" / "105k" | `agent.ctx` | `<1000`: integer; `<100k`: one decimal + `k` (`.0` dropped); `<1M`: integer `k`; else `x.yM`. Hidden when 0/absent |
 | its color | `agent.cache_until` vs now | warm green; ≤30 s left yellow; expired `muted` |

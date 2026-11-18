@@ -848,6 +848,8 @@ public final class WorkspaceEngine: WorkspaceBackend {
 
     func markUnread(_ address: String) {
         guard let t = records[address], StatusRule.word(t) != nil else { return }
+        // A Codex saying it's idle stays idle (`StatusRule`): nothing to mark.
+        if t.status?.app == AgentText.codex, StatusRule.word(t) == "idle" { return }
         localSeen[address] = false
         // On screen it stays unread until the person looks away and back.
         looked[address] = onScreen.contains(address) ? t.turn : nil

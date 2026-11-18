@@ -232,9 +232,9 @@ struct PhoneSpaceTag: View {
 
 /// Text of the rows.
 enum PhoneRowText {
-    /// `@effort` in its color; `max` in a per-letter gradient.
+    /// `@effort` in its color; `max` (and Codex's `ultra`) in a per-letter gradient.
     static func effort(_ effort: String, theme: Theme) -> Text {
-        if effort.lowercased() == "max" {
+        if Theme.isGradientEffort(effort) {
             let colors = theme.maxEffortGradient
             let word = Array("@" + effort)
             return word.enumerated().reduce(Text("")) { acc, item in

@@ -55,21 +55,8 @@ enum Format {
     /// Agent row title (§10.4): `AgentText.title`.
     static func agentTitle(_ t: TerminalInfo, tab: Tab?) -> String { AgentText.title(t, tab: tab) }
 
-    /// A sub-agent's title under its parent (`kidLabel`): its own word (pi's
-    /// session name), else a telling title, else its name (`hc run --name`), its
-    /// template, its program's name. `plain`: a terminal that isn't an agent
-    /// (`termRow`): its name, template or program only.
-    static func kidTitle(_ t: TerminalInfo, plain: Bool = false) -> String {
-        if !plain {
-            let msg = cleanTitle(t.message)
-            if !msg.isEmpty { return msg }
-            if isTelling(t.title, program: t.program) { return cleanTitle(t.title) }
-        }
-        if let n = t.name, !n.isEmpty { return n }
-        if let n = t.template, !n.isEmpty { return n }
-        if !t.program.name.isEmpty { return t.program.name }
-        return t.address
-    }
+    /// A sub-agent's title under its parent: `AgentText.kidTitle`.
+    static func kidTitle(_ t: TerminalInfo, plain: Bool = false) -> String { AgentText.kidTitle(t, plain: plain) }
 
     /// Plain terminal row name (§4.9): the foreground process's own name.
     static func processName(_ t: TerminalInfo) -> String {

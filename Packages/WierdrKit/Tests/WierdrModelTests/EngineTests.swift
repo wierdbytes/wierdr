@@ -363,6 +363,38 @@ struct EngineTests {
         #expect(ws.terminal("t5")?.pinnedAt != nil)
     }
 
+    /// Codex: herdr-core counts a turn at its launch (working → idle while its MCP servers
+    /// start) and on each approval; its idle stays idle, its done is done until seen.
+    @Test func codexIsIdleUntilItSaysDone() async throws {
+        let core = makeCore()
+        var agent = terminalJSON("t5", labels: ["herdr.seen": "0"])
+        agent["status"] = ["state": "idle", "app": "codex"]
+        agent["turn"] = 1
+        core.addTerminal(agent)
+        let (ws, _) = try await start(core)
+        #expect(ws.terminal("t5")?.status == .idle)
+        // Mark Unread can't make it done: nothing is written.
+        ws.markUnread("t5")
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(core.calls("terminal.label").isEmpty && ws.terminal("t5")?.status == .idle)
+        // A turn: working, then done (herdr-core's turn 2), until it's seen.
+        core.emit("status", terminal: "t5", ["status": ["state": "working", "app": "codex"], "reported": true])
+        try await eventually { ws.terminal("t5")?.status == .working }
+        core.emit("turn", terminal: "t5", ["turn": 2, "state": "done"])
+        core.emit("status", terminal: "t5", ["status": ["state": "done", "app": "codex"], "reported": true])
+        try await eventually { ws.terminal("t5")?.status == .done }
+        ws.markSeen(["t5"])
+        try await eventually { ws.terminal("t5")?.status == .idle && core.calls("terminal.label").count == 1 }
+        #expect(core.calls("terminal.label").last?["labels"] == ["herdr.seen": "2"])
+        // Still saying done: unread again works.
+        ws.markSeen([])
+        ws.markUnread("t5")
+        try await eventually { ws.terminal("t5")?.status == .done && core.calls("terminal.label").count == 2 }
+        // A key in its TUI: idle, however unseen the turn.
+        core.emit("status", terminal: "t5", ["status": ["state": "idle", "app": "codex"], "reported": true])
+        try await eventually { ws.terminal("t5")?.status == .idle }
+    }
+
     @Test func unreadClearsWhenLookedAtAgain() async throws {
         let core = makeCore()
         var agent = terminalJSON("t5", labels: ["herdr.seen": "3"])

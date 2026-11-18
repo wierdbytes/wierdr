@@ -289,6 +289,28 @@ private let channels = [lane.key: "CHAN=="]
         #expect(counts == [1, 0, 1, 0])
     }
 
+    /// Codex's row: its thread's name cut out of its window title (no project, no
+    /// "Action Required"), "Codex" while it has none.
+    @Test func codexTitles() {
+        let codex = Program(key: "codex", name: "Codex", iconAsset: "program.codex", tint: false, isAgent: true)
+        let space = Space(id: "sp1", machine: nil, name: "", displayName: "wierdr", folder: "/x", tabs: [])
+        func item(_ a: String, _ s: AgentStatus, title: String) -> InboxItem {
+            let t = TerminalInfo(address: a, title: title, cwd: "/Users/mentor/me/dev/wierdr", program: codex, status: s,
+                                 state: s == .blocked ? "blocked" : "idle", app: "codex")
+            return InboxItem(row: SidebarRow(kind: .agent, paneID: "p" + a, tabID: "tb1", terminal: t), space: space)
+        }
+        let inbox = [
+            InboxGroup(status: .blocked, items: [item("t1", .blocked, title: "[ ! ] Action Required | Create approval marker | wierdr")]),
+            InboxGroup(status: .done, items: [item("t2", .done, title: "Fix the login redirect | wierdr")]),
+            InboxGroup(status: .working, items: [item("t3", .working, title: "wierdr")]),
+            InboxGroup(status: .idle, items: [item("t4", .idle, title: "Reply with exactly ok | wierdr")]),
+        ]
+        let s = ActivitySummary.state(of: inbox, tab: { _ in nil }, now: Date(timeIntervalSince1970: 5))
+        #expect(s.agents.map(\.title) == ["Create approval marker", "Fix the login redirect", "Codex"])
+        let counts: [Int] = [s.blocked, s.done, s.working, s.idle]
+        #expect(counts == [1, 1, 1, 1])
+    }
+
     @Test func subAgentsCountAsAgents() {
         let space = Space(id: "sp1", machine: nil, name: "", displayName: "wierdr", folder: "/x", tabs: [])
         func term(_ a: String, _ s: AgentStatus?) -> TerminalInfo {

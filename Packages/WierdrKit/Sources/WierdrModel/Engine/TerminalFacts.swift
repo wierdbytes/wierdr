@@ -61,11 +61,17 @@ enum StatusRule {
 
     /// Herdr's status: `working`; `blocked`/`error` → blocked; otherwise done
     /// while the turn is unseen (shared `herdr.seen`, else this client's own flag).
-    static func status(word: String?, turn: UInt64, seenTurn: UInt64?, locallySeen: Bool) -> AgentStatus? {
+    ///
+    /// Codex (7501 app `codex`) says itself when a turn is done: its `idle` is idle
+    /// whatever the turn counter says (herdr-core counts a turn at its launch, on `/new`
+    /// and on every approval, none of them a finished turn), and only its `done` can be
+    /// done, while that turn is unseen.
+    static func status(word: String?, turn: UInt64, seenTurn: UInt64?, locallySeen: Bool, app: String? = nil) -> AgentStatus? {
         guard let word else { return nil }
         switch word {
         case "working": return .working
         case "blocked", "error": return .blocked
+        case "idle" where app == AgentText.codex: return .idle
         default:
             if let seenTurn { return turn > seenTurn ? .done : .idle }
             return locallySeen ? .idle : .done
@@ -219,7 +225,7 @@ struct TerminalDeriver {
             processName: TerminalText.processName(t),
             program: table.resolve(app: app, argv: argv),
             isLive: t.isLive,
-            status: StatusRule.status(word: word, turn: t.turn, seenTurn: seenTurn, locallySeen: locallySeen),
+            status: StatusRule.status(word: word, turn: t.turn, seenTurn: seenTurn, locallySeen: locallySeen, app: app),
             state: word,
             message: t.status?.msg,
             app: app,

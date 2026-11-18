@@ -90,17 +90,24 @@ struct Theme: Equatable {
     }
 
     /// `@effort` colors: pi-statusline Tokyo Night on dark, the named ANSI colors on light.
+    /// Codex's `none` is `off`, its `ultra` above `max` is drawn as `max` (`isGradientEffort`).
     func effortColor(_ word: String) -> Color {
         switch word.lowercased() {
-        case "off": return isDark ? Color(hex: "#565f89") : dim
+        case "off", "none": return isDark ? Color(hex: "#565f89") : dim
         case "minimal": return isDark ? Color(hex: "#bb9af7") : ansi(5)
         case "low": return isDark ? Color(hex: "#7aa2f7") : ansi(4)
         case "medium": return isDark ? Color(hex: "#7dcfff") : ansi(6)
         case "high": return isDark ? Color(hex: "#ff9e64") : ansi(3)
         case "xhigh": return isDark ? Color(hex: "#f7768e") : ansi(1)
-        case "max": return isDark ? Color(hex: "#f7768e") : ansi(1)
+        case "max", "ultra": return isDark ? Color(hex: "#f7768e") : ansi(1)
         default: return muted
         }
+    }
+
+    /// The efforts drawn in `maxEffortGradient`: `max`, and Codex's `ultra` over it.
+    static func isGradientEffort(_ word: String) -> Bool {
+        let w = word.lowercased()
+        return w == "max" || w == "ultra"
     }
 
     /// `max` effort: a per-letter gradient.

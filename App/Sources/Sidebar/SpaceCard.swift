@@ -157,7 +157,7 @@ struct SpaceCardLine: View {
     private func leadingActions(_ t: TerminalInfo) -> [PhoneSwipeAction] {
         var out: [PhoneSwipeAction] = []
         switch t.status {
-        case .idle:
+        case .idle where t.canMarkUnread:
             out.append(PhoneSwipeAction(id: "unread", title: "Unread", symbol: "message.badge.filled.fill",
                                         color: PhoneSwipeColors.unread(theme)) {
                 controller.markUnread(t.address)
@@ -202,7 +202,7 @@ struct SpaceCardLine: View {
                 controller.setPinned(t.address, !t.pinned)
             })
             switch t.status {
-            case .idle:
+            case .idle where t.canMarkUnread:
                 agent.append(PhoneMenuItem(title: "Mark Unread", icon: .system("circle.fill")) { controller.markUnread(t.address) })
             case .done:
                 agent.append(PhoneMenuItem(title: "Mark Idle", icon: .system("circle")) { controller.markRead(t.address) })

@@ -13,6 +13,7 @@ extension Workspace {
         let now = Date()
         let pi = Program(key: "pi", name: "Pi", iconAsset: "program.pi", isAgent: true)
         let claude = Program(key: "claude", name: "Claude Code", iconAsset: "program.claude", tint: false, isAgent: true)
+        let codex = Program(key: "codex", name: "Codex", iconAsset: "program.codex", tint: false, isAgent: true)
         let lazygit = Program(key: "lazygit", name: "lazygit", iconAsset: "program.lazygit", tile: "#3f8f4f")
         let zsh = Program(key: "shell", name: "zsh", iconAsset: "program.shell", tile: "#16241a", color: "#4ec95f", isShell: true)
 
@@ -77,6 +78,21 @@ extension Workspace {
                             TaskRecord(id: "bcq5ektlx", app: "claude-code", state: "working",
                                        title: "Run the queue tests in watch mode"),
                          ]),
+            // Codex with the codex@wierdr plugin: its window title is its thread's name and
+            // its project's (Codex's own `tui.terminal_title`), its `agent.*` as the plugin
+            // writes them, read as the engine reads them; it said idle after a turn
+            // herdr-core counted (its launch, say) but nobody saw: idle all the same.
+            TerminalInfo(address: "t9a", title: "Fix the login redirect | wierdr", cwd: "/Users/mentor/me/dev/wierdr",
+                         processName: "codex", program: codex,
+                         status: StatusRule.status(word: "idle", turn: 2, seenTurn: 1, locallySeen: false, app: "codex"),
+                         state: "idle", app: "codex", turn: 2, statusChangedAt: now.addingTimeInterval(-9 * 60),
+                         labels: ["herdr.seen": "1"],
+                         meta: AgentLabels.meta(labels: [
+                            "agent.app": "codex", "agent.pid": "48211", "agent.provider": "openai",
+                            "agent.model": "GPT-6.1 Sol", "agent.model_id": "gpt-6.1-sol", "agent.effort": "high",
+                            "agent.ctx": "61240", "agent.ctx_max": "258400",
+                            "agent.session": "019a8f3e-5c2b-7d41-9e0a-3b6c1f2d4e58", "agent.subagents": "2",
+                         ], foregroundPID: 48211)),
             TerminalInfo(address: "lf/t1", machine: "lf", title: "zsh", cwd: "/home/hcagent", processName: "zsh", program: zsh),
         ]
         terms = terms.map { t in
@@ -99,7 +115,8 @@ extension Workspace {
 
         ws.spaces = [
             space("sp1", "wierdr", "/Users/mentor/me/dev/wierdr", "#22a99a",
-                  [tab("sp1", "tb1", 0, PaneNode(id: "tb1", kind: .row([pane("p1", "t5w")])))]),
+                  [tab("sp1", "tb1", 0, PaneNode(id: "tb1", kind: .row([pane("p1", "t5w")]))),
+                   tab("sp1", "tb7", 1, PaneNode(id: "tb7", kind: .row([pane("p8", "t9a")])))]),
             space("sp2", "herdr-app", "/Users/mentor/me/dev/herdr-app", "#e3814f",
                   [tab("sp2", "tb2", 0, PaneNode(id: "tb2", kind: .row([
                         PaneNode(id: "p2", kind: .terminal("t6a"), weight: 0.6),

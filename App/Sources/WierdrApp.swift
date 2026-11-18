@@ -46,7 +46,7 @@ struct WierdrApp: App {
                 #endif
                 if !UserDefaults.standard.bool(forKey: "demo") { await app.reconnectLastHost() }
                 #if DEBUG
-                // `-open switcher|settings|space:<id>` (screenshots).
+                // `-open switcher|settings|space:<id>|agent:<address>` (screenshots).
                 if let open = UserDefaults.standard.string(forKey: "open"), let s = app.session {
                     try? await Task.sleep(for: .milliseconds(600))
                     if open == "switcher" { s.showSwitcher = true }
@@ -58,6 +58,9 @@ struct WierdrApp: App {
                     }
                     if open.hasPrefix("space:"), let sp = s.workspace.space(String(open.dropFirst(6))),
                        let pane = sp.tabs.first?.panes.first { s.focus(pane: pane.id, reveal: false) }
+                    if open.hasPrefix("agent:"), let at = s.workspace.pane(showing: String(open.dropFirst(6))) {
+                        s.focus(pane: at.pane.id)
+                    }
                 }
                 // `-orientation landscape|portrait` (screenshots in the simulator).
                 if let o = UserDefaults.standard.string(forKey: "orientation") {

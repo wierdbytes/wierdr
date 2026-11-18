@@ -3,7 +3,7 @@ import WierdrModel
 
 /// A drawn (non-interactive) terminal for demo mode, previews and screenshots:
 /// JetBrains Mono in the theme's terminal colors, plausible output per program
-/// (a pi or Claude Code TUI for agents, a shell prompt, a lazygit layout).
+/// (a pi, Claude Code or Codex TUI for agents, a shell prompt, a lazygit layout).
 struct DemoTerminalView: View {
     var context: TerminalViewContext
     @Environment(\.homeFolder) private var home
@@ -113,6 +113,7 @@ struct DemoScript {
         switch t?.program.key {
         case "pi": pi(t!, cwd: cwd)
         case "claude": claude(t!, cwd: cwd)
+        case "codex": codex(t!, cwd: cwd)
         default: shell(t, cwd: cwd)
         }
     }
@@ -269,6 +270,54 @@ struct DemoScript {
             TLine([s("   2. Yes, allow all edits during this session (shift+tab)")]),
             TLine([s("   3. No, and tell Claude what to do differently (esc)")]),
             TLine(),
+        ]
+    }
+
+    // Codex at its prompt after a turn (the demo's t9a), shaped like Codex's TUI.
+    private mutating func codex(_ t: TerminalInfo, cwd: String) {
+        anchorBottom = true
+        let w = 58
+        let model = t.meta?.model.map { "gpt-" + $0.lowercased().replacingOccurrences(of: " ", with: "-") } ?? "gpt-6.1-sol"
+        let effort = t.meta?.effort ?? "medium"
+        func boxed(_ segs: [TSeg]) -> TLine {
+            let visible = segs.reduce(0) { $0 + $1.text.count }
+            return TLine([s("│ ", .dim)] + segs + [s(String(repeating: " ", count: Swift.max(0, w - 4 - visible)) + " │", .dim)])
+        }
+        let left = t.meta.flatMap { m -> Int? in
+            guard let ctx = m.ctx, let max = m.ctxMax, max > 0 else { return nil }
+            return Swift.max(0, 100 - Int(Double(ctx) / Double(max) * 100))
+        } ?? 100
+        lines += [
+            TLine([s("╭" + String(repeating: "─", count: w - 2) + "╮", .dim)]),
+            boxed([s(">_ ", .dim), s("OpenAI Codex", .bold), s(" (v0.170.0)", .dim)]),
+            boxed([]),
+            boxed([s("model:     ", .dim), s("\(model) \(effort)"), s("   /model to change", .ansi(6))]),
+            boxed([s("directory: ", .dim), s(cwd)]),
+            TLine([s("╰" + String(repeating: "─", count: w - 2) + "╯", .dim)]),
+            TLine(),
+            TLine([s("› ", .bold), s("Fix the login redirect: after signing in it lands on / instead of the page you came from")]),
+            TLine(),
+            TLine([s("• ", .dim), s("I'll trace where the sign-in flow decides where to go next.")]),
+            TLine(),
+            TLine([s("• ", .ansi(2)), s("Explored", .bold)]),
+            TLine([s("  └ ", .dim), s("Read ", .ansi(6)), s("AuthRouter.swift, LoginView.swift, SessionStore.swift")]),
+            TLine([s("    ", .dim), s("Search ", .ansi(6)), s("returnTo in App/Sources")]),
+            TLine(),
+            TLine([s("• ", .ansi(2)), s("Edited ", .bold), s("App/Sources/Auth/AuthRouter.swift "), s("(+6 -2)", .dim)]),
+            TLine([s("    41 ", .dim), s("-        router.go(.home)", .ansi(1))]),
+            TLine([s("    41 ", .dim), s("+        router.go(session.returnTo ?? .home)", .ansi(2))]),
+            TLine(),
+            TLine([s("• ", .ansi(2)), s("Ran ", .bold), s("swift test --filter AuthRouterTests")]),
+            TLine([s("  └ ", .dim), s("✓ 12 tests passed", .ansi(2))]),
+            TLine(),
+            TLine([s("─ Worked for 1m 48s " + String(repeating: "─", count: w - 20), .dim)]),
+            TLine(),
+            TLine([s("• ", .dim), s("Sign-in now returns to the page that sent you there; "),
+                   s("/", .ansi(6)), s(" only when there was none.")]),
+            TLine(),
+            TLine([s("› ", .bold), s("Ask Codex to do anything", .dim)], cursor: true),
+            TLine(),
+            TLine([s("  \(model) \(effort) · \(left)% left · \(cwd)", .dim)]),
         ]
     }
 

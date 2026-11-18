@@ -81,7 +81,8 @@ public struct AgentMeta: Hashable, Sendable {
     public var providerAsset: String?
     /// Display model, already shortened: `Opus 5.5` (`agent.model`).
     public var model: String?
-    /// `agent.effort`: `off|minimal|low|medium|high|xhigh|max`.
+    /// `agent.effort`: pi's `off|minimal|low|medium|high|xhigh|max`, Claude Code's
+    /// `low…max`, Codex's `none|minimal|low|medium|high|xhigh|max|ultra`.
     public var effort: String?
     /// Context tokens in use and the window (`agent.ctx`, `agent.ctx_max`).
     public var ctx: Int?
@@ -185,6 +186,12 @@ public struct TerminalInfo: Identifiable, Hashable, Sendable {
     /// (`error` is already blocked).
     public var kidStatus: AgentStatus? {
         status == .done ? .idle : status
+    }
+
+    /// Whether "Mark Unread" (`herdr.seen = turn - 1`) would make it done: an idle agent,
+    /// but not a Codex that says it's idle (only its `done` is ever done, `StatusRule`).
+    public var canMarkUnread: Bool {
+        status == .idle && !(app == AgentText.codex && state == "idle")
     }
 }
 
