@@ -7,6 +7,7 @@
   [`FEATURES.md`](docs/FEATURES.md) — что реализовано;
   [`BUILD.md`](docs/BUILD.md) — сборка, установка, устройства, симуляторы, WDA;
   [`live-activity.md`](docs/live-activity.md) — Live Activity и APNs, проверенные ловушки;
+  [`claude-code.md`](docs/claude-code.md) — мод `cc` для Claude Code (метки `agent.*`, лимиты), проверенные ловушки;
   [`ssh.md`](docs/ssh.md), [`hc-protocol-client.md`](docs/hc-protocol-client.md) — связь с herdr-core.
   Меняя поведение или решение, обнови соответствующий документ в том же коммите.
 - Перед тем как назвать UI-изменение готовым, проверь его на физическом iPad:

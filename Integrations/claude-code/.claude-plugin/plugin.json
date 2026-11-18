@@ -1,0 +1,19 @@
+{
+  "name": "cc",
+  "version": "0.1.0",
+  "description": "Tells herdr and Wierdr which model, effort and context size Claude Code runs with (agent.* labels on its herdr-core terminal) and how much of the Claude subscription limits is used (herdr-core's limits document), as @wierdbytes/pi-herdr does for pi.",
+  "author": { "name": "wierdbytes", "url": "https://github.com/wierdbytes" },
+  "homepage": "https://github.com/wierdbytes/wierdr/tree/master/Integrations/claude-code",
+  "repository": "https://github.com/wierdbytes/wierdr",
+  "license": "MIT",
+  "keywords": ["herdr", "herdr-core", "wierdr", "labels", "limits"],
+  "userConfig": {
+    "limits": {
+      "type": "boolean",
+      "title": "Subscription limits",
+      "description": "Fold the claude.ai subscription's 5-hour and 7-day windows into herdr-core's limits document, which herdr and Wierdr show.",
+      "required": false,
+      "default": true
+    }
+  }
+}

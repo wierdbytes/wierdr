@@ -1,0 +1,13 @@
+{
+  "name": "wierdr",
+  "description": "Claude Code plugins from the Wierdr repository",
+  "owner": { "name": "wierdbytes", "url": "https://github.com/wierdbytes" },
+  "plugins": [
+    {
+      "name": "cc",
+      "source": "./Integrations/claude-code",
+      "description": "Claude Code's model, effort, context and subscription limits for herdr and Wierdr (agent.* labels, herdr-core's limits document)",
+      "category": "productivity"
+    }
+  ]
+}

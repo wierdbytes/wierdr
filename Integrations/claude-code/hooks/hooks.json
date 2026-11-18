@@ -1,0 +1,4 @@
+{
+  "description": "agent.* labels on Claude Code's herdr-core terminal, and the subscription limits in herdr-core's limits document",
+  "modules": ["./register.ts"]
+}
