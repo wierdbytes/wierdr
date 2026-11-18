@@ -148,7 +148,8 @@ public struct TerminalInfo: Identifiable, Hashable, Sendable {
     public var spaceID: String?
     public var tabID: String?
     /// Work its program runs in-process and reports as 7501 records of its own (Claude
-    /// Code's background sub-agents and shells), by id; none once it ended.
+    /// Code's background sub-agents and shells), with the sub-agents and teammates its
+    /// labels tell of (`StatusRecords.merge`), by id; none once it ended.
     public var records: [TaskRecord]
 
     public init(address: String, machine: String? = nil, name: String? = nil, template: String? = nil,
@@ -220,15 +221,18 @@ public struct SubAgent: Identifiable, Hashable, Sendable {
 
 /// A piece of work a terminal's program runs in-process and reports as an OSC 7501
 /// record of its own (`Terminal.records`, keyed by id), next to its root status:
-/// Claude Code's background sub-agents and shells. It has no terminal: it shows as a
-/// row of its terminal's tree, and a tap opens that terminal.
+/// Claude Code's background sub-agents and shells; or a sub-agent or teammate only its
+/// labels tell of (`agent.subagents_meta`: a teammate between turns has no record). It
+/// has no terminal: it shows as a row of its terminal's tree, and a tap opens that terminal.
 public struct TaskRecord: Identifiable, Hashable, Sendable {
     /// What it is, as far as its id tells: Claude Code's background shells are `b` and
     /// 8 base-36 characters (its sub-agents `a` and 16 hex); anything else is taken for
     /// a sub-agent.
     public enum Kind: Hashable, Sendable { case agent, shell }
 
-    /// Its record's key (`a445e47c8be43ef46`, `bcq5ektlx`).
+    /// Its record's key (`a445e47c8be43ef46`, `bcq5ektlx`); for a sub-agent or teammate its
+    /// terminal's labels tell of, its `$.agent.list()` id (`ahelper-c2e58121067329e7`), which
+    /// it keeps with or without a record (`StatusRecords.merge`).
     public var id: String
     public var app: String?
     /// Raw 7501 word: `working`, `blocked` …
@@ -241,13 +245,30 @@ public struct TaskRecord: Identifiable, Hashable, Sendable {
     public var blockedKind: String?
     public var progress: Int?
     public var kind: Kind
+    /// A sub-agent's model, @effort and context as its terminal's labels tell them
+    /// (`agent.subagents_meta`, by its id: cc@wierdr, codex@wierdr), read as a terminal's
+    /// `agent.*`, its terminal's provider; nil without them, or untrusted.
+    public var meta: AgentMeta?
+    /// When it started (`agent.subagents_meta`'s `started`).
+    public var startedAt: Date?
+    /// Since when it has been in its state (`since`: working, or a teammate idle between
+    /// turns): its row's age, as a sub-agent's since its status changed.
+    public var statusSince: Date?
+    /// Its name (a Claude teammate's, what SendMessage addresses it by; a Codex sub-agent's
+    /// nickname).
+    public var name: String?
 
     public init(id: String, app: String? = nil, state: String, title: String, message: String? = nil,
-                blockedKind: String? = nil, progress: Int? = nil, kind: Kind? = nil) {
+                blockedKind: String? = nil, progress: Int? = nil, kind: Kind? = nil,
+                meta: AgentMeta? = nil, startedAt: Date? = nil, statusSince: Date? = nil, name: String? = nil) {
         self.id = id; self.app = app; self.state = state; self.title = title; self.message = message
         self.blockedKind = blockedKind; self.progress = progress
         self.kind = kind ?? Self.kind(id: id, app: app)
+        self.meta = meta; self.startedAt = startedAt; self.statusSince = statusSince; self.name = name
     }
+
+    /// Its row's age: since it got its state, else since it started.
+    public var ageSince: Date? { statusSince ?? startedAt }
 
     /// Its dot, as a sub-agent's (`kidStatus`): working, blocked (`blocked`/`error`),
     /// else idle (it reports to its terminal, whose own status is the news).
@@ -273,9 +294,12 @@ public struct RecordKid: Identifiable, Hashable, Sendable {
     public var owner: String
     /// As `SubAgent.lines`.
     public var lines: [SubAgent.Line]
+    /// Its terminal's program's name (`Claude Code`): a sub-agent's model slot without
+    /// its meta, as a terminal's without `agent.*`.
+    public var program: String?
 
-    public init(record: TaskRecord, owner: String, lines: [SubAgent.Line]) {
-        self.record = record; self.owner = owner; self.lines = lines
+    public init(record: TaskRecord, owner: String, lines: [SubAgent.Line], program: String? = nil) {
+        self.record = record; self.owner = owner; self.lines = lines; self.program = program
     }
 }
 

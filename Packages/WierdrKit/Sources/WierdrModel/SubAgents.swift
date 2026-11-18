@@ -77,6 +77,7 @@ struct SubAgentIndex {
         func walk(_ addr: String, _ lead: [SubAgent.Line]) {
             let kids = (children[addr] ?? []).filter { seen.insert($0.address).inserted }
             let records = terminals[addr].map { $0.isLive ? $0.records : [] } ?? []
+            let program = terminals[addr]?.program.name
             let count = kids.count + records.count
             for (i, k) in kids.enumerated() {
                 let last = i == count - 1
@@ -85,7 +86,7 @@ struct SubAgentIndex {
             }
             for (j, r) in records.enumerated() {
                 let last = kids.count + j == count - 1
-                out.append(.record(RecordKid(record: r, owner: addr, lines: lead + [last ? .elbow : .tee])))
+                out.append(.record(RecordKid(record: r, owner: addr, lines: lead + [last ? .elbow : .tee], program: program)))
             }
         }
         walk(address, [])

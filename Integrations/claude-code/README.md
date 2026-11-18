@@ -37,7 +37,8 @@ Nothing to configure: it has no options, and the labels and the limits are alway
 | `agent.session` | `3c14007c-8945-4642-9b80-bccea03804b5` | The session id (`claude --resume <id>` opens it again). Follows `/clear` and `/resume` |
 | `agent.cache_until` | `1795028589487` | When the main conversation's prompt cache expires (epoch ms): when the last request that read or wrote it was sent, plus its lifetime. Stays after expiry (compare with now); absent until a request touched the cache, and after `/clear` |
 | `agent.cache_ttl` | `3600000` | That lifetime (ms): one hour when the request wrote one-hour entries (`ephemeral_1h_input_tokens`, Claude Code's default on a subscription), five minutes for five-minute ones; a request that only read the cache keeps the last one seen |
-| `agent.subagents` | `1` | Subagents and teammates queued or running (`$.agent.list()`: `pending`, `running`, `waiting`). Absent when none |
+| `agent.subagents` | `1` | Subagents and teammates alive (`$.agent.list()`: `pending`, `running`, `waiting`, and `idle`, a teammate between turns waiting for a message). Absent when none |
+| `agent.subagents_meta` | `{"ahelper-508256b46aa016ee":{"title":"Helper","name":"helper","status":"idle","since":1795034399598,"model":"Claude Haiku 5.5","model_id":"claude-haiku-5-5","effort":"medium","ctx":35244,"ctx_max":1000000,"started":1795034394841}}` | Each of those, as JSON by its `$.agent.list()` id: `title` (the Agent call's description, which its OSC 7501 record has as its title), `name` (a teammate's, what SendMessage addresses), `status` and `since` (epoch ms, when the mod saw it get that status), `model` and `model_id` (named as `agent.model`), `effort` (its last request's), `ctx` (its last request's input side), `ctx_max` (its model's window; before 2.1.327 only for the session's model), `started` (epoch ms). Ids sorted, a field not known left out. Absent when none is alive. A subagent's record in the terminal's `records` has the same key; a teammate's is keyed by its task (`t4x1csoe5`), which no API names, so readers join it by title; a teammate between turns has no record at all |
 
 Read them in a herdr mod from `terminals()`, as pi-herdr's:
 
@@ -72,7 +73,7 @@ On a claude.ai subscription (Pro, Max) Claude Code knows the 5-hour and 7-day wi
 
 - `session.start` reads the session's id, model and usage, Claude's pid and the configured effort, and writes every label before the first prompt. Each `turn.step` of the main loop (no `agentId`) updates the model, the effort and the cache window when the request is sent, then the context and the cache lifetime from its usage. `turn.complete`, `session.measure` and every command (`/model`, `/effort`, `/clear`…) re-read the session.
 - Labels go out as `terminal.label` requests through `hc connect` (herdr-core's JSON-RPC over stdin, one process a request, `HC_SOCKET` set to the terminal's `HC_TERMINAL_SOCKET`). Changes within 150 ms collapse into one request, unchanged values are never sent, one request is in flight at a time, and the first write after a load sends every key, removing what an earlier Claude left.
-- `agent.subagents` is re-read on `agent.spawn`, on every request, and every 5 s while any runs.
+- `agent.subagents` is re-read on `agent.spawn`, on every request, and every 5 s while any is alive (an idle teammate too, so its waking shows). `agent.subagents_meta` goes with it: a subagent's own `turn.step`s (`agentId`) give its model, effort and context as the main loop's do, `agent.spawn`'s answer its id, model and start, and `$.agent.list()` (2.1.327) its model, window, start time and the effort its last request carried.
 - Only the interactive session owns the terminal: `claude -p` runs inside it never write labels.
 - Quitting (`/exit`, ctrl+c, logout) removes every label it set within the 1.5 s that `session.end` hooks share; the `limits` document stays. `/clear` and `/resume` keep the labels and republish them a moment later under the new session id.
 
@@ -81,7 +82,7 @@ On a claude.ai subscription (Pro, Max) Claude Code knows the 5-hour and 7-day wi
 - `hc send <t> "/clear"` doesn't run a command: hc wraps what it pastes in `<hc from=…>` tags, so Claude gets a message. Type commands with `hc keys <t> / c l e a r` then `hc keys <t> enter`.
 - Before the first request `agent.effort` is the configured level, which can differ from what the model runs at (a model with a lower default, such as Haiku, shows the setting's `high` until its first request says `medium`). Claude Code's mods API has no read of the effective level outside a request.
 - Not tested: an interactive Claude that inherits another one's `HC_TERMINAL_ID` (an agent-team teammate in a tmux pane, say) would write its labels on that terminal over the first one's.
-- Background agents and shells also show up in the terminal's `records` (Claude Code's own OSC 7501 report); `agent.subagents` counts only `$.agent.list()`'s agents and teammates, not background shells.
+- Background agents and shells also show up in the terminal's `records` (Claude Code's own OSC 7501 report), but only while they work; `agent.subagents` counts only `$.agent.list()`'s agents and teammates, not background shells.
 - A hot reload of the mod (`--plugin-dir` watches its folder) starts it afresh: its first write resends every label.
 
 ## Development

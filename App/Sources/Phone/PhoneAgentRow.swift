@@ -176,24 +176,38 @@ struct PhoneAgentRowContent: View {
 /// ring first, and no room taken past them). The model is cut first when room runs out;
 /// @effort and the ring stay whole.
 struct PhoneModelLine: View {
-    var terminal: TerminalInfo
+    var meta: AgentMeta?
+    /// The model slot without a model (no `agent.*`): its program's name.
+    var fallback: String
     var size: CGFloat
-    /// A sub-agent's status (its own `kidStatus`): idle dims the model.
-    var status: AgentStatus?? = nil
+    /// Idle dims the model.
+    var status: AgentStatus?
     /// The ring before the model, and the line only as wide as it is (an agent's row,
     /// where its chips follow).
     var ringFirst = false
     @Environment(\.theme) private var theme
 
+    /// A terminal's: its `agent.*`, its program; `status` a sub-agent's own (`kidStatus`),
+    /// else the terminal's.
+    init(terminal: TerminalInfo, size: CGFloat, status: AgentStatus?? = nil, ringFirst: Bool = false) {
+        self.init(meta: terminal.meta, fallback: terminal.program.name, size: size,
+                  status: status ?? terminal.status, ringFirst: ringFirst)
+    }
+
+    /// A record's (`TaskRecord.meta`), in its terminal's program's name without one.
+    init(meta: AgentMeta?, fallback: String, size: CGFloat, status: AgentStatus?, ringFirst: Bool = false) {
+        self.meta = meta; self.fallback = fallback; self.size = size; self.status = status
+        self.ringFirst = ringFirst
+    }
+
     var body: some View {
-        let meta = terminal.meta
-        let quiet = (status ?? terminal.status) == .idle
+        let quiet = status == .idle
         HStack(spacing: 8) {
             if ringFirst {
                 PhoneContextRing(meta: meta).fixedSize()
             }
             HStack(spacing: 5) {
-                Text(meta?.model ?? terminal.program.name)
+                Text(meta?.model ?? fallback)
                     .foregroundStyle(quiet ? theme.dim : theme.muted)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -446,10 +460,13 @@ struct PhoneKidRowContent: View {
 }
 
 /// A record in an agent's tree (`RecordKid`): work a terminal of the tree runs in-process
-/// and reports as a 7501 record (Claude Code's background sub-agents and shells). One line
-/// as a plain terminal's (36 pt): the tree's lines, its status's dot (working, needs you),
-/// its title. No age (nothing tells when it started), no swipes, no menu: a tap opens the
-/// terminal reporting it.
+/// and reports as a 7501 record or in `agent.subagents_meta` (Claude Code's and Codex's
+/// sub-agents, Claude's teammates and background shells). A sub-agent or teammate is drawn
+/// as a sub-agent with a terminal (`PhoneKidRowContent`, 50 pt): its status's dot (working,
+/// needs you, idle: a teammate between turns) and title, how long it has been so; under
+/// them its model, @effort and context's ring (`TaskRecord.meta`; without it the terminal's
+/// program's name, and no age). A shell as a plain terminal (36 pt): the dot and its title.
+/// No swipes, no menu: a tap opens the terminal reporting it.
 struct PhoneRecordRowContent: View {
     var kid: RecordKid
     /// Right over its agent (`PhoneKidRowContent.adjacent`).
@@ -459,15 +476,70 @@ struct PhoneRecordRowContent: View {
     @Environment(\.theme) private var theme
 
     var body: some View {
+        if kid.record.kind == .agent {
+            TimelineView(.periodic(from: .now, by: tickInterval)) { context in
+                agent(now: context.date)
+            }
+        } else {
+            shell
+        }
+    }
+
+    /// `PhoneKidRowContent.tree`.
+    @ViewBuilder
+    private func tree(height h: CGFloat, mid: CGFloat) -> some View {
+        if adjacent {
+            TreeLines(lines: kid.lines, height: h, mid: mid, upward: true)
+        } else {
+            TreeLines(lines: kid.lines, height: h - 4, mid: mid, upward: true)
+                .frame(height: h, alignment: .top)
+        }
+    }
+
+    /// Second ticks while its age visibly moves each second.
+    private var tickInterval: TimeInterval {
+        let young = kid.record.ageSince.map { Date().timeIntervalSince($0) < 3600 } ?? false
+        return young ? 1 : 30
+    }
+
+    private func agent(now: Date) -> some View {
+        let h = PhoneRowMetrics.kidHeight
+        let r = kid.record
+        return HStack(alignment: .top, spacing: 0) {
+            tree(height: h, mid: 6 + 11)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    StatusMark(status: r.status).frame(width: 14)
+                    MatchText.text(r.title, matched: titleMatch, color: theme.accent)
+                        .font(.ui(15))
+                        .foregroundStyle(theme.foreground)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(Format.age(since: r.ageSince, now: now) ?? "")
+                        .font(.mono(13))
+                        .foregroundStyle(theme.muted)
+                        .fixedSize()
+                }
+                .frame(height: 22)
+                PhoneModelLine(meta: r.meta, fallback: kid.program ?? "", size: 12.5, status: r.status)
+                    .padding(.leading, 22)
+                    .frame(height: 18)
+            }
+            .padding(.top, 6)
+        }
+        .padding(.leading, PhoneRowMetrics.treeLeading)
+        .padding(.trailing, PhoneRowMetrics.inset)
+        .frame(height: h, alignment: .top)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.accessibilityText(r, now: now))
+        .accessibilityHint("Opens its agent")
+    }
+
+    private var shell: some View {
         let h = PhoneRowMetrics.kidTerminalHeight
         let r = kid.record
-        HStack(spacing: 0) {
-            if adjacent {
-                TreeLines(lines: kid.lines, height: h, mid: h / 2, upward: true)
-            } else {
-                TreeLines(lines: kid.lines, height: h - 4, mid: h / 2, upward: true)
-                    .frame(height: h, alignment: .top)
-            }
+        return HStack(spacing: 0) {
+            tree(height: h, mid: h / 2)
             StatusMark(status: r.status)
                 .frame(width: 14)
                 .padding(.trailing, 8)
@@ -481,13 +553,18 @@ struct PhoneRecordRowContent: View {
         .padding(.trailing, PhoneRowMetrics.inset)
         .frame(height: h)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.accessibilityText(r))
+        .accessibilityLabel(Self.accessibilityText(r, now: Date()))
         .accessibilityHint("Opens its agent")
     }
 
-    static func accessibilityText(_ r: TaskRecord) -> String {
+    static func accessibilityText(_ r: TaskRecord, now: Date) -> String {
         var parts = [r.kind == .shell ? "Background shell" : "Background sub-agent", r.title, Format.statusWord(r.status)]
+        if let n = r.name, n != r.title { parts.append("named \(n)") }
         if r.status == .blocked, let m = r.message, m != r.title { parts.append(m) }
+        if let m = r.meta?.model { parts.append(m) }
+        if let e = r.meta?.effort { parts.append("effort \(e)") }
+        if let c = Format.context(r.meta?.ctx) { parts.append("\(c) context") }
+        if let a = Format.age(since: r.ageSince, now: now) { parts.append(a) }
         if let p = r.progress { parts.append("\(p) percent") }
         return parts.joined(separator: ", ")
     }

@@ -10,6 +10,8 @@
  * Pure functions only: the wiring lives in `register.ts`.
  */
 
+import type { SubagentState } from './subagents'
+
 /** Every label this mod owns. Removing all of them clears Claude's trace. */
 export const LABEL_KEYS = [
   'agent.app',
@@ -21,6 +23,7 @@ export const LABEL_KEYS = [
   'agent.ctx',
   'agent.ctx_max',
   'agent.subagents',
+  'agent.subagents_meta',
   'agent.session',
   'agent.cache_until',
   'agent.cache_ttl',
@@ -95,17 +98,6 @@ export function effortLabel(effort: unknown): string | undefined {
   return e
 }
 
-/** Subagent statuses that count as queued or running for `agent.subagents`. */
-const ACTIVE = new Set(['pending', 'running', 'waiting'])
-
-/** How many of `$.agent.list()`'s agents are queued or running. */
-export function activeSubagents(list: readonly { status?: string }[] | undefined): number {
-  if (!Array.isArray(list)) return 0
-  let n = 0
-  for (const a of list) if (a && typeof a.status === 'string' && ACTIVE.has(a.status)) n++
-  return n
-}
-
 export interface MetaInputs {
   /** Claude's pid: the terminal's foreground pid while it runs. */
   pid?: number | string
@@ -117,7 +109,10 @@ export interface MetaInputs {
   ctx?: number
   /** The context window. */
   ctxMax?: number
+  /** Subagents and teammates alive: queued, running, waiting, or a teammate idle between turns. */
   subagents?: number
+  /** What each of them runs with, by id (`SubagentTracker.snapshot`). */
+  subagentsMeta?: Record<string, SubagentState>
   /** `$.session.id()`: `claude --resume <id>` opens it again. */
   session?: string
   /** The main loop's prompt cache: its expiry (epoch ms) and lifetime (ms). */
@@ -139,6 +134,8 @@ export function collectLabels(inputs: MetaInputs): Labels {
   if (finite(inputs.ctx) && inputs.ctx >= 0) labels['agent.ctx'] = String(Math.round(inputs.ctx))
   if (finite(inputs.ctxMax) && inputs.ctxMax > 0) labels['agent.ctx_max'] = String(Math.round(inputs.ctxMax))
   if (finite(inputs.subagents) && inputs.subagents > 0) labels['agent.subagents'] = String(inputs.subagents)
+  const subagentsMeta = subagentsMetaLabel(inputs.subagentsMeta, inputs)
+  if (subagentsMeta) labels['agent.subagents_meta'] = subagentsMeta
   if (inputs.session) labels['agent.session'] = inputs.session
   const cache = inputs.cache
   if (cache && finite(cache.until) && finite(cache.ttlMs) && cache.ttlMs > 0) {
@@ -146,6 +143,46 @@ export function collectLabels(inputs: MetaInputs): Labels {
     labels['agent.cache_ttl'] = String(Math.round(cache.ttlMs))
   }
   return labels
+}
+
+/**
+ * `agent.subagents_meta`: for each subagent or teammate alive, by its
+ * `$.agent.list()` id (a subagent's OSC 7501 record has the same key; a
+ * teammate's record is its task's, found by `title`): `title` (its
+ * description, the record's title), `name`, `status` (`pending`, `running`,
+ * `waiting`, `idle`) and `since` (epoch ms), then what the agent's own labels
+ * say of the agent: `model` and `model_id`, `effort`, `ctx` and `ctx_max`, and
+ * `started` (epoch ms). JSON, the ids sorted; a field not known is left out.
+ * The window, when the list doesn't give it (before 2.1.327), is the session's
+ * for the session's model. Undefined when none is alive.
+ */
+export function subagentsMetaLabel(
+  agents: Record<string, SubagentState> | undefined,
+  main: { model?: string; ctxMax?: number } = {},
+): string | undefined {
+  if (!agents) return undefined
+  const ids = Object.keys(agents).filter((id) => id !== '').sort()
+  if (ids.length === 0) return undefined
+  const out: Record<string, Record<string, string | number>> = {}
+  for (const id of ids) {
+    const a = agents[id]!
+    const entry: Record<string, string | number> = {}
+    if (a.title) entry.title = a.title
+    if (a.name) entry.name = a.name
+    if (a.status) entry.status = a.status
+    if (finite(a.since) && a.since > 0) entry.since = Math.round(a.since)
+    if (a.model) {
+      entry.model = modelName(a.model)
+      entry.model_id = a.model
+    }
+    if (a.effort) entry.effort = a.effort
+    if (finite(a.ctx) && a.ctx >= 0) entry.ctx = Math.round(a.ctx)
+    const window = finite(a.ctxMax) && a.ctxMax > 0 ? a.ctxMax : a.model && a.model === main.model ? main.ctxMax : undefined
+    if (finite(window) && window > 0) entry.ctx_max = Math.round(window)
+    if (finite(a.started) && a.started > 0) entry.started = Math.round(a.started)
+    out[id] = entry
+  }
+  return JSON.stringify(out)
 }
 
 /**

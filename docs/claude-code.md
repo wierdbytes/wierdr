@@ -19,6 +19,7 @@ Claude Code в терминале herdr-core показывается в Wierdr 
 | Статус `idle` / `working` / `blocked` / `done` / `error`, `msg` | Claude Code сам, OSC 7501 (`app: "claude-code"`) | `status` терминала |
 | Фоновые саб‑агенты и фоновые шеллы (по записи на каждый, с заголовком) | Claude Code сам, OSC 7501 | `records` терминала |
 | Модель, провайдер, effort, контекст, окно, сессия, кэш, число саб‑агентов, pid | мод `cc` | метки `agent.*` |
+| Каждый живой саб‑агент и тиммейт (и простаивающий между ходами): заголовок, имя, статус и с какого момента, модель, effort, контекст, окно, старт | мод `cc` | метка `agent.subagents_meta` (JSON) |
 | Лимиты подписки (5 часов, 7 дней) | мод `cc` (и pi-herdr для pi) | документ `limits` |
 
 Метки (все строки, только у интерактивного Claude и только в терминале herdr-core):
@@ -27,8 +28,45 @@ Claude Code в терминале herdr-core показывается в Wierdr 
 сокращает до `Opus 5.5`), `agent.model_id`, `agent.provider` (`anthropic`, либо
 `amazon-bedrock` / `google-vertex` / `azure-foundry` по `CLAUDE_CODE_USE_*`), `agent.effort`,
 `agent.ctx` / `agent.ctx_max`, `agent.session` (`claude --resume <id>`),
-`agent.cache_until` / `agent.cache_ttl`, `agent.subagents`. Таблица с примерами — в
-[README мода](../Integrations/claude-code/README.md#labels).
+`agent.cache_until` / `agent.cache_ttl`, `agent.subagents`, `agent.subagents_meta`. Таблица с
+примерами — в [README мода](../Integrations/claude-code/README.md#labels).
+
+`agent.subagents_meta` — то, чем строка сабагента Claude в Wierdr не отличается от строки
+сабагента pi (у того свой терминал и свои `agent.*`): JSON по id из `$.agent.list()`, по
+записи на каждого живого саб‑агента и тиммейта (`pending` / `running` / `waiting` / `idle`):
+
+```json
+{"a4fe2dc75963f2fab": {"title": "Look around", "status": "running", "since": 1795032181214,
+                       "model": "Claude Haiku 5.5", "model_id": "claude-haiku-5-5", "effort": "medium",
+                       "ctx": 17107, "ctx_max": 1000000, "started": 1795032181214},
+ "ahelper-508256b46aa016ee": {"title": "Helper", "name": "helper", "status": "idle", "since": 1795034399598,
+                              "model": "Claude Haiku 5.5", "model_id": "claude-haiku-5-5", "effort": "medium",
+                              "ctx": 35244, "ctx_max": 1000000, "started": 1795034394841}}
+```
+
+`title` — описание из вызова Agent (оно же заголовок записи 7501), `name` — имя, по которому к
+агенту обращается SendMessage (у тиммейта), `since` — когда мод увидел его статус (спавн, первый
+запрос его цикла после простоя, чтение списка). id по порядку, неизвестное поле опущено; никого
+нет — метки нет. Записи 7501 с этим id совпадают не всегда (проверено вживую на 2.1.319 и 2.1.327):
+
+- у **саб‑агента** ключ записи — его id (`a4fe2dc75963f2fab`: тот же у `$.agent.list()` и у
+  `agent.spawn`);
+- у **тиммейта** (agent teams, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`) ключ записи — id его задачи
+  (`t4x1csoe5`, `t` и 8 знаков base36), а у списка — `ahelper-508256b46aa016ee`; задачу mods API
+  не называет, общее у них — заголовок (`Helper` = `description`);
+- **тиммейт между ходами** (`idle`, ждёт сообщения) записи не имеет вовсе, как и саб‑агент, который
+  ждёт свой фоновый шелл (`waiting`).
+
+Поэтому Wierdr (`StatusRecords.merge`) строит строку на каждую запись метки: запись 7501 находит
+по id, иначе по заголовку, и берёт у неё состояние (работает, ждёт тебя) и вопрос; у кого записи
+нет — строка из одной метки: простаивающий тиммейт серый (idle), остальные — работают. Строка
+держит id из списка, поэтому не прыгает, когда запись приходит и уходит. Читает метку только
+вместе с доверенными `agent.*` (правило pid).
+
+Тап по такой строке открывает терминал самого Claude: своей сессии у сабагента нет. Как дать
+тиммейтам свои терминалы hc (режим Claude `teammateMode: tmux` и шим tmux поверх `hc run`) и
+что проверено про переключение вида Claude (`$.ui.view`) — в
+[research/claude-subagent-session.md](research/claude-subagent-session.md).
 
 ## Как это работает
 
@@ -43,12 +81,19 @@ Claude Code в терминале herdr-core показывается в Wierdr 
   промпта (первая запись шлёт все ключи, пустые удаляют то, что осталось от прошлого Claude).
 - **`turn.step`** основного цикла (без `agentId`): в момент отправки запроса — модель,
   effort запроса и продление кэша; по ответу — контекст (`input + cache_read +
-  cache_creation`) и время жизни кэша. Шаги саб‑агентов только пересчитывают
-  `agent.subagents`.
+  cache_creation`) и время жизни кэша. Шаги саб‑агентов (с `agentId`) так же дают их
+  модель, effort и контекст в `agent.subagents_meta` (`hooks/subagents.ts`, `SubagentTracker`) и
+  пересчитывают `agent.subagents`.
 - **`turn.complete`**, **`session.measure`**, любая команда (`command.run`: `/model`,
   `/effort`, `/clear`…) — перечитать сессию; `session.measure` даёт и контекст.
 - **`agent.spawn`** (кроме `e.resume`) — пересчитать саб‑агентов и опрашивать
-  `$.agent.list()` каждые 5 с, пока кто‑то `pending` / `running` / `waiting`.
+  `$.agent.list()` каждые 5 с, пока кто‑то жив (`pending` / `running` / `waiting`, и тиммейт
+  `idle` — тогда опрос идёт, пока есть команда, чтобы видеть, как его будят); ответ даёт id и модель нового,
+  его старт — сейчас. Список в 2.1.327 сам знает `model`, `contextWindowSize`, `startTime`,
+  `lastRequest.effort` и `tokenCount` (им заполняется контекст до первого ответа: это вход плюс
+  весь вывод, чуть больше контекста); в 2.1.319 — только id и статус, и окно саб‑агента
+  известно, лишь когда у него модель сессии (её окно). Закончившиеся и id, которых список
+  не знает (агенты workflow, форки движка), забываются на каждом чтении списка.
 - **`session.end`**: при выходе (`prompt_input_exit`, `logout`, `other`) — снять все метки в
   пределах общих 1,5 с; при `clear` / `resume` — оставить метки (без мигания), сбросить
   контекст и кэш и через полсекунды записать новый id сессии.
@@ -126,6 +171,17 @@ Integrations/claude-code` или `CLAUDE_CODE_PLUGIN_DIRS`.
 - **`settings.read` в тестах**: заглушка отвечает объектом настроек целиком
   (`{ value: { effortLevel: 'high' } }`), ключ из него достаёт сам тест‑кит.
 - Запуск `claude` может сам обновить нативную установку — это нормально.
+- **Записи есть только у работающих саб‑агентов и тиммейтов.** В 2.1.327 все саб‑агенты уходят
+  в фон (и «в foreground» тоже) и сразу получают запись; саб‑агент, который ждёт свой фоновый
+  шелл (`waiting on 1 shell`), запись теряет, тиммейт — как только кончился его ход (`idle`). Без
+  `agent.subagents_meta` их в Wierdr не видно совсем: ни строки, ни бейджа (так и было с тремя
+  простаивающими тиммейтами в живой сессии). С меткой они — строки дерева, и `agent.subagents`
+  их считает.
+- **У тиммейта ключ записи — id задачи** (`t…`, 9 знаков), не id агента (`a<имя>-<hex>`): по id их
+  не связать, связывает заголовок. Два тиммейта с одинаковым описанием в работе — первый по id
+  получит не свою запись (строк всё равно две, данные могут перепутаться).
+  На полном диске Bash саб‑агента не стартует (ENOSPC в `/tmp/claude-501`), и он заканчивается за
+  секунды — живая проверка тогда ничего не покажет.
 
 ## Как проверить вживую
 
@@ -153,7 +209,13 @@ hc keys wierdrtest-cc-1 / e x i t; hc keys wierdrtest-cc-1 enter   # метки 
 `agent.ctx_max` `1000000`, `agent.session`; после ответа — `agent.effort` `medium`,
 `agent.ctx` `45115`, `agent.cache_ttl` `3600000`, `agent.cache_until` = отправка + 1 ч; с
 фоновым саб‑агентом — `agent.subagents` `1` (и запись в `records`), после его конца метка
-пропадает; `/model sonnet` без промпта сразу дал `Claude Sonnet 5.5`; после `/exit` меток нет.
+пропадает; с Explore‑саб‑агентом (версия мода 0.1.2) — `agent.subagents_meta` с тем же id, что у
+записи: сначала модель, effort, окно и старт, через секунды — и `ctx`, вместе с записью
+пропадает, а `wierdr-cli ws` пишет у записи `meta[Haiku 5.5 @medium ctx=34039/1000000 started 22s ago]`;
+с тиммейтом `helper` на 2.1.319 (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) — запись `t4x1csoe5`
+«Helper» пока он работает, потом записи нет, а в метке он остаётся `idle` с `since` конца хода, и
+`wierdr-cli ws` пишет `ahelper-508256b46aa016ee [agent] idle "Helper" meta[@helper Haiku 5.5 @medium
+ctx=35244/1000000 since 26s …]`; сообщение ему снова делает его `running`; `/model sonnet` без промпта сразу дал `Claude Sonnet 5.5`; после `/exit` меток нет.
 В `wierdrtest-limits` — аккаунт `claude.849d2d8c` с теми же `used` и `resets_at`, что
 pi-herdr записал в настоящий `limits`; `claude -p` в том же терминале меток не писал, а
 лимиты обновил.

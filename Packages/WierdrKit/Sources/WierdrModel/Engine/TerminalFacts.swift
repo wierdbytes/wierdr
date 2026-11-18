@@ -106,6 +106,51 @@ enum StatusRecords {
         }
         return out.sorted { $0.id < $1.id }
     }
+
+    /// `records` with what the terminal's labels tell of its sub-agents and teammates
+    /// (`details`, `agent.subagents_meta`, by the agent's own id: Claude Code's
+    /// `$.agent.list()` id, Codex's thread id), as one row each: a sub-agent's record is
+    /// found by its id, a Claude teammate's (keyed by its task) by its title,
+    /// and takes the agent's id, so the row stays the same one when the record goes and the
+    /// agent stays (a teammate between turns). The ones the labels tell of without a record
+    /// are rows of their own (`app`'s): idle (a teammate waiting for a message), else working
+    /// (queued, or waiting on its own background work). Records keep their state (working,
+    /// blocked) and message; sorted by id.
+    static func merge(_ records: [TaskRecord], details: [String: AgentLabels.SubagentDetail], app: String?) -> [TaskRecord] {
+        guard !details.isEmpty else { return records }
+        var left = details
+        var out = records
+        var found = Array(repeating: false, count: out.count)
+        func take(_ i: Int, _ id: String) {
+            guard let d = left.removeValue(forKey: id) else { return }
+            out[i].id = id
+            out[i].apply(d)
+            found[i] = true
+        }
+        // By id first, so a title never takes an agent its own record names.
+        for i in out.indices where out[i].kind == .agent && left[out[i].id] != nil { take(i, out[i].id) }
+        for i in out.indices where out[i].kind == .agent && !found[i] {
+            if let id = left.keys.sorted().first(where: { left[$0]?.title == out[i].title }) { take(i, id) }
+        }
+        let taken = Set(out.map(\.id))
+        for (id, d) in left where !taken.contains(id) {
+            var r = TaskRecord(id: id, app: app, state: d.status == "idle" ? "idle" : "working",
+                               title: d.title ?? d.name ?? id, kind: .agent)
+            r.apply(d)
+            out.append(r)
+        }
+        return out.sorted { $0.id < $1.id }
+    }
+}
+
+extension TaskRecord {
+    /// What `agent.subagents_meta` tells of it.
+    mutating func apply(_ d: AgentLabels.SubagentDetail) {
+        meta = d.meta
+        startedAt = d.startedAt
+        statusSince = d.since
+        name = d.name
+    }
 }
 
 // MARK: - agent.* labels
@@ -161,6 +206,57 @@ enum AgentLabels {
         return n
     }
 
+    /// What `agent.subagents_meta` tells of one sub-agent or teammate the terminal's program
+    /// runs in-process (Claude Code's, Codex's), by its id.
+    struct SubagentDetail: Hashable, Sendable {
+        /// Its description (its record's title) and name (a teammate's).
+        var title: String?
+        var name: String?
+        /// `pending`, `running`, `waiting` or `idle` (`$.agent.list()`'s), and since when.
+        var status: String?
+        var since: Date?
+        var meta: AgentMeta
+        var startedAt: Date?
+    }
+
+    /// `agent.subagents_meta` (cc@wierdr, codex@wierdr): a JSON object, by sub-agent id, of
+    /// `title`, `name`, `status`, `since` (epoch ms), `model`, `effort`, `ctx`, `ctx_max`
+    /// (numbers or numeric strings) and `started` (epoch ms), the model read as the terminal's
+    /// own `agent.model` under its provider (`provider`: its mark shortens it). Unknown keys,
+    /// and entries that aren't objects, are ignored; anything that doesn't parse is none.
+    static func subagents(labels: [String: String], provider: String?) -> [String: SubagentDetail] {
+        guard let raw = labels["agent.subagents_meta"], !raw.isEmpty,
+              let object = (try? JSONValue(parsing: raw))?.object else { return [:] }
+        let mark = mark(provider: provider)
+        func text(_ v: JSONValue?) -> String? {
+            guard let s = v?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+            return s
+        }
+        func number(_ v: JSONValue?) -> Double? {
+            guard let n = v?.double ?? text(v).flatMap(Double.init), n.isFinite else { return nil }
+            return n
+        }
+        func int(_ v: JSONValue?) -> Int? { number(v).flatMap { Int(exactly: $0.rounded()) } }
+        var out: [String: SubagentDetail] = [:]
+        for (id, entry) in object where !id.isEmpty {
+            guard entry.object != nil else { continue }
+            let meta = AgentMeta(
+                provider: provider,
+                providerAsset: mark.map { "provider.\($0)" },
+                model: text(entry["model"]).map { shortModel($0, mark: mark) },
+                effort: text(entry["effort"]),
+                ctx: int(entry["ctx"]),
+                ctxMax: int(entry["ctx_max"]))
+            func date(_ key: String) -> Date? {
+                number(entry[key]).flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0 / 1000) : nil }
+            }
+            out[id] = SubagentDetail(title: text(entry["title"]), name: text(entry["name"]),
+                                     status: text(entry["status"]), since: date("since"),
+                                     meta: meta, startedAt: date("started"))
+        }
+        return out
+    }
+
     /// `agentMeta`: trusted only while `agent.pid` is still the foreground program.
     static func meta(labels: [String: String], foregroundPID: Int?) -> AgentMeta? {
         guard let app = labels["agent.app"], !app.isEmpty else { return nil }
@@ -214,6 +310,9 @@ struct TerminalDeriver {
             guard let v = t.labels[label(name)], !v.isEmpty else { return nil }
             return LayoutID.qualify(v, machine)
         }
+        // Its sub-agents' details are as trusted as its own `agent.*`.
+        let meta = AgentLabels.meta(labels: t.labels, foregroundPID: t.foreground?.pid)
+        let details = meta.map { AgentLabels.subagents(labels: t.labels, provider: $0.provider) } ?? [:]
         return TerminalInfo(
             address: t.address,
             machine: machine,
@@ -235,10 +334,10 @@ struct TerminalDeriver {
             labels: t.labels,
             pinned: !(t.labels[label("pinned")] ?? "").isEmpty,
             pinnedAt: Self.pinTime(t.labels[label("pinned")]),
-            meta: AgentLabels.meta(labels: t.labels, foregroundPID: t.foreground?.pid),
+            meta: meta,
             spaceID: qualifiedLabel("space"),
             tabID: qualifiedLabel("tab"),
-            records: t.isLive ? StatusRecords.parse(t.records) : [])
+            records: t.isLive ? StatusRecords.merge(StatusRecords.parse(t.records), details: details, app: app) : [])
     }
 }
 

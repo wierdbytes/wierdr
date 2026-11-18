@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'claude-code/testing'
 import {
-  activeSubagents,
   clearLabels,
   collectLabels,
   diffLabels,
@@ -70,22 +69,6 @@ describe('effort', () => {
     expect(effortLabel('')).toBeUndefined()
     expect(effortLabel({})).toBeUndefined()
   })
-})
-
-test('subagents queued or running count', () => {
-  expect(
-    activeSubagents([
-      { status: 'pending' },
-      { status: 'running' },
-      { status: 'waiting' },
-      { status: 'idle' },
-      { status: 'completed' },
-      { status: 'failed' },
-      { status: 'killed' },
-    ]),
-  ).toBe(3)
-  expect(activeSubagents([])).toBe(0)
-  expect(activeSubagents(undefined)).toBe(0)
 })
 
 describe('labels', () => {

@@ -9,7 +9,8 @@
  * 7501; this adds what that report has no room for.
  *
  * Wiring only. The labels are built in `meta.ts` and written in
- * `publisher.ts`, the cache window is `cache.ts`, the limits are read in
+ * `publisher.ts`, the subagents' models and contexts are kept in
+ * `subagents.ts`, the cache window is `cache.ts`, the limits are read in
  * `limits.ts` and written in `limits-publisher.ts`, `hc.ts` speaks
  * herdr-core's JSON-RPC through `hc connect`.
  *
@@ -24,15 +25,16 @@ import { CacheTracker, type CacheUsage } from './cache'
 import { docOf, parseReply, requestLine, type RpcReply, setResultOf } from './hc'
 import { accountFromConfig, accountSlug, LIMITS_DOC, type LimitsDoc, type RateLimitLike, readingFromRateLimits } from './limits'
 import { LimitsPublisher } from './limits-publisher'
-import { activeSubagents, collectLabels, effortLabel, type MetaInputs, providerOf } from './meta'
+import { collectLabels, effortLabel, type MetaInputs, providerOf } from './meta'
 import { LabelPublisher } from './publisher'
+import { type ListedAgent, SubagentTracker } from './subagents'
 import type { After, Cancelable } from './timer'
 
 type Api = EngineInterface
 
 /** How long one `hc connect` may take. */
 const HC_TIMEOUT_MS = 3000
-/** How often `agent.subagents` is re-read while subagents run. */
+/** How often `agent.subagents` is re-read while subagents or teammates are alive. */
 const SUBAGENT_POLL_MS = 5000
 /** How long the signed-in account read from `~/.claude.json` is trusted. */
 const ACCOUNT_TTL_MS = 10 * 60_000
@@ -131,9 +133,20 @@ async function snapshot($: Api): Promise<Snapshot> {
   return { session, model, context: usage?.context, rateLimits: usage?.rateLimits }
 }
 
-async function subagentCount($: Api): Promise<number | undefined> {
+/** The session's subagents and teammates, or undefined when they can't be read. */
+async function agentList($: Api): Promise<readonly ListedAgent[] | undefined> {
   try {
-    return activeSubagents(await $.agent.list())
+    const list = await $.agent.list()
+    return Array.isArray(list) ? (list as readonly ListedAgent[]) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** `$.clock.now()`, or undefined without a clock. */
+async function nowOf($: Api): Promise<number | undefined> {
+  try {
+    return await $.clock.now()
   } catch {
     return undefined
   }
@@ -212,6 +225,7 @@ export function register(on: On): void {
 
   const meta: MetaInputs = {}
   const cache = new CacheTracker()
+  const subagents = new SubagentTracker()
   /** The model and effort the session last named: a change means /model or /effort. */
   let sessionModel: string | undefined
   let settingEffort: string | undefined
@@ -221,7 +235,7 @@ export function register(on: On): void {
   /** Polls left before a spawn that never showed up stops the subagent poll. */
   let expectSpawn = 0
 
-  const publish = () => labels?.publish(collectLabels({ ...meta, cache: cache.window }))
+  const publish = () => labels?.publish(collectLabels({ ...meta, cache: cache.window, subagentsMeta: subagents.snapshot() }))
 
   const stopPoll = () => {
     try {
@@ -307,8 +321,9 @@ export function register(on: On): void {
         if (counting) return
         counting = true
         try {
-          const n = await subagentCount($)
-          if (n === undefined) return
+          const [list, at] = await Promise.all([agentList($), nowOf($)])
+          if (list === undefined) return
+          const n = subagents.listed(list, at)
           meta.subagents = n
           publish()
           if (n > 0) {
@@ -347,9 +362,18 @@ export function register(on: On): void {
   })
 
   on('turn.step', async function* ($, e, next) {
-    // Subagents' requests: only their count matters here.
+    // Subagents' requests: their model, effort and context, and their count.
     if (!labels || e.agentId !== undefined) {
+      const agent = labels ? e.agentId : undefined
+      if (agent !== undefined) {
+        subagents.requested(agent, e.model, e.effort, await nowOf($))
+        publish()
+      }
       const result = yield* next(e)
+      if (agent !== undefined) {
+        subagents.answered(agent, result?.usage)
+        publish()
+      }
       void countAgents?.().catch(() => undefined)
       return result
     }
@@ -406,7 +430,8 @@ export function register(on: On): void {
 
   on('agent.spawn', async ($, e, next) => {
     // A resumed subagent is counted already.
-    if (labels && !e.resume) {
+    const fresh = labels !== undefined && !e.resume
+    if (fresh) {
       expectSpawn = 2
       startPoll?.()
       try {
@@ -415,7 +440,14 @@ export function register(on: On): void {
         // The poll catches it.
       }
     }
-    return next(e)
+    const result = await next(e)
+    // Its id, its model and when it started (the list has the start too from 2.1.327 on).
+    const spawned = result as { agentId?: string; model?: string } | undefined
+    if (fresh && spawned?.agentId) {
+      subagents.spawned(spawned.agentId, spawned.model, await nowOf($))
+      publish()
+    }
+    return result
   })
 
   on('session.end', async ($, e, next) => {
@@ -425,6 +457,7 @@ export function register(on: On): void {
       // flicker) and let the next reads republish, the new id among them.
       labels?.cancel()
       cache.reset()
+      subagents.reset()
       meta.ctx = undefined
       meta.subagents = 0
       if (labels) {

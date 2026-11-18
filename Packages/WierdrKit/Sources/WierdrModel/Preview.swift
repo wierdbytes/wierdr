@@ -63,7 +63,9 @@ extension Workspace {
             TerminalInfo(address: "t7b", title: "zsh", cwd: "/Users/mentor/me/dev/wierd-limits", processName: "zsh", program: zsh),
             // Claude Code with the cc@wierdr plugin: its session's title is the terminal's
             // (its `msg` a passing detail), `agent.*` as the plugin writes them (1 h cache),
-            // and its background work as 7501 records: a sub-agent and a shell.
+            // and its background work as 7501 records: a sub-agent (its model, effort, context
+            // and start from `agent.subagents_meta`) and a shell; and a teammate between turns,
+            // which only `agent.subagents_meta` tells of (`StatusRecords.merge`).
             TerminalInfo(address: "t8a", title: "Dream jobs on the queue", cwd: "/Users/mentor/me/dev/memory",
                          processName: "claude", program: claude, status: .working, state: "working",
                          message: "1 shell still running", app: "claude-code", turn: 2,
@@ -74,7 +76,18 @@ extension Workspace {
                                          session: "5f0c2a41-7d3e-4b8a-9c61-2e8f4d1a7b30"),
                          records: [
                             TaskRecord(id: "a445e47c8be43ef46", app: "claude-code", state: "working",
-                                       title: "Review the queue's retry logic"),
+                                       title: "Review the queue's retry logic",
+                                       meta: AgentMeta(provider: "anthropic", providerAsset: "provider.anthropic",
+                                                       model: "Haiku 5.5", effort: "medium", ctx: 31_200,
+                                                       ctxMax: 1_000_000),
+                                       startedAt: now.addingTimeInterval(-74)),
+                            TaskRecord(id: "asleeper-0d1e2f3a4b5c6d7e", app: "claude-code", state: "idle",
+                                       title: "Wait for the nightly build", kind: .agent,
+                                       meta: AgentMeta(provider: "anthropic", providerAsset: "provider.anthropic",
+                                                       model: "Sonnet 5.5", effort: "medium", ctx: 12_400,
+                                                       ctxMax: 1_000_000),
+                                       startedAt: now.addingTimeInterval(-20 * 60),
+                                       statusSince: now.addingTimeInterval(-6 * 60), name: "sleeper"),
                             TaskRecord(id: "bcq5ektlx", app: "claude-code", state: "working",
                                        title: "Run the queue tests in watch mode"),
                          ]),

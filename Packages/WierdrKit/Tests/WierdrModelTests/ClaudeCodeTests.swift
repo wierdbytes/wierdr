@@ -76,6 +76,84 @@ import Testing
         #expect(AgentText.title(t(claude, app: "claude", .working, msg: "Detail", title: "Ok reply test"), tab: nil) == "Detail")
     }
 
+    /// `agent.subagents_meta` as cc@wierdr wrote it live (2.1.327, an Explore agent, Haiku 5.5),
+    /// and one of an older Claude Code (no window, no start), by the records' ids.
+    static let subagentsMeta = #"{"a445e47c8be43ef46":{"model":"Claude Haiku 5.5","model_id":"claude-haiku-5-5","effort":"medium","ctx":15745,"ctx_max":1000000,"started":1795030972758},"a8324c80d4747b666":{"model":"Claude Opus 5.5","model_id":"claude-opus-5-5","ctx":"1200"},"bcq5ektlx":{"model":"x"},"zz":5}"#
+
+    @Test func subagentsMeta() throws {
+        var labels = Self.labels
+        labels["agent.subagents_meta"] = Self.subagentsMeta
+        let details = AgentLabels.subagents(labels: labels, provider: "anthropic")
+        let haiku = try #require(details["a445e47c8be43ef46"])
+        #expect(haiku.meta.model == "Haiku 5.5" && haiku.meta.effort == "medium")
+        #expect(haiku.meta.ctx == 15_745 && haiku.meta.ctxMax == 1_000_000)
+        #expect(haiku.meta.provider == "anthropic" && haiku.meta.providerAsset == "provider.anthropic")
+        #expect(haiku.startedAt == Date(timeIntervalSince1970: 1_795_030_972.758))
+        let opus = try #require(details["a8324c80d4747b666"])
+        #expect(opus.meta.model == "Opus 5.5" && opus.meta.effort == nil && opus.meta.ctx == 1200 && opus.meta.ctxMax == nil)
+        #expect(opus.startedAt == nil)
+        #expect(details["zz"] == nil)
+        #expect(AgentLabels.subagents(labels: ["agent.subagents_meta": "{oops"], provider: nil).isEmpty)
+        #expect(AgentLabels.subagents(labels: [:], provider: nil).isEmpty)
+
+        // Through the deriver: each sub-agent record gets its own; a shell none.
+        let deriver = TerminalDeriver(prefix: "herdr")
+        var t = Fixture.terminal("t7", fg: ["claude"], status: TerminalStatus(state: "working", app: "claude-code"),
+                                 labels: labels, pid: 71234)
+        t.records = Self.records
+        let records = deriver.info(t, seenTurn: nil, locallySeen: true).records
+        #expect(records.map { $0.meta?.model } == ["Haiku 5.5", "Opus 5.5", nil])
+        #expect(records[0].startedAt != nil && records[2].startedAt == nil)
+        // Untrusted labels (another program in front) tell nothing of the sub-agents either.
+        t.foreground = Foreground(pid: 70001, name: "zsh", argv: ["-zsh"], cwd: "/")
+        #expect(deriver.info(t, seenTurn: nil, locallySeen: true).records.allSatisfy { $0.meta == nil && $0.startedAt == nil })
+    }
+
+    /// Teammates (agent teams): a working one's record is keyed by its task (`tlio18wlb`,
+    /// live, 2.1.319 and 2.1.327), not by its agent id, and is found by its title; one between
+    /// turns has no record and is a row of the labels alone, idle; so is a sub-agent waiting
+    /// on its own background shell (no record either), working.
+    @Test func teammates() throws {
+        var labels = Self.labels
+        labels["agent.subagents_meta"] = #"""
+        {"a445e47c8be43ef46":{"title":"Count to five slowly","status":"running","since":1795033700000,"model":"Claude Haiku 5.5"},
+         "a9000000000000001":{"title":"Slow count","status":"waiting","since":1795033710000},
+         "ahelper-c2e58121067329e7":{"title":"Helper","name":"helper","status":"running","since":1795033739160,"model":"Claude Haiku 5.5","effort":"medium","ctx":35715,"ctx_max":1000000,"started":1795033739159},
+         "asleeper-0d1e2f3a4b5c6d7e":{"title":"Wait for the build","name":"sleeper","status":"idle","since":1795033741000},
+         "bcq5ektlx":{"title":"Helper"}}
+        """#
+        let deriver = TerminalDeriver(prefix: "herdr")
+        var t = Fixture.terminal("t7", fg: ["claude"], status: TerminalStatus(state: "working", app: "claude-code"),
+                                 labels: labels, pid: 71234)
+        t.records = Fixture.json(#"""
+        {"a445e47c8be43ef46": {"app": "claude-code", "state": "working", "title": "Count to five slowly"},
+         "tlio18wlb": {"app": "claude-code", "state": "blocked", "kind": "permission", "msg": "approve Bash: ls", "title": "Helper"},
+         "bcq5ektlx": {"app": "claude-code", "state": "working", "title": "Sleep for 25 seconds in background"}}
+        """#)
+        let records = deriver.info(t, seenTurn: nil, locallySeen: true).records
+        // One row each, by agent id; the shell's record keeps its own (its id named in the
+        // labels takes nothing from it).
+        #expect(records.map(\.id) == ["a445e47c8be43ef46", "a9000000000000001", "ahelper-c2e58121067329e7",
+                                      "asleeper-0d1e2f3a4b5c6d7e", "bcq5ektlx"])
+        #expect(records.map(\.kind) == [.agent, .agent, .agent, .agent, .shell])
+        #expect(records.map(\.status) == [.working, .working, .blocked, .idle, .working])
+        let helper = records[2]
+        // The record's state and question, the labels' model, name and times.
+        #expect(helper.title == "Helper" && helper.message == "approve Bash: ls" && helper.name == "helper")
+        #expect(helper.meta?.model == "Haiku 5.5" && helper.meta?.ctx == 35_715 && helper.meta?.ctxMax == 1_000_000)
+        #expect(helper.ageSince == Date(timeIntervalSince1970: 1_795_033_739.160))
+        let sleeper = records[3]
+        #expect(sleeper.title == "Wait for the build" && sleeper.app == "claude-code" && sleeper.meta?.model == nil)
+        #expect(sleeper.ageSince == Date(timeIntervalSince1970: 1_795_033_741))
+        #expect(records[1].title == "Slow count" && records[1].startedAt == nil)
+        // They count as sub-agents in process (the badge), the shell as a shell.
+        let info = deriver.info(t, seenTurn: nil, locallySeen: true)
+        #expect(info.inProcessAgents == 4 && info.backgroundShells == 1)
+        // Without the labels (no plugin), the records alone, as Claude reports them.
+        t.labels = [:]
+        #expect(deriver.info(t, seenTurn: nil, locallySeen: true).records.map(\.id) == ["a445e47c8be43ef46", "bcq5ektlx", "tlio18wlb"])
+    }
+
     @Test func recordsParse() {
         let records = StatusRecords.parse(Self.records)
         #expect(records.map(\.id) == ["a445e47c8be43ef46", "a8324c80d4747b666", "bcq5ektlx"])
@@ -166,7 +244,11 @@ import Testing
         let ws = Workspace.preview()
         let t = ws.terminal("t8a")
         #expect(t?.app == "claude-code" && t?.meta?.model == "Opus 5.5" && t?.meta?.effort == "high")
-        #expect(t?.meta?.cacheTTL == 3600 && t?.records.map(\.kind) == [.agent, .shell])
+        #expect(t?.meta?.cacheTTL == 3600 && t?.records.map(\.kind) == [.agent, .agent, .shell])
+        // Its sub-agent is drawn as fully as a pi sub-agent (model, effort, context, age), and
+        // so is its teammate between turns, idle.
+        #expect(t?.records.first?.meta?.model == "Haiku 5.5" && t?.records.first?.startedAt != nil)
+        #expect(t?.records[1].status == .idle && t?.records[1].name == "sleeper" && t?.records[1].statusSince != nil)
         if let t { #expect(AgentText.title(t, tab: nil) == "Dream jobs on the queue") }
     }
 }

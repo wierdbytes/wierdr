@@ -32,7 +32,7 @@ function world(on: any, env: Record<string, string> = HERDR_ENV) {
   mock.env(on, env)
   const sent: Sent[] = []
   const doc: { value: unknown; version: number } = { value: null, version: 0 }
-  const session = { id: 'sess-1', model: 'claude-opus-5-5', agents: [] as Array<{ status: string }> }
+  const session = { id: 'sess-1', model: 'claude-opus-5-5', agents: [] as Array<Record<string, unknown>> }
   on('process.run', ($: unknown, e: { argv: string[]; init?: { stdin?: string; env?: Record<string, string> } }) => {
     if (e.argv[0] === 'hostname') return ok('box\n')
     if (e.argv[0] === '/bin/sh') return ok('4242\n')
@@ -105,6 +105,7 @@ test('an interactive session in a herdr-core terminal publishes its labels at st
     'agent.ctx': '',
     'agent.ctx_max': '1000000',
     'agent.subagents': '',
+    'agent.subagents_meta': '',
     'agent.session': 'sess-1',
     'agent.cache_until': '',
     'agent.cache_ttl': '',
@@ -140,6 +141,74 @@ test('subagents are counted while they run, then polled until none is left', asy
   w.session.agents = [{ status: 'completed' }, { status: 'completed' }]
   await w.clock.advance(5_200)
   expect(w.labelCalls().at(-1)).toEqual({ 'agent.subagents': '' })
+})
+
+test("each running subagent's model, effort, context and start go out by id", async ($, on) => {
+  const w = world(on)
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  w.session.agents = [
+    { id: 'a1', status: 'running', description: 'Look around', startTime: 990_000, contextWindowSize: 200_000 },
+    { id: 'a0', status: 'completed' },
+  ]
+  await runStep($, { turnId: 'turn-1', index: 0, model: 'claude-opus-5-5', effort: 'low', messageCount: 1, agentId: 'a1' })
+  await w.clock.advance(200)
+  expect(w.labelCalls().at(-1)).toEqual({
+    'agent.subagents': '1',
+    'agent.subagents_meta': JSON.stringify({
+      a1: {
+        title: 'Look around',
+        status: 'running',
+        since: 1_000_000,
+        model: 'Claude Opus 5.5',
+        model_id: 'claude-opus-5-5',
+        effort: 'low',
+        ctx: 51414,
+        ctx_max: 200000,
+        started: 990000,
+      },
+    }),
+  })
+  // The main loop's labels stay as they were.
+  expect(w.labelCalls().some((l) => 'agent.ctx' in l && l['agent.ctx'] !== '')).toBe(false)
+  w.session.agents = [{ id: 'a1', status: 'completed' }]
+  await w.clock.advance(5_200)
+  expect(w.labelCalls().at(-1)).toEqual({ 'agent.subagents': '', 'agent.subagents_meta': '' })
+})
+
+test('teammates between turns stay listed and counted, and keep the poll going', async ($, on) => {
+  const w = world(on)
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  w.session.agents = [{ id: 'ahelper-1', status: 'idle', description: 'Helper', name: 'helper', type: 'teammate' }]
+  await runStep($, { turnId: 'turn-1', index: 0, model: 'claude-opus-5-5', messageCount: 1 })
+  await w.clock.advance(200)
+  expect(w.labelCalls().at(-1)).toMatchObject({
+    'agent.subagents': '1',
+    'agent.subagents_meta': JSON.stringify({ 'ahelper-1': { title: 'Helper', name: 'helper', status: 'idle', since: 1_000_000 } }),
+  })
+  // Polled while it's there: woken, then gone.
+  w.session.agents = [{ id: 'ahelper-1', status: 'running', description: 'Helper', name: 'helper', type: 'teammate' }]
+  await w.clock.advance(5_200)
+  expect(JSON.parse(w.labelCalls().at(-1)!['agent.subagents_meta']!)['ahelper-1'].status).toBe('running')
+  w.session.agents = [{ id: 'ahelper-1', status: 'killed' }]
+  await w.clock.advance(5_200)
+  expect(w.labelCalls().at(-1)).toEqual({ 'agent.subagents': '', 'agent.subagents_meta': '' })
+})
+
+test('a spawn tells its id, its model and when it started', async ($, on) => {
+  const w = world(on)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a7' }))
+  await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+  w.session.agents = [{ id: 'a7', status: 'running' }]
+  // The engine fills the rest of the input; the hook reads only `resume`.
+  await $.agent.spawn({ prompt: 'Look around', description: 'Look around' } as any)
+  // Counted 300 ms on, written 150 ms after.
+  await w.clock.advance(600)
+  expect(w.labelCalls().at(-1)).toEqual({
+    'agent.subagents': '1',
+    'agent.subagents_meta': JSON.stringify({
+      a7: { status: 'running', since: 1_000_000, model: 'Claude Haiku 5.5', model_id: 'claude-haiku-5-5', started: 1_000_000 },
+    }),
+  })
 })
 
 test('limits are folded into the document the mod is pointed at', async ($, on) => {
@@ -178,7 +247,7 @@ test('quitting removes every label; /clear keeps them and republishes the new se
 
   await $.session.end({ reason: 'prompt_input_exit', sessionId: 'sess-2', resume: { id: 'sess-2' } })
   const cleared = w.labelCalls().at(-1)!
-  expect(Object.keys(cleared).length).toBe(12)
+  expect(Object.keys(cleared).length).toBe(13)
   expect(Object.values(cleared).every((v) => v === '')).toBe(true)
 })
 

@@ -450,7 +450,11 @@ event's `records`); titles arrive decoded; state `working`, or `blocked` with `k
 question/permission when a remote agent needs input. Ids: sub-agents `a` + 16 hex, shells
 `b` + 8 base36. Wierdr shows them as rows of the agent's sub-agent tree (`TaskRecord`, no
 terminal: a tap opens the agent; they count in no status). pi and the desktop mods don't
-use records. The rich agent data comes from **labels** (below), not records.
+use records. The rich agent data comes from **labels** (below), not records; a Claude
+sub-agent's or teammate's (title, status, model, effort, context, start) from its terminal's
+`agent.subagents_meta`, by `$.agent.list()`'s id, and its row is then a pi sub-agent's two lines.
+A sub-agent's record has that id as its key; a teammate's (agent teams) is keyed by its task
+(`t4x1csoe5`) and has its description as its title; a teammate between turns has no record.
 
 Codex (0.170.0) reports its root record itself, `app: "codex"`, never `msg`, `progress` or
 `records`: `{"app":"codex","state":"working"}`; `state` idle|working|blocked|done|error,
@@ -490,7 +494,10 @@ agent.provider=anthropic     agent.effort=high (low|medium|high|xhigh|max)
 agent.ctx=84312              agent.ctx_max=200000           agent.session=<Claude session id>
 agent.cache_until=<epoch ms> agent.cache_ttl=3600000 (1 h on a subscription)
 agent.pid=<Claude's pid = the terminal's foreground pid>
-agent.subagents=1 (its in-process sub-agents pending/running/waiting)
+agent.subagents=1 (its in-process sub-agents and teammates pending/running/waiting/idle)
+agent.subagents_meta={"ahelper-508256b46aa016ee":{"title":"Helper","name":"helper","status":"idle",
+  "since":1795034399598,"model":"Claude Haiku 5.5","model_id":"claude-haiku-5-5","effort":"medium",
+  "ctx":35244,"ctx_max":1000000,"started":1795034394841}}  (JSON, by $.agent.list() id, every live one)
 ```
 Codex writes them through Wierdr's plugin `codex@wierdr` (`Integrations/codex`, its hooks,
 [codex.md](../codex.md)):

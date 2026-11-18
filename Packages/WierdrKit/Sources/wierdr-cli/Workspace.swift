@@ -137,7 +137,7 @@ func render(_ ws: Workspace) -> [String] {
                             let k = kid.terminal
                             out.append("\(pad)  \(lead)\(k.address) \(k.name ?? k.program.name) \(status(k.kidStatus))\(kid.paneID.map { " kept in \($0)" } ?? "")")
                         case .record(let r):
-                            out.append("\(pad)  \(lead)record \(r.record.id) [\(r.record.kind)] \(status(r.record.status)) \"\(r.record.title.prefix(50))\"")
+                            out.append("\(pad)  \(lead)record \(r.record.id) [\(r.record.kind)] \(status(r.record.status)) \"\(r.record.title.prefix(50))\"\(recordMeta(r.record))")
                         }
                     }
                 }
@@ -152,9 +152,19 @@ func render(_ ws: Workspace) -> [String] {
         out.append("terminals without a pane: " + loose.map { "\($0.address)(\($0.program.key))" }.joined(separator: " "))
         for t in loose where !t.records.isEmpty {
             out.append("  \(t.address) title=\"\(AgentText.title(t, tab: nil))\" records: " + t.records.map {
-                "\($0.id) [\($0.kind)] \(status($0.status)) \"\($0.title)\""
+                "\($0.id) [\($0.kind)] \(status($0.status)) \"\($0.title)\"\(recordMeta($0))"
             }.joined(separator: ", "))
         }
     }
     return out
+}
+
+/// A sub-agent record's `agent.subagents_meta` part: ` meta[@helper Haiku 5.5 @medium ctx=17107/1000000 since 3s started 12s ago]`.
+private func recordMeta(_ r: TaskRecord) -> String {
+    guard r.meta != nil || r.startedAt != nil || r.statusSince != nil else { return "" }
+    let m = r.meta
+    var s = " meta[\(r.name.map { "@\($0) " } ?? "")\(m?.model ?? "-")\(m?.effort.map { " @\($0)" } ?? "") ctx=\(m?.ctx.map(String.init) ?? "-")/\(m?.ctxMax.map(String.init) ?? "-")"
+    if let since = r.statusSince { s += " since \(Int(Date().timeIntervalSince(since)))s" }
+    if let started = r.startedAt { s += " started \(Int(Date().timeIntervalSince(started)))s ago" }
+    return s + "]"
 }
