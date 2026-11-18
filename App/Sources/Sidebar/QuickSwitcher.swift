@@ -43,7 +43,7 @@ struct QuickSwitcher: View {
     @State private var keyboardButton = true
 
     var body: some View {
-        let results = GoToResults(controller.workspace, query: query, showsKids: controller.showsKids(of:))
+        let results = GoToResults(controller.workspace, query: query, tree: { controller.shownTree(of: $0, forced: $1) })
         let lines = results.lines
         let topHeader = lines.first?.id
         ScrollView(.vertical) {
@@ -111,16 +111,18 @@ struct QuickSwitcher: View {
                 listRow(line, next: next, to: .pane(hit.item.row.paneID, hit.item.space)) {
                     PhoneAgentRowContent(terminal: t, tab: controller.workspace.tab(hit.item.row.tabID),
                                          space: hit.item.space, showsSpace: true, tree: hit.item.row.tree,
-                                         open: hit.showsKids, titleMatch: hit.titleMatch)
+                                         hasKids: !hit.shown.isEmpty, titleMatch: hit.titleMatch)
                 }
             }
-        case .kid(let kid, let parent, let adjacent, let match):
+        case .kid(let kid, let parent, let hasKids, let match):
             listRow(line, next: next, to: .kid(kid, from: parent.item.row.paneID, parent.item.space)) {
-                PhoneKidRowContent(kid: kid, adjacent: adjacent, titleMatch: match)
+                PhoneKidRowContent(kid: kid, hasKids: hasKids,
+                                   terminals: TreeFolds.terminals(of: kid.terminal.address, in: parent.item.row.tree),
+                                   titleMatch: match)
             }
-        case .record(let record, let parent, let adjacent, let match):
+        case .record(let record, let parent, let match):
             listRow(line, next: next, to: .record(record, in: parent.item.row, parent.item.space)) {
-                PhoneRecordRowContent(kid: record, adjacent: adjacent, titleMatch: match)
+                PhoneRecordRowContent(kid: record, titleMatch: match)
             }
         }
     }
@@ -260,8 +262,8 @@ struct GoToAgentHit {
     var kidMatches: [String: [Int]]
     /// The best of its own score and its sub-agents'.
     var score: Int
-    /// Its sub-agents show under it: as in the list, or because one of them matched.
-    var showsKids: Bool
+    /// What of its tree shows under it: as in the list, and the rows that matched.
+    var shown: [TreeNode]
     /// Where Return goes: the agent, or its sub-agent that matched best.
     var target: GoToTarget
 }
@@ -274,9 +276,9 @@ struct GoToLine: Identifiable {
         case machine(String?)
         case space(GoToSpaceHit)
         case agent(GoToAgentHit)
-        /// `adjacent`: right over its agent.
-        case kid(SubAgent, parent: GoToAgentHit, adjacent: Bool, match: [Int])
-        case record(RecordKid, parent: GoToAgentHit, adjacent: Bool, match: [Int])
+        /// `hasKids`: rows of its own children show over it.
+        case kid(SubAgent, parent: GoToAgentHit, hasKids: Bool, match: [Int])
+        case record(RecordKid, parent: GoToAgentHit, match: [Int])
     }
 
     var kind: Kind
@@ -291,7 +293,8 @@ struct GoToResults {
     var spaces: [(machine: String?, hits: [GoToSpaceHit])] = []
     var agents: [GoToAgentHit] = []
 
-    init(_ ws: Workspace, query: String, showsKids: (SidebarRow) -> Bool) {
+    /// `tree`: what of a row's tree shows, its matches (node ids) whatever the folds (`shownTree`).
+    init(_ ws: Workspace, query: String, tree: (SidebarRow, Set<String>) -> [TreeNode]) {
         let q = query.trimmingCharacters(in: .whitespaces)
         let searching = !q.isEmpty
 
@@ -349,7 +352,7 @@ struct GoToResults {
             }
             agents.append(GoToAgentHit(item: item, titleMatch: own?.indices ?? [], kidMatches: kidMatches,
                                        score: max(ownScore, bestKid?.score ?? .min),
-                                       showsKids: showsKids(item.row) || !kidMatches.isEmpty, target: target))
+                                       shown: tree(item.row, Set(kidMatches.keys)), target: target))
         }
         self.agents = searching ? Self.ranked(agents, by: \.score) : agents
     }
@@ -382,15 +385,13 @@ struct GoToResults {
         if !agents.isEmpty {
             out.append(GoToLine(kind: .header("Agents"), id: "header:agents"))
             for (i, hit) in agents.enumerated().reversed() {
-                if hit.showsKids {
-                    for (k, node) in hit.item.row.tree.enumerated().reversed() {
-                        let match = hit.kidMatches[node.id] ?? []
-                        switch node {
-                        case .kid(let kid):
-                            out.append(GoToLine(kind: .kid(kid, parent: hit, adjacent: k == 0, match: match), id: node.id))
-                        case .record(let record):
-                            out.append(GoToLine(kind: .record(record, parent: hit, adjacent: k == 0, match: match), id: node.id))
-                        }
+                for (k, node) in hit.shown.enumerated().reversed() {
+                    let match = hit.kidMatches[node.id] ?? []
+                    switch node {
+                    case .kid(let kid):
+                        out.append(GoToLine(kind: .kid(kid, parent: hit, hasKids: hit.shown.hasKids(at: k), match: match), id: node.id))
+                    case .record(let record):
+                        out.append(GoToLine(kind: .record(record, parent: hit, match: match), id: node.id))
                     }
                 }
                 let separator: PhoneRowSeparator = i > 0 ? .inset(PhoneRowMetrics.inset) : (spaces.isEmpty ? .none : .full)

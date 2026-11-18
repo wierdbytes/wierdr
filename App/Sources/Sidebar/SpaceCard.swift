@@ -63,7 +63,7 @@ struct SpaceCardContent: View {
     var body: some View {
         VStack(spacing: 0) {
             if bodyShown {
-                let lines = PhoneListLine.lines(page, showsKids: controller.showsKids(of:), terminalsHeader: false)
+                let lines = PhoneListLine.lines(page, tree: { controller.shownTree(of: $0) }, terminalsHeader: false)
                 ForEach(Array(lines.enumerated()), id: \.element.id) { i, line in
                     SpaceCardLine(line: line, next: i + 1 < lines.count ? lines[i + 1].id : nil)
                         // A row being pinned slides down over the rows it passes.
@@ -96,19 +96,20 @@ struct SpaceCardLine: View {
         switch line.kind {
         case .agent(let item):
             agentRow(item)
-        case .kid(let kid, let parent, let adjacent):
+        case .kid(let kid, let parent, let hasKids):
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
                          selected: !controller.singlePane && controller.isRinged(kid),
                          trailing: [kidCloseAction(kid)],
                          edgeSwipesOnly: false, tap: { controller.open(kid, from: parent.row.paneID) },
                          menu: { kidMenu(kid, parent: parent) }) {
-                PhoneKidRowContent(kid: kid, adjacent: adjacent)
+                PhoneKidRowContent(kid: kid, hasKids: hasKids,
+                                   terminals: TreeFolds.terminals(of: kid.terminal.address, in: parent.row.tree))
             }
-        case .record(let record, let parent, let adjacent):
+        case .record(let record, let parent):
             // No terminal of its own: no swipes, no menu, never selected; a tap opens its terminal.
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
                          edgeSwipesOnly: false, tap: { controller.open(record, in: parent.row) }) {
-                PhoneRecordRowContent(kid: record, adjacent: adjacent)
+                PhoneRecordRowContent(kid: record)
             }
         case .header(let title):
             Text(title)
@@ -146,7 +147,7 @@ struct SpaceCardLine: View {
                          menu: { paneMenu(item.row) }) {
                 PhoneAgentRowContent(terminal: t, tab: controller.workspace.tab(item.row.tabID), space: item.space,
                                      showsSpace: false, tree: item.row.tree,
-                                     open: controller.showsKids(of: item.row))
+                                     hasKids: !controller.shownTree(of: item.row).isEmpty)
             }
         }
     }
@@ -259,10 +260,10 @@ struct PhoneListLine: Identifiable {
 
     enum Kind {
         case agent(Item)
-        /// `adjacent`: right over its agent.
-        case kid(SubAgent, parent: Item, adjacent: Bool)
+        /// `hasKids`: rows of its own children show over it.
+        case kid(SubAgent, parent: Item, hasKids: Bool)
         /// A record a terminal of the agent's tree reports (`RecordKid`).
-        case record(RecordKid, parent: Item, adjacent: Bool)
+        case record(RecordKid, parent: Item)
         case header(String)
         case pane(Item)
     }
@@ -272,8 +273,8 @@ struct PhoneListLine: Identifiable {
     var pinned = false
     var separator: PhoneRowSeparator = .none
 
-    /// Top to bottom, as drawn.
-    static func lines(_ page: PhoneListPage, showsKids: (SidebarRow) -> Bool, terminalsHeader: Bool = true) -> [PhoneListLine] {
+    /// Top to bottom, as drawn. `tree`: what of an agent's tree shows (`shownTree(of:)`).
+    static func lines(_ page: PhoneListPage, tree: (SidebarRow) -> [TreeNode], terminalsHeader: Bool = true) -> [PhoneListLine] {
         var out: [PhoneListLine] = []
         if !page.others.isEmpty {
             if terminalsHeader {
@@ -289,14 +290,13 @@ struct PhoneListLine: Identifiable {
         for (i, item) in page.agents.enumerated().reversed() {
             let pinned = item.row.terminal?.pinned == true
             var block: [PhoneListLine] = []
-            if showsKids(item.row) {
-                block += item.row.tree.enumerated().reversed().map { k, node in
-                    switch node {
-                    case .kid(let kid):
-                        PhoneListLine(kind: .kid(kid, parent: item, adjacent: k == 0), id: node.id, pinned: pinned)
-                    case .record(let record):
-                        PhoneListLine(kind: .record(record, parent: item, adjacent: k == 0), id: node.id, pinned: pinned)
-                    }
+            let shown = tree(item.row)
+            block += shown.enumerated().reversed().map { k, node in
+                switch node {
+                case .kid(let kid):
+                    PhoneListLine(kind: .kid(kid, parent: item, hasKids: shown.hasKids(at: k)), id: node.id, pinned: pinned)
+                case .record(let record):
+                    PhoneListLine(kind: .record(record, parent: item), id: node.id, pinned: pinned)
                 }
             }
             // Under the block: the one drawn under it (the one before it in the list's order).

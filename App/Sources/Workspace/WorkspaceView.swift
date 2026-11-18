@@ -65,6 +65,7 @@ struct WorkspaceView: View {
         }
         .onChange(of: controller.workspace.spaces) { _, _ in controller.applyPending() }
         .onChange(of: peekGone) { _, gone in if gone { controller.checkPeek() } }
+        .onChange(of: terminalOwners) { _, owners in controller.foldEndedTerminals(owners: owners) }
         .onChange(of: seenKey) { _, _ in controller.markVisibleSeen(looking: looking) }
         .onAppear { controller.markVisibleSeen(looking: looking) }
     }
@@ -74,6 +75,12 @@ struct WorkspaceView: View {
         guard let address = controller.peek else { return false }
         let ws = controller.workspace
         return ws.terminal(address)?.isLive != true || ws.pane(showing: address) != nil
+    }
+
+    /// The terminals that started terminals, while some `>_` chip is open (an agent whose
+    /// terminals all ended folds its chip again).
+    private var terminalOwners: Set<String> {
+        controller.openTerminals.isEmpty ? [] : TreeFolds.owners(in: controller.workspace.terminals)
     }
 
     /// iPhone (any orientation) and narrow iPad windows: the list and one pane

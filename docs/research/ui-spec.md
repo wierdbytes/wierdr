@@ -525,7 +525,7 @@ rows show the program name in the model slot and no ring.
 | provider mark (Anthropic "A\\") | `agent.provider` | regex map → `providers/<mark>.svg` (anthropic, openai\|chatgpt→openai, google\|gemini\|vertex→google, opencode, openrouter, *copilot*→github-copilot, …, see `meta.js PROVIDERS`); none → program icon |
 | model "Opus 5.5" | `agent.model` | drop `"Vendor: "` prefix and `vendor/` id prefix; drop leading `Claude ` under anthropic, `GPT ` under openai, `Kimi ` under kimi/moonshot. No label → program name ("Claude Code") |
 | "@xhigh" | `agent.effort` | `"@"+word`, color per level (§0); Wierdr: Codex's `none` as `off`, `ultra` in `max`'s gradient |
-| sub-agent badge "⑂ 2" | `agent.subagents` + count of live terminals whose `parent` == this address and that report a status | Wierdr: sub-agents with a terminal + per terminal of the block max(`agent.subagents`, its sub-agent records); `>_`: terminals + background-shell records |
+| sub-agent badge "⑂ 2" | `agent.subagents` + count of live terminals whose `parent` == this address and that report a status | Wierdr: sub-agents with a terminal + per terminal of the block max(`agent.subagents`, its sub-agent records), a tap folds them all; `>_`: on the row of the agent or sub-agent that started them, its own terminals + background-shell records, folded until tapped (and again once none are left) |
 | context "59.4k" / "105k" | `agent.ctx` | `<1000`: integer; `<100k`: one decimal + `k` (`.0` dropped); `<1M`: integer `k`; else `x.yM`. Hidden when 0/absent |
 | its color | `agent.cache_until` vs now | warm green; ≤30 s left yellow; expired `muted` |
 | bar fill | `agent.ctx / agent.ctx_max` | clamp 0–1; color ≤60 green / ≤80 yellow / >80 red (by floor %) |

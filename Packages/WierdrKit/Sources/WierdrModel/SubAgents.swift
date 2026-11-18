@@ -142,3 +142,111 @@ struct SubAgentIndex {
         return nil
     }
 }
+
+/// How an agent's tree folds in the list: its sub-agents all at once (the bot chip on the
+/// agent's row; open unless folded), and each agent's terminals (plain terminals it
+/// started, the background shells it reports) on their own (the `>_` chip on that agent's
+/// or sub-agent's row; folded until it's tapped). A row hidden hides what hangs under it;
+/// the lines of what shows are drawn afresh (`relined`).
+public enum TreeFolds {
+    /// For each node of `tree`, the agent whose `>_` chip it's under: a terminal's row's
+    /// nearest agent above it (the row's agent, the root, is its depth-1 rows' owner); nil
+    /// for a sub-agent's row.
+    public static func chipOwners(_ tree: [TreeNode]) -> [String?] {
+        // A plain terminal of the tree: the agent whose chip it's under (nested terminals go with it).
+        var plain: [String: String] = [:]
+        return tree.map { node in
+            guard node.isTerminal, let owner = node.owner else { return nil }
+            let agent = plain[owner] ?? owner
+            if let a = node.address { plain[a] = agent }
+            return agent
+        }
+    }
+
+    /// What the `>_` chip of `agent` counts: the terminal rows under it (`chipOwners`).
+    /// `agent` nil: the row's own agent, the tree's root.
+    public static func terminals(of agent: String?, in tree: [TreeNode]) -> TerminalTally {
+        guard let agent = agent ?? tree.first?.owner else { return TerminalTally() }
+        var out = TerminalTally()
+        for (node, owner) in zip(tree, chipOwners(tree)) where owner == agent {
+            if node.kid != nil { out.terminals += 1 } else { out.shells += 1 }
+        }
+        return out
+    }
+
+    /// The rows of `tree` that show: sub-agents' while `agentsOpen`, an agent's terminals
+    /// while `terminalsOpen(agent)`, nothing under a hidden row; `forced` (node ids: Go to's
+    /// matches) and the rows they hang under show whatever the folds. Relined.
+    public static func shown(_ tree: [TreeNode], agentsOpen: Bool, terminalsOpen: (String) -> Bool,
+                             forced: Set<String> = []) -> [TreeNode] {
+        let owners = chipOwners(tree)
+        var keep = forced
+        if !forced.isEmpty {
+            let byAddress = Dictionary(tree.compactMap { n in n.address.map { ($0, n) } }, uniquingKeysWith: { a, _ in a })
+            for node in tree where forced.contains(node.id) {
+                var up = node.owner
+                while let u = up, let parent = byAddress[u], keep.insert(parent.id).inserted { up = parent.owner }
+            }
+        }
+        var hidden: Set<String> = []
+        var out: [TreeNode] = []
+        for (node, owner) in zip(tree, owners) {
+            let show: Bool
+            if keep.contains(node.id) {
+                show = true
+            } else if let o = node.owner, hidden.contains(o) {
+                show = false
+            } else if node.isTerminal {
+                show = owner.map(terminalsOpen) ?? true
+            } else {
+                show = agentsOpen
+            }
+            if show { out.append(node) } else if let a = node.address { hidden.insert(a) }
+        }
+        return relined(out)
+    }
+
+    /// The lines of a depth-first tree drawn afresh for the rows it shows: each row's own
+    /// `├`, or `└` when no sibling follows it; an ancestor's `│` past it while that one has
+    /// a sibling still to come. A row's depth is its lines' count (a row shown has every
+    /// row above it shown).
+    public static func relined(_ tree: [TreeNode]) -> [TreeNode] {
+        let depths = tree.map(\.lines.count)
+        var last = [Bool](repeating: true, count: tree.count)
+        for i in tree.indices {
+            for j in (i + 1)..<tree.count {
+                if depths[j] < depths[i] { break }
+                if depths[j] == depths[i] { last[i] = false; break }
+            }
+        }
+        // Whether each open level's row is its parent's last, outermost first.
+        var stack: [Bool] = []
+        return tree.indices.map { i in
+            let d = max(1, depths[i])
+            stack = Array(stack.prefix(d - 1))
+            while stack.count < d - 1 { stack.append(true) }
+            let lines = stack.map { $0 ? SubAgent.Line.blank : .pipe } + [last[i] ? .elbow : .tee]
+            stack.append(last[i])
+            return tree[i].with(lines: lines)
+        }
+    }
+
+    /// The terminals whose `>_` chip can show (they started a terminal or report a
+    /// background shell): an agent outside it has nothing to unfold, so its chip folds
+    /// again (`WorkspaceController.openTerminals`).
+    public static func owners(in terminals: [String: TerminalInfo]) -> Set<String> {
+        var out: Set<String> = []
+        for t in terminals.values where t.isLive {
+            if !t.isAgent, let p = t.parent { out.insert(p) }
+            if t.backgroundShells > 0 { out.insert(t.address) }
+        }
+        return out
+    }
+}
+
+extension Array where Element == TreeNode {
+    /// Whether rows hang under the `index`th row here (the next one is deeper).
+    public func hasKids(at index: Int) -> Bool {
+        index + 1 < count && self[index + 1].lines.count > self[index].lines.count
+    }
+}

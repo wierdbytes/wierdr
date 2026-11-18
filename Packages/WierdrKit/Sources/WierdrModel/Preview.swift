@@ -28,8 +28,8 @@ extension Workspace {
                          program: pi, status: .working, state: "working", message: "Wierdr iPad-приложение для herdr-core",
                          app: "pi", turn: 3, statusChangedAt: now.addingTimeInterval(-56),
                          meta: meta("Opus 5.5", "xhigh", 59_400, subagents: 1)),
-            // t5w's sub-agents (hc run): a reviewer that started its own helper, a
-            // dev server, and a scout waiting for an answer.
+            // t5w's sub-agents (hc run): a reviewer that started its own helper and a
+            // test watcher, a dev server, and a scout waiting for an answer.
             TerminalInfo(address: "t5x", name: "reviewer", createdAt: now.addingTimeInterval(-600), title: "π - wierdr",
                          cwd: "/Users/mentor/me/dev/wierdr", processName: "pi", program: pi, status: .working,
                          state: "working", message: "Review the sub-agent tree", app: "pi", turn: 1,
@@ -43,6 +43,8 @@ extension Workspace {
                          statusChangedAt: now.addingTimeInterval(-95), parent: "t5x",
                          meta: AgentMeta(provider: "openai", providerAsset: "provider.openai", model: "GPT 5.5",
                                          effort: "low", ctx: 7_400, ctxMax: 400_000)),
+            TerminalInfo(address: "t5v", name: "swift test", createdAt: now.addingTimeInterval(-250), title: "zsh",
+                         cwd: "/Users/mentor/me/dev/wierdr", processName: "swift", program: zsh, parent: "t5x"),
             TerminalInfo(address: "t5z", name: "vite", createdAt: now.addingTimeInterval(-500), title: "vite",
                          cwd: "/Users/mentor/me/dev/wierdr/site", processName: "node", program: Program(key: "vite", name: "Vite", iconAsset: "program.vite"),
                          parent: "t5w"),

@@ -61,8 +61,11 @@ final class WorkspaceController {
     // MARK: Sidebar state (persisted)
     var foldedMachines: Set<String> { didSet { save(foldedMachines, "sidebar.foldedMachines") } }
     var closedSpaces: Set<String> { didSet { save(closedSpaces, "sidebar.closedSpaces") } }
-    /// Agents whose sub-agents are folded away (their badge folds them); the rest show theirs.
+    /// Agents whose sub-agents are folded away (their bot chip folds them); the rest show theirs.
     var foldedAgents: Set<String> = []
+    /// Agents and sub-agents whose terminals show (their `>_` chip opened them); the rest
+    /// keep theirs folded. One left with no terminals leaves it (`foldEndedTerminals`).
+    var openTerminals: Set<String> = []
 
     // MARK: Sub-agent shown for now
     /// A sub-agent without a pane, shown for now (as Herdr's `terminal.show`):

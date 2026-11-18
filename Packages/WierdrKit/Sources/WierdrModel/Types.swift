@@ -325,6 +325,35 @@ public enum TreeNode: Identifiable, Hashable, Sendable {
 
     public var kid: SubAgent? { if case .kid(let k) = self { return k } else { return nil } }
     public var record: RecordKid? { if case .record(let r) = self { return r } else { return nil } }
+
+    /// The terminal it hangs under: the one that started it (a terminal's `parent`) or
+    /// reports it (a record's).
+    public var owner: String? {
+        switch self {
+        case .kid(let k): return k.terminal.parent
+        case .record(let r): return r.owner
+        }
+    }
+
+    /// A terminal's row (a plain terminal an agent started, a background shell), folded by
+    /// its agent's `>_` chip; else a sub-agent's (a terminal or a record), folded by the bot chip.
+    public var isTerminal: Bool {
+        switch self {
+        case .kid(let k): return !k.isAgent
+        case .record(let r): return r.record.kind == .shell
+        }
+    }
+
+    /// Its terminal's address (a record has none: nothing hangs under it).
+    public var address: String? { kid?.terminal.address }
+
+    /// The same row with other lines (`TreeFolds.relined`).
+    public func with(lines: [SubAgent.Line]) -> TreeNode {
+        switch self {
+        case .kid(var k): k.lines = lines; return .kid(k)
+        case .record(var r): r.lines = lines; return .record(r)
+        }
+    }
 }
 
 /// What an agent row's badges count: its tree's sub-agents (with a terminal, and those
@@ -343,13 +372,14 @@ public struct KidCounts: Hashable, Sendable {
 
     public init() {}
 
-    /// For an agent `terminal` and its tree.
+    /// For an agent `terminal` and its tree: the sub-agents of the whole tree (the bot
+    /// chip), the terminals of the agent itself (its `>_` chip; its sub-agents' are on
+    /// their own rows, `TreeFolds.terminals(of:in:)`).
     public init(terminal: TerminalInfo?, tree: [TreeNode]) {
         var seen: Set<String> = []
         func own(_ t: TerminalInfo) {
             guard seen.insert(t.address).inserted else { return }
             inProcess += t.inProcessAgents
-            shells += t.backgroundShells
         }
         if let terminal { own(terminal) }
         for node in tree {
@@ -358,14 +388,29 @@ public struct KidCounts: Hashable, Sendable {
                 if k.isAgent {
                     terminalAgents += 1
                     if k.terminal.status == .blocked { alert = true }
-                } else {
-                    terminals += 1
                 }
                 own(k.terminal)
             case .record(let r):
                 if r.record.status == .blocked { alert = true }
             }
         }
+        let own = TreeFolds.terminals(of: nil, in: tree)
+        terminals = own.terminals
+        shells = own.shells
+    }
+}
+
+/// The terminals an agent of a tree started (`TreeFolds.terminals(of:in:)`): what its
+/// `>_` chip counts.
+public struct TerminalTally: Hashable, Sendable {
+    /// Plain terminals (`hc run`), with those they started in turn.
+    public var terminals = 0
+    /// The background shells it reports (records).
+    public var shells = 0
+    public var total: Int { terminals + shells }
+
+    public init(terminals: Int = 0, shells: Int = 0) {
+        self.terminals = terminals; self.shells = shells
     }
 }
 
