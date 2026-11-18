@@ -19,7 +19,7 @@
  * for the timers and the writes that run after it returned.
  */
 
-import type { EngineInterface, On, PluginOptions } from 'claude-code'
+import type { EngineInterface, On } from 'claude-code'
 import { CacheTracker, type CacheUsage } from './cache'
 import { docOf, parseReply, requestLine, type RpcReply, setResultOf } from './hc'
 import { accountFromConfig, accountSlug, LIMITS_DOC, type LimitsDoc, type RateLimitLike, readingFromRateLimits } from './limits'
@@ -197,10 +197,7 @@ class Hc {
 // The hooks
 // ============================================
 
-export function register(on: On, options: PluginOptions): void {
-  /** `userConfig.limits`: write the subscription limits (default on). */
-  const limitsEnabled = options.limits !== false
-
+export function register(on: On): void {
   /** The interactive session's labels; unset outside herdr-core and for `claude -p`. */
   let labels: LabelPublisher | undefined
   let limits: LimitsPublisher | undefined
@@ -247,34 +244,33 @@ export function register(on: On, options: PluginOptions): void {
       const hc = new Hc(io, env.socket, bins)
       const terminal = env.terminal
 
-      if (limitsEnabled) {
-        const docName = env.limitsDoc || LIMITS_DOC
-        const publisher = new LimitsPublisher(
-          { get: () => hc.getDoc(docName), set: (value, version) => hc.setDoc(docName, value, version) },
-          io.after,
-        )
-        limits = publisher
-        publisher.host = env.hostname
-        void io
-          .run(['hostname'], { timeoutMs: 2000 })
-          .then((out) => {
-            const name = out.stdout.trim()
-            if (out.exitCode === 0 && name) publisher.host = name
-          })
-          .catch(() => undefined)
-        const configPath = `${env.configDir || env.home || ''}/.claude.json`
-        let account: { slug: string; plan?: string; at: number } | undefined
-        recordLimits = async (rateLimits) => {
-          // Off a claude.ai subscription Claude Code reports no windows.
-          if (!Array.isArray(rateLimits) || rateLimits.length === 0) return
-          const now = await $.clock.now()
-          if (!account || now - account.at > ACCOUNT_TTL_MS) {
-            const found = accountFromConfig(await readText($, configPath))
-            account = { slug: await accountSlug(found.organizationId), plan: found.plan, at: now }
-          }
-          const reading = readingFromRateLimits(rateLimits, account.plan)
-          if (reading) publisher.record(reading, { slug: account.slug }, now)
+      // Every session writes the limits, `claude -p` too: it spends the same subscription.
+      const docName = env.limitsDoc || LIMITS_DOC
+      const publisher = new LimitsPublisher(
+        { get: () => hc.getDoc(docName), set: (value, version) => hc.setDoc(docName, value, version) },
+        io.after,
+      )
+      limits = publisher
+      publisher.host = env.hostname
+      void io
+        .run(['hostname'], { timeoutMs: 2000 })
+        .then((out) => {
+          const name = out.stdout.trim()
+          if (out.exitCode === 0 && name) publisher.host = name
+        })
+        .catch(() => undefined)
+      const configPath = `${env.configDir || env.home || ''}/.claude.json`
+      let account: { slug: string; plan?: string; at: number } | undefined
+      recordLimits = async (rateLimits) => {
+        // Off a claude.ai subscription Claude Code reports no windows.
+        if (!Array.isArray(rateLimits) || rateLimits.length === 0) return
+        const now = await $.clock.now()
+        if (!account || now - account.at > ACCOUNT_TTL_MS) {
+          const found = accountFromConfig(await readText($, configPath))
+          account = { slug: await accountSlug(found.organizationId), plan: found.plan, at: now }
         }
+        const reading = readingFromRateLimits(rateLimits, account.plan)
+        if (reading) publisher.record(reading, { slug: account.slug }, now)
       }
 
       // Only the interactive session owns the terminal: `claude -p` runs

@@ -20,13 +20,7 @@ Needs Claude Code 2.1.304 or later (`$.settings.read` by key). Tested live with 
 
 or from the shell: `claude plugin marketplace add wierdbytes/wierdr && claude plugin install cc@wierdr`. Run `/reload-plugins` in an open session, or start a new one.
 
-Nothing to configure. Outside a herdr-core terminal (no `HC_TERMINAL_ID` / `HC_TERMINAL_SOCKET`) it does nothing. It needs `hc` (herdr-core's CLI) on `PATH` or at `~/.local/bin/hc`, which herdr-core terminals have.
-
-One option, in `/config` (or `pluginConfigs["cc@wierdr"].options` in `~/.claude/settings.json`):
-
-| Option | Default | |
-|---|---|---|
-| `limits` | `true` | Write the subscription limits into herdr-core's `limits` document. `false` keeps only the labels |
+Nothing to configure: it has no options, and the labels and the limits are always written. Outside a herdr-core terminal (no `HC_TERMINAL_ID` / `HC_TERMINAL_SOCKET`) it does nothing. It needs `hc` (herdr-core's CLI) on `PATH` or at `~/.local/bin/hc`, which herdr-core terminals have.
 
 ## Labels
 

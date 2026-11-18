@@ -34,7 +34,7 @@ Claude Code в терминале herdr-core показывается в Wierdr 
 
 Мод — это плагин Claude Code с хуками (mods API; моду нужен Claude Code ≥ 2.1.304 из‑за
 `$.settings.read({ key })`, вживую проверен на 2.1.327 и на 2.1.319 — старт и выход):
-модуль `hooks/register.ts` экспортирует `register(on, options)` и подписывается на события.
+модуль `hooks/register.ts` экспортирует `register(on)` и подписывается на события.
 
 - **`session.start`** — один раз на загрузку. Если нет `HC_TERMINAL_ID` /
   `HC_TERMINAL_SOCKET`, мод ничего не делает. Иначе читает id сессии, модель, usage, pid
@@ -79,7 +79,8 @@ Claude Code в терминале herdr-core показывается в Wierdr 
 Code и pi складываются в один аккаунт. `plan` — `organizationType` без `claude_` с уровнем
 Max из `organizationRateLimitTier` (`max_5x`, `max_20x` → Max / Ultra в
 `Limits.planName`). `host` — вывод `hostname`, как `os.hostname()` у pi. `claude -p` тоже
-пишет лимиты, но не метки. Выключить лимиты: опция `limits` мода в `/config`.
+пишет лимиты, но не метки. Настроек у мода нет: лимиты пишутся всегда (опции в `userConfig`
+Claude Code спрашивал бы при включении плагина).
 
 ## Установка
 
