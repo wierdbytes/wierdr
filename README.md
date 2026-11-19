@@ -80,11 +80,21 @@ sub-agents and subscription limits, install the integration for your agent on th
 
 ### 5. Optional: Lock Screen and Dynamic Island
 
-The Live Activity comes from `wierdr-push`, a small daemon on your Mac that watches
-herdr-core and sends pushes through Apple's push service. Agent titles, spaces and machine
-names are encrypted with a key that only your Mac and your iPhone have: Apple and the push relay
-see only the counts. Setup: [docs/live-activity.md](docs/live-activity.md). A self-built app
-needs its own APNs key, since the hosted push relay serves only official Wierdr builds.
+The Live Activity comes from `wierdrd`, Wierdr's small daemon on your Mac: it watches
+herdr-core and sends pushes through Apple's push service. After Wierdr first connects to your
+computer, it offers to install and start wierdrd with [Homebrew](https://brew.sh) (later:
+**Settings › Daemon**). By hand:
+
+```sh
+brew install wierdbytes/apps/wierdrd
+brew services start wierdrd
+```
+
+Agent titles, spaces and machine names are encrypted with a key that only your Mac and your
+iPhone have: Apple and the push relay see only the counts. More:
+[docs/wierdrd.md](docs/wierdrd.md), [docs/live-activity.md](docs/live-activity.md). A
+self-built app needs its own APNs key, since the hosted push relay serves only official
+Wierdr builds.
 
 ## Building from source
 
@@ -123,7 +133,8 @@ Most of the detailed docs are in Russian for now (RU); the rest are in English (
 - [Building and installing](docs/BUILD.md): devices, install over the air, preparing the Mac (RU).
 - [SSH](docs/ssh.md): sign-in, keys, host keys, setting up the Mac (EN).
 - [Live Activity](docs/live-activity.md): how it works and how to set it up (RU);
-  the [push relay](docs/relay.md) (RU).
+  the [push relay](docs/relay.md) (RU); [wierdrd](docs/wierdrd.md), the daemon behind it:
+  installing, how the app sets it up, releases (RU).
 - Agent integrations: [pi](Integrations/pi/README.md), [Claude Code](Integrations/claude-code/README.md),
   [Codex](Integrations/codex/README.md) (EN); how they work inside: [pi](docs/pi.md),
   [Claude Code](docs/claude-code.md), [Codex](docs/codex.md) (RU).

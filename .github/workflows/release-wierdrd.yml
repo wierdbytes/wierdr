@@ -1,0 +1,160 @@
+# Releases wierdrd, Wierdr's daemon on the Mac, when the version in
+# Packages/WierdrKit/Sources/wierdrd/Version.swift has no release yet: builds it
+# (arm64 + x86_64), signs and notarizes it if the secrets are there, puts
+# wierdrd-<v>-macos.tar.gz in this repository's release wierdrd-v<v>, and commits
+# Formula/wierdrd.rb pointing at it to the Homebrew tap wierdbytes/apps
+# (github.com/wierdbytes/homebrew-apps):
+#   brew install wierdbytes/apps/wierdrd
+# See docs/wierdrd.md.
+#
+# The tap is written with a deploy key of its own (write access to that repository only):
+#   HOMEBREW_APPS_DEPLOY_KEY    the private key; its public half is homebrew-apps' deploy key
+#
+# Signing (optional; without it the linker's ad-hoc signature stays, which a
+# formula's download runs with, as Homebrew doesn't quarantine it). The same
+# secrets as autosk's release:
+#   APPLE_CERTIFICATE           base64 of a .p12: Developer ID Application, certificate and key
+#   APPLE_CERTIFICATE_PASSWORD  its password
+#   APPLE_SIGNING_IDENTITY      "Developer ID Application: … (TEAMID)"
+# and for notarizing, an App Store Connect API key:
+#   APPLE_API_KEY               its id
+#   APPLE_API_ISSUER            its issuer id
+#   APPLE_API_KEY_P8            base64 of its .p8
+
+name: release-wierdrd
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - Packages/WierdrKit/Sources/wierdrd/Version.swift
+      - .github/workflows/release-wierdrd.yml
+  workflow_dispatch: # re-run for any commit
+
+concurrency:
+  group: release-wierdrd
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write # the release
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
+      NOTARIZING: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_API_KEY_P8 != '' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: check
+        name: Is this version released already?
+        run: |
+          set -euo pipefail
+          v=$(scripts/wierdrd-release.sh version)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "wierdrd-v$v" >/dev/null 2>&1; then
+            echo "= wierdrd $v is released, nothing to do"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "+ wierdrd $v will be released"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.release == 'true'
+        name: Tests (the daemon's, the app's probe)
+        working-directory: Packages/WierdrKit
+        run: |
+          swift --version
+          swift test --filter 'WierdrPushTests|DaemonTests'
+
+      - if: steps.check.outputs.release == 'true' && env.SIGNING == 'true'
+        name: Developer ID into a keychain of its own
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/wierdrd-signing.keychain-db"
+          PASS=$(openssl rand -hex 24)
+          security create-keychain -p "$PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$PASS" "$KEYCHAIN"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PASS" "$KEYCHAIN"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+          echo "WIERDRD_SIGN_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      - if: steps.check.outputs.release == 'true' && env.NOTARIZING == 'true'
+        name: The notary's API key
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          {
+            echo "NOTARY_KEY=$RUNNER_TEMP/notary.p8"
+            echo "NOTARY_KEY_ID=$APPLE_API_KEY"
+            echo "NOTARY_ISSUER=$APPLE_API_ISSUER"
+          } >> "$GITHUB_ENV"
+
+      - if: steps.check.outputs.release == 'true'
+        id: package
+        name: Build and pack
+        run: |
+          set -euo pipefail
+          sha=$(scripts/wierdrd-release.sh package)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - if: steps.check.outputs.release == 'true'
+        name: Release
+        env:
+          V: ${{ steps.check.outputs.version }}
+          SHA: ${{ steps.package.outputs.sha }}
+        run: |
+          set -euo pipefail
+          signed=$([ "$SIGNING" = true ] && echo "Signed with Developer ID$([ "$NOTARIZING" = true ] && echo ", notarized")." || echo "Ad-hoc signed.")
+          gh release create "wierdrd-v$V" "dist/wierdrd-$V-macos.tar.gz" --target "$GITHUB_SHA" \
+            --title "wierdrd $V" --notes "$(printf '%s\n' \
+              "wierdrd $V: Wierdr's daemon on the Mac (macOS 15 or later, Apple silicon and Intel). $signed" \
+              "" \
+              "Wierdr sets it up when it connects to your Mac. By hand:" \
+              '```sh' \
+              'brew install wierdbytes/apps/wierdrd' \
+              'brew services start wierdrd' \
+              '```' \
+              "" \
+              "SHA-256 of the archive: $SHA")"
+
+      - if: steps.check.outputs.release == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: wierdbytes/homebrew-apps
+          ssh-key: ${{ secrets.HOMEBREW_APPS_DEPLOY_KEY }}
+          path: homebrew-apps
+
+      - if: steps.check.outputs.release == 'true'
+        name: The formula, in the tap
+        env:
+          V: ${{ steps.check.outputs.version }}
+          SHA: ${{ steps.package.outputs.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p homebrew-apps/Formula
+          scripts/wierdrd-release.sh formula "$SHA" > homebrew-apps/Formula/wierdrd.rb
+          cd homebrew-apps
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/wierdrd.rb
+          git commit -m "wierdrd $V (wierdbytes/wierdr@${GITHUB_SHA::7}, release wierdrd-v$V)"
+          for attempt in 1 2 3; do
+            git pull --rebase && git push && exit 0
+            sleep 5
+          done
+          exit 1

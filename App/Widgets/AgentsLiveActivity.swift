@@ -5,7 +5,7 @@ import WierdrActivity
 
 /// The agents Live Activity: counts by status and the most urgent agents, on the
 /// Lock Screen (and the Watch's Smart Stack) and in the Dynamic Island. Started,
-/// updated and ended by `wierdr-push` on the computer; a tap on an agent opens
+/// updated and ended by `wierdrd` on the computer; a tap on an agent opens
 /// its pane in Wierdr.
 struct AgentsLiveActivity: Widget {
     var body: some WidgetConfiguration {

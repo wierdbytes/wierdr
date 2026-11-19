@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		01E244F92ACA1ECA484701F4 /* PhoneGoTo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5947DAF57B5949A202A62CE3 /* PhoneGoTo.swift */; };
+		023379D756DF8F64F36C4B17 /* DaemonState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C5CADE2B9C285E281904D3B /* DaemonState.swift */; };
 		06D3FEAE9CF1B77486BCADF1 /* DemoAgents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 371F936E312FDD9B0F64A105 /* DemoAgents.swift */; };
 		0E1CCC69D66751AABAD36B2A /* SidebarOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BBD742BB5614E0A3EFA587E /* SidebarOverlay.swift */; };
 		1285CD309F5DC12221AE9046 /* TutorialCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0604E17B52FA1A6E31778B5D /* TutorialCard.swift */; };
@@ -22,6 +23,7 @@
 		281ACDB6C96A9C6546DFB23D /* TerminalSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B698C0B918748FB60826385 /* TerminalSurface.swift */; };
 		293313B9597429F72BDC4358 /* JetBrainsMono-Italic-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A4014E502E9A282EDD7C3BAE /* JetBrainsMono-Italic-Variable.ttf */; };
 		2A3D21E671673CE9B484D247 /* SymbolsNerdFont-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C08C4C79EED0725EFF2BDA7 /* SymbolsNerdFont-Regular.ttf */; };
+		2A9B7BF0EC7F4A443759F529 /* DaemonViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4C7BCEF18BB1E7B1AA340D2 /* DaemonViews.swift */; };
 		2C98A2A2E414AC5E23D584D7 /* WierdrActivity in Frameworks */ = {isa = PBXBuildFile; productRef = 7A12E64658370AD428D4E972 /* WierdrActivity */; };
 		2E06A6541CC6433528080868 /* Chrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7056E4DE60E7F76AD6B1A7D3 /* Chrome.swift */; };
 		3129E5A3E56BC7C93B4845AF /* TabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFF448659A8E45E54D69258 /* TabBar.swift */; };
@@ -150,6 +152,7 @@
 		1A26A269D22F1730952287B9 /* TerminalLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalLabView.swift; sourceTree = "<group>"; };
 		1AF2BC817415DFF36FE83826 /* PaneTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneTreeView.swift; sourceTree = "<group>"; };
 		1B63AAA583363CB64F13B188 /* RelayRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayRegistration.swift; sourceTree = "<group>"; };
+		1C5CADE2B9C285E281904D3B /* DaemonState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonState.swift; sourceTree = "<group>"; };
 		1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentsLiveActivity.swift; sourceTree = "<group>"; };
 		20A5417D9BCC91A5B4906C41 /* SpaceHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceHeader.swift; sourceTree = "<group>"; };
 		24C773688B33E3F0413C5204 /* KeyboardCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCover.swift; sourceTree = "<group>"; };
@@ -219,6 +222,7 @@
 		DE26974C234B1E0F63F4FB12 /* WierdrWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WierdrWidgets.entitlements; sourceTree = "<group>"; };
 		DEFF448659A8E45E54D69258 /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
 		E003A4137528491C6CAB5B01 /* SpaceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceCard.swift; sourceTree = "<group>"; };
+		E4C7BCEF18BB1E7B1AA340D2 /* DaemonViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaemonViews.swift; sourceTree = "<group>"; };
 		E84DDDCE899CB1DEAE132F06 /* PhoneHosting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHosting.swift; sourceTree = "<group>"; };
 		F859D6049AABA66F33A95A82 /* TerminalSessionPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionPool.swift; sourceTree = "<group>"; };
 		F884493E41282F237E5D6C75 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -293,6 +297,7 @@
 				F28F437FB04A548DA9513B33 /* Activity */,
 				4DF4DC8DC9C71BD0EE764E63 /* App */,
 				F1139F7204035CAD7AD316D8 /* Connect */,
+				4CF20473B77B70149CD58B3F /* Daemon */,
 				3D9AD108B8047EE3DC8CC847 /* Debug */,
 				B629BAA51B2D539F66E57DE3 /* Input */,
 				159A75AA07BB46132E6E8F2A /* Panel */,
@@ -326,6 +331,15 @@
 				A5885A899767CC54AA835E1D /* WierdrWidgets.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		4CF20473B77B70149CD58B3F /* Daemon */ = {
+			isa = PBXGroup;
+			children = (
+				1C5CADE2B9C285E281904D3B /* DaemonState.swift */,
+				E4C7BCEF18BB1E7B1AA340D2 /* DaemonViews.swift */,
+			);
+			path = Daemon;
 			sourceTree = "<group>";
 		};
 		4DF4DC8DC9C71BD0EE764E63 /* App */ = {
@@ -668,6 +682,8 @@
 				8EB50B847ABF07923FE8EF67 /* ComposerBar.swift in Sources */,
 				2059138432A8BF088947DCE3 /* ComposerTextView.swift in Sources */,
 				1D99092A103C9305E6D01ACD /* ConnectView.swift in Sources */,
+				023379D756DF8F64F36C4B17 /* DaemonState.swift in Sources */,
+				2A9B7BF0EC7F4A443759F529 /* DaemonViews.swift in Sources */,
 				818FF89F7C15CD20E61479AF /* DebugAutoConnect.swift in Sources */,
 				06D3FEAE9CF1B77486BCADF1 /* DemoAgents.swift in Sources */,
 				EC192EE4130459A9871E6286 /* DemoTerminalView.swift in Sources */,
@@ -816,7 +832,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 86;
+				CURRENT_PROJECT_VERSION = 87;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -903,7 +919,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 86;
+				CURRENT_PROJECT_VERSION = 87;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

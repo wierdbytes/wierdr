@@ -10,14 +10,15 @@
 //                agents, statuses (from the `herdr-app` document + terminals).
 //   WierdrActivity  The agents Live Activity's data (attributes, content state)
 //                and the `wierdr-push` registration document: Foundation only,
-//                shared by the app, its widget extension and the Mac's pusher.
+//                shared by the app, its widget extension and the Mac's daemon.
 //   WierdrRelay  The app's registration on Wierdr's push relay: App Attest, the grant
 //                for its push-to-start token (Foundation and CryptoKit; DeviceCheck in the app).
 //   WierdrPush   The Mac side of the Live Activity: the summary of a workspace,
 //                when to start/update/end it, APNs (token auth, broadcast channels).
 //   wierdr-cli   macOS-only debugging tool: talks to the local core through
 //                `hc connect` and prints what the model sees.
-//   wierdr-push  macOS daemon (launchd): drives the Live Activity from the local core.
+//   wierdrd      Wierdr's macOS daemon (Homebrew service, launchd): drives the Live
+//                Activity from the local core. Homebrew: wierdbytes/apps; docs/wierdrd.md.
 import PackageDescription
 
 let swift5: [SwiftSetting] = [.swiftLanguageMode(.v5)]
@@ -33,7 +34,7 @@ let package = Package(
         .library(name: "WierdrPush", targets: ["WierdrPush"]),
         .library(name: "WierdrRelay", targets: ["WierdrRelay"]),
         .executable(name: "wierdr-cli", targets: ["wierdr-cli"]),
-        .executable(name: "wierdr-push", targets: ["wierdr-push"]),
+        .executable(name: "wierdrd", targets: ["wierdrd"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.80.0"),
@@ -81,7 +82,7 @@ let package = Package(
             swiftSettings: swift5
         ),
         .executableTarget(
-            name: "wierdr-push",
+            name: "wierdrd",
             dependencies: ["HerdrCore", "WierdrModel", "WierdrActivity", "WierdrPush"],
             swiftSettings: swift5
         ),

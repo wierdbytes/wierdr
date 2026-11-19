@@ -5,8 +5,9 @@ import WierdrModel
 
 /// `~/.config/wierdr/push.json`: how the pushes go out. Either Wierdr's relay
 /// (`relay`, its URL: it signs them) or straight to APNs, signed with the team's key
-/// on this Mac (`key_file`, `key_id`, `team_id`).
-public struct PushConfig: Codable, Sendable {
+/// on this Mac (`key_file`, `key_id`, `team_id`). Without the file, the relay
+/// (`PushConfig.standard`): what a Mac with wierdrd from Homebrew has.
+public struct PushConfig: Codable, Sendable, Equatable {
     /// Path to the `.p8` key (APNs, of the team that signs the app); `~` allowed.
     public var keyFile: String?
     public var keyID: String?
@@ -16,8 +17,30 @@ public struct PushConfig: Codable, Sendable {
     /// The computer's name on the activity (default: this Mac's name).
     public var host: String?
 
+    /// Read from no file: `load()` found none.
+    public var isDefault = false
+
     enum CodingKeys: String, CodingKey {
         case keyFile = "key_file", keyID = "key_id", teamID = "team_id", relay, host
+    }
+
+    public init(keyFile: String? = nil, keyID: String? = nil, teamID: String? = nil, relay: String? = nil,
+                host: String? = nil) {
+        self.keyFile = keyFile
+        self.keyID = keyID
+        self.teamID = teamID
+        self.relay = relay
+        self.host = host
+    }
+
+    /// Wierdr's relay.
+    public static let relayURL = "https://relay.wierdr.workat.dev"
+
+    /// Without `push.json`: through Wierdr's relay.
+    public static var standard: PushConfig {
+        var c = PushConfig(relay: relayURL)
+        c.isDefault = true
+        return c
     }
 
     /// The relay, or APNs with the key.
@@ -31,7 +54,7 @@ public struct PushConfig: Codable, Sendable {
 
     /// What `status` says about it.
     public var summary: String {
-        if let relay { return "relay \(relay)" }
+        if let relay { return "relay \(relay)" + (isDefault ? " (no push.json: the default)" : "") }
         return "key \(keyID ?? "?"), team \(teamID ?? "?"), \(keyFile ?? "?")"
     }
 
@@ -39,12 +62,20 @@ public struct PushConfig: Codable, Sendable {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/wierdr/push.json")
     }
 
+    /// The file, or `standard` when there's none. A file that can't be read or parsed is an
+    /// error (not the default: whoever wrote it meant something else).
     public static func load(_ url: URL = defaultURL) throws -> PushConfig {
+        guard FileManager.default.fileExists(atPath: url.path) else { return standard }
         let data: Data
         do { data = try Data(contentsOf: url) } catch {
-            throw PushError("no config at \(url.path): {\"key_file\": \"~/.config/wierdr/AuthKey_XXXXXXXXXX.p8\", \"key_id\": \"XXXXXXXXXX\", \"team_id\": \"XXXXXXXXXX\"}")
+            throw PushError("can't read \(url.path): \(error.localizedDescription)")
         }
-        return try JSONDecoder().decode(PushConfig.self, from: data)
+        do {
+            return try JSONDecoder().decode(PushConfig.self, from: data)
+        } catch {
+            throw PushError("\(url.path): not a config (\(error)); {\"relay\": \"\(relayURL)\"} or "
+                + "{\"key_file\": \"~/.config/wierdr/AuthKey_XXXXXXXXXX.p8\", \"key_id\": \"XXXXXXXXXX\", \"team_id\": \"XXXXXXXXXX\"}")
+        }
     }
 
     public func signer() throws -> APNsSigner {
@@ -190,7 +221,7 @@ public struct PushState: Codable, Sendable, Equatable {
         return !all.isEmpty && all.allSatisfy(badGrants.contains)
     }
 
-    /// A device's relay grant as `wierdr-push status` says it: until when and how many days are
+    /// A device's relay grant as `wierdrd status` says it: until when and how many days are
     /// left, whether it's one the relay renewed, or that it was refused.
     public func grantSummary(for d: PushRegistry.Device, now: Date) -> String {
         func day(_ date: Date) -> String { String(ISO8601DateFormatter().string(from: date).prefix(10)) }
@@ -623,7 +654,7 @@ public final class Pusher {
         guard forgotten.insert(channel).inserted else { return }
         log("channel \(channel) (\(lane.key), \(why)) was made straight with the APNs key: the relay can't delete it, "
             + "so it's forgotten; it stays one of the app's channels until deleted with the key "
-            + "(`wierdr-push reset` with the key in push.json) or by the relay's admin cleanup")
+            + "(`wierdrd reset` with the key in push.json) or by the relay's admin cleanup")
     }
 
     /// Deletes queued channels: the due ones, at most `deletesPerTick` (`force`: all of them,
@@ -803,7 +834,7 @@ public final class Pusher {
         return Lane(bundle: String(parts[0]), env: env)
     }
 
-    /// Ends every running activity now and drops the channels (`wierdr-push reset`): each
+    /// Ends every running activity now and drops the channels (`wierdrd reset`): each
     /// deletion is tried at once (with any still queued); those that fail stay queued in the
     /// state file for the daemon's next run.
     public func endAll() async {

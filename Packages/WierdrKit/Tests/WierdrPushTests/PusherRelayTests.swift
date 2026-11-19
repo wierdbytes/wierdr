@@ -218,7 +218,7 @@ private func running(_ channel: String, devices: [String: String] = ["d": "aa"])
         #expect(t.deletes.isEmpty, "the relay can't delete it without a grant")
         #expect(p.state.channels[lane.key] == "NEW1==")
         #expect(p.state.pendingDeletes.isEmpty)
-        #expect(lines.all.contains { $0.contains("DIRECT==") && $0.contains("wierdr-push reset") })
+        #expect(lines.all.contains { $0.contains("DIRECT==") && $0.contains("wierdrd reset") })
     }
 
     // MARK: Deleting channels

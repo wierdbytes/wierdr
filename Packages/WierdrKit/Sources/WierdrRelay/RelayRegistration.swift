@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 /// This iPhone's grant on Wierdr's push relay (`Relay/`, docs/relay.md): the right for
-/// the Mac's `wierdr-push` to start the agents Live Activity on its push-to-start token
+/// the Mac's `wierdrd` to start the agents Live Activity on its push-to-start token
 /// through the relay. The relay hands it only to a genuine copy of Wierdr: App Attest
 /// makes a key in the Secure Enclave, Apple attests it once (the relay keeps its public
 /// key), and each registration is an assertion signed with it over the request.

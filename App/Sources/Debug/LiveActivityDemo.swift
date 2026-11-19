@@ -4,7 +4,7 @@ import Foundation
 import WierdrActivity
 
 /// `-live-activity-demo YES` (DEBUG): starts the agents Live Activity locally with
-/// sample agents, to look at it in the simulator without `wierdr-push` and APNs.
+/// sample agents, to look at it in the simulator without `wierdrd` and APNs.
 /// `-live-activity-demo end` ends every one.
 @MainActor
 enum LiveActivityDemo {

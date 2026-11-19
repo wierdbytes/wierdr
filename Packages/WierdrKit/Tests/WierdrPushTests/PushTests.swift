@@ -484,6 +484,24 @@ private let channels = [lane.key: "CHAN=="]
         #expect(throws: PushError.self) { try plain.transport() }
     }
 
+    /// wierdrd from Homebrew has no push.json: the relay. A file that's there but isn't a
+    /// config is an error, not the default.
+    @Test func withoutPushJSONTheRelay() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("wierdr-config-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("push.json")
+        let standard = try PushConfig.load(url)
+        #expect(standard.relay == PushConfig.relayURL && standard.isDefault)
+        #expect(try standard.transport().needsGrants)
+        #expect(standard.summary.contains("no push.json"))
+        try Data("{\"relay\": \"https://relay.example\"}".utf8).write(to: url)
+        let file = try PushConfig.load(url)
+        #expect(file.relay == "https://relay.example" && !file.isDefault)
+        try Data("key_file: x".utf8).write(to: url)
+        #expect(throws: PushError.self) { try PushConfig.load(url) }
+    }
+
     @Test func anOlderStateFileStillReads() throws {
         let old = #"{"channels": {"pw.xff.wierdr development": "CHAN=="}, "running": {}, "badTokens": ["bb"]}"#
         let s = try JSONDecoder().decode(PushState.self, from: Data(old.utf8))

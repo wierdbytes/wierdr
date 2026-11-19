@@ -78,6 +78,9 @@ Debug‑сборка: `make install CONFIG=Debug` (парсинг вывода �
    `SHA256:YKysidsqfwHmxS7eFJTAbqVwmY2mQ33PdJtS4S4XXFs`
    (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`).
 5. iOS спросит разрешение на доступ к локальной сети — разреши (для адресов в LAN).
+6. После первого подключения Wierdr предложит поставить или запустить `wierdrd` (демон
+   Live Activity, через Homebrew; [wierdrd.md](wierdrd.md)). На этом Mac он стоит из
+   Homebrew; свою сборку демона ставит `scripts/wierdrd.sh install`.
 
 ## Проверка на iPad и iPhone: скриншоты и управление
 

@@ -26,10 +26,10 @@
 ## Как это устроено
 
 ```
-iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)                 APNs
+iPhone (Wierdr)                          Mac (herdr-core + wierdrd)                     APNs
  ActivityKit: push-to-start token ──SSH──▶ документ `wierdr-push` в ядре
  App Group: ключ печати          ◀──SSH── документ `wierdr-push-seal` (ключ демона)
-                                           wierdr-push: зеркало ядра (WorkspaceEngine,
+                                           wierdrd: зеркало ядра (WorkspaceEngine,
                                            только чтение) → сводка → Planner
                                              start (на токен устройства) ─────────────▶ ─┐
                                              update / end (broadcast на канал) ───────▶ ─┤
@@ -45,7 +45,7 @@ iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)         
   Если Live Activities для Wierdr выключены, запись удаляется. Перед записью приложение
   берёт ключ печати из документа `wierdr-push-seal` и кладёт его в App Group (см.
   «Запечатано»).
-- **`wierdr-push`** на Mac (launchd, `scripts/push-agent.sh`). Это `WorkspaceEngine` в
+- **`wierdrd`** на Mac (служба Homebrew; [wierdrd.md](wierdrd.md)). Это `WorkspaceEngine` в
   режиме только чтения над локальным `hc connect`, то есть тот же разбор, что в приложении.
   Раз в секунду он строит сводку (`ActivitySummary`: `Workspace.inbox`, общий со списком
   агентов на iPhone) и отдаёт её `Planner`. Тот решает, что слать:
@@ -87,7 +87,7 @@ iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)         
 
 Код: `Packages/WierdrKit/Sources/WierdrActivity` (атрибуты, состояние, документ, ссылка,
 печать `Sealed.swift`; общий для приложения, виджета и Mac), `WierdrPush`
-(`ActivitySummary`, `Planner`, `ActivityPayload`, `APNsClient`, `Pusher`), `wierdr-push`
+(`ActivitySummary`, `Planner`, `ActivityPayload`, `APNsClient`, `Pusher`), `wierdrd`
 (CLI); в приложении `App/Sources/Activity/LiveActivities.swift` и виджет `App/Widgets/`.
 
 ## Запечатано
@@ -95,7 +95,7 @@ iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)         
 APNs и релей ([relay.md](relay.md)) видят в пушах только счётчики. Заголовки, спейсы, модели, машины, адреса агентов и имя компьютера
 запечатаны ключом, которого у Apple нет.
 
-- **Ключ** делает `wierdr-push` при первом запуске: 256 бит в `~/.config/wierdr/seal-key`
+- **Ключ** делает `wierdrd` при первом запуске: 256 бит в `~/.config/wierdr/seal-key`
   (base64, `0600`), `kid` — первые 8 hex SHA‑256 ключа. Демон кладёт его в документ
   `wierdr-push-seal` своего ядра (`{"schema": 1, "kid", "key"}`) и раз в минуту проверяет,
   что он там. Прочитать документ может тот, кто говорит с ядром, то есть тот, кто и так
@@ -170,31 +170,36 @@ iOS 18.4 на живой активности; через ~43 с / ~21 мин / 
      «Authentication failed», а App Group через API не завести.
      Если ASC API пишет `REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`, сначала нужно принять
      соглашение в developer account.
-2. На Mac:
+2. На Mac — `wierdrd` ([wierdrd.md](wierdrd.md)). Его ставит само приложение при первом
+   подключении (лист «Set Up wierdrd», Homebrew) или:
+   ```sh
+   brew install wierdbytes/apps/wierdrd && brew services start wierdrd
+   ```
+   Без `~/.config/wierdr/push.json` он шлёт пуши через релей ([relay.md](relay.md)), и
+   п. 1 про ключ APNs не нужен. Прямо в APNs, своим ключом:
    ```sh
    mkdir -p ~/.config/wierdr && mv ~/Downloads/AuthKey_XXXXXXXXXX.p8 ~/.config/wierdr/
    cat > ~/.config/wierdr/push.json <<'EOF'
    {"key_file": "~/.config/wierdr/AuthKey_XXXXXXXXXX.p8", "key_id": "XXXXXXXXXX", "team_id": "AUL4CCB2XY"}
    EOF
-   scripts/push-agent.sh install      # release-сборка → ~/.local/share/wierdr-push (+ ссылка в ~/.local/bin), LaunchAgent
+   brew services restart wierdrd
    ```
-   Без своего ключа — через релей: `{"relay": "https://relay.wierdr.workat.dev"}`
-   ([relay.md](relay.md)).
+   Демон из этого репозитория, для работы над ним: `scripts/wierdrd.sh install`.
 3. Поставить на iPhone сборку с Live Activity (`make ipa && scripts/iphone.sh install`) и
-   один раз открыть Wierdr, подключённый к этому Mac. В **Settings → Live Activity**
-   должно стать «On mentoair».
+   один раз открыть Wierdr, подключённый к этому Mac. В **Settings → Daemon** должно
+   стать «wierdrd: Running» и «Live Activity: On mentoair».
 4. Первая Live Activity придёт с вопросом iOS «Allow Live Activities from Wierdr?» → Allow.
 
 Проверка и обслуживание:
 
 ```sh
-scripts/push-agent.sh status   # launchd + конфиг, ключ печати, устройства (есть ли у них ключ), канал, активность, сводка
-scripts/push-agent.sh log      # что и когда отправлено (start/update/end, ошибки APNs)
-wierdr-push reset              # закончить идущую активность, удалить каналы, забыть отвергнутые токены
+wierdrd status                 # конфиг, ключ печати, устройства (есть ли у них ключ), канал, активность, сводка
+tail -f "$(brew --prefix)/var/log/wierdrd.log"   # что и когда отправлено (start/update/end, ошибки APNs)
+wierdrd reset                  # закончить идущую активность, удалить каналы, забыть отвергнутые токены
 ```
 
 Сменить ключ печати: остановить демон, удалить `~/.config/wierdr/seal-key`, запустить
-снова (`scripts/push-agent.sh restart`). Он сделает и опубликует новый. Телефоны покажут
+снова (`brew services restart wierdrd`). Он сделает и опубликует новый. Телефоны покажут
 «Open Wierdr to see the agents», пока Wierdr на них не подключится к этому Mac (проверено
 2026‑11‑19).
 
@@ -206,7 +211,7 @@ wierdr-push reset              # закончить идущую активно�
 
 - Только iPhone. На iPad iOS не показывает Live Activities сторонних приложений, поэтому
   ActivityKit там выключен и запись не делается.
-- `wierdr-push` должен работать на том компьютере, к которому подключается телефон: он
+- `wierdrd` должен работать на том компьютере, к которому подключается телефон: он
   читает документ `wierdr-push` из своего ядра. Агенты с машин, добавленных в это ядро
   (`hc machine add`), в сводку попадают.
 - Mac должен быть включён и не спать. Иначе активность через 25 мин показывает

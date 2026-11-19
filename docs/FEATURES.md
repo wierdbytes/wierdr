@@ -23,6 +23,14 @@ Wierdr (`pw.xff.wierdr`) — нативное приложение для iPad �
   `~/.ssh/authorized_keys` на Mac и переключит хост на вход по ключу.
 - **Проверка ключа хоста (TOFU)**: при первом подключении — алерт с отпечатком SHA256;
   при смене ключа — громкое предупреждение.
+- **wierdrd на Mac** ([wierdrd.md](wierdrd.md)): после первого подключения к хосту
+  приложение проверяет демон Wierdr (через `machine.exec` ядра: Homebrew, wierdrd, версия,
+  работает ли). Если он не установлен, остановлен или устарел, появляется лист «Set Up
+  wierdrd» с одной кнопкой: **Install with Homebrew** (`brew tap wierdbytes/apps`,
+  `brew install`, `brew services start`), **Start** или **Update**; под ней — команды, которые
+  она выполнит. Без Homebrew лист объясняет, что его нужно поставить. Лист показывается один
+  раз на хост, на iPad и на iPhone. Потом то же — в **Settings → Daemon**: состояние
+  («Running · 0.1.0»), кнопка, на iPhone — регистрация Live Activity.
 - **Переподключение**: при обрыве — автоматический реконнект с backoff; при возвращении
   приложения на передний план линия проверяется пингом и при необходимости поднимается заново.
   Баннер «Reconnecting…» в панели. Терминалы переаттачиваются сами (ядро присылает экран +
@@ -386,7 +394,7 @@ iPad — карточки спейсов (сворачиваются, перет
 `HerdrCore` (протокол herdr-core: фреймы, JSON‑RPC, attach‑стримы, события, документы),
 `HerdrSSH` (SSH‑транспорт, ключи, known hosts), `WierdrModel` (живая модель + команды,
 `WorkspaceEngine`), `wierdr-cli` (отладка на Mac: `wierdr-cli ws`, `ls`, `doc`, `events`, `attach`),
-`WierdrActivity` / `WierdrPush` / `wierdr-push` (Live Activity агентов, §7).
+`WierdrActivity` / `WierdrPush` / `wierdrd` (Live Activity агентов, §7; демон — [wierdrd.md](wierdrd.md)).
 `App/Sources` — SwiftUI. Подробно: `docs/architecture.md`, `docs/hc-protocol-client.md`,
 `docs/ssh.md`. Тесты: `make test` (unit), `WIERDR_LIVE=1` / `WIERDR_SSH_LIVE=1` — живые.
 
@@ -553,11 +561,12 @@ iPad — карточки спейсов (сворачиваются, перет
   «idle»), даже когда Wierdr закрыт. Счётчики
   (точки цвета статуса; сабагенты считаются, как в кольце статусов шапки списка), до 3 самых срочных агентов в порядке списка в две строки (статус, заголовок; под
   ним спейс · модель и сколько в этом статусе: `5 min, 25 secs`, тикает само), тап по
-  агенту открывает его панель. «Нужен ты» зажигает экран со звуком, «закончил» — без звука. Её шлёт `wierdr-push` на Mac через APNs; приложение
-  регистрирует iPhone в ядре при подключении (Settings → Live Activity: «On <компьютер>»)
+  агенту открывает его панель. «Нужен ты» зажигает экран со звуком, «закончил» — без звука. Её шлёт `wierdrd` на Mac через APNs (его ставит само
+  приложение, §1); приложение регистрирует iPhone в ядре при подключении (Settings → Daemon:
+  «Live Activity: On <компьютер>»)
   и берёт там ключ печати: Apple видит в пушах только счётчики, alert — «Needs you» /
   «Done» без имён; без ключа — счётчики и «Open Wierdr to see the agents». Без своего
-  ключа APNs демон шлёт пуши через релей Wierdr (`relay.wierdr.workat.dev`): приложение
+  ключа APNs (без `push.json`) демон шлёт пуши через релей Wierdr (`relay.wierdr.workat.dev`): приложение
   получает там право на свой токен через App Attest ([relay.md](relay.md)).
   Настройка и устройство: [live-activity.md](live-activity.md).
 

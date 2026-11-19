@@ -1,11 +1,15 @@
-// wierdr-push: drives Wierdr's agents Live Activity from this Mac's herdr-core.
+// wierdrd: Wierdr's daemon on the Mac. Drives Wierdr's agents Live Activity from this Mac's
+// herdr-core.
 //
-//   wierdr-push [--hc PATH] [run]   the daemon (scripts/push-agent.sh installs it in launchd)
-//   wierdr-push [--hc PATH] status  config, devices, channels, the running activity, the summary now
-//   wierdr-push [--hc PATH] reset   end the running activity and forget it (and refused tokens)
+//   wierdrd [--hc PATH] [run]   the daemon (a Homebrew service: `brew services start wierdrd`;
+//                               from source: scripts/wierdrd.sh)
+//   wierdrd [--hc PATH] status  config, devices, channels, the running activity, the summary now
+//   wierdrd [--hc PATH] reset   end the running activity and forget it (and refused tokens)
+//   wierdrd --version
 //
-// Config: ~/.config/wierdr/push.json (`PushConfig`), state: ~/.config/wierdr/push-state.json,
-// the key the pushes are sealed with: ~/.config/wierdr/seal-key (made at the first run).
+// Config: ~/.config/wierdr/push.json (`PushConfig`; without it, the relay), state:
+// ~/.config/wierdr/push-state.json, the key the pushes are sealed with:
+// ~/.config/wierdr/seal-key (made at the first run).
 // Devices register themselves in the core's `wierdr-push` document when Wierdr connects,
 // and take the seal key from its `wierdr-push-seal` document, which the daemon writes.
 import Foundation
@@ -25,7 +29,7 @@ func stamp() -> String {
 func say(_ s: String) { print("\(stamp()) \(s)") }
 
 func fail(_ s: String) -> Never {
-    FileHandle.standardError.write(Data("wierdr-push: \(s)\n".utf8))
+    FileHandle.standardError.write(Data("wierdrd: \(s)\n".utf8))
     exit(1)
 }
 
@@ -38,7 +42,10 @@ while !args.isEmpty {
     case "--hc": hcPath = args.isEmpty ? nil : args.removeFirst()
     case "run", "status", "reset": command = a
     case "-h", "--help", "help":
-        print("usage: wierdr-push [--hc PATH] [run|status|reset]")
+        print("usage: wierdrd [--hc PATH] [run|status|reset] | wierdrd --version")
+        exit(0)
+    case "-v", "--version", "version":
+        print(wierdrdVersion)
         exit(0)
     default: fail("unknown argument \(a)")
     }
@@ -61,8 +68,10 @@ func makePusher() throws -> Pusher {
 
 @MainActor
 func status() async throws {
-    let config = try? PushConfig.load()
-    print("config: \(config.map(\.summary) ?? "missing (\(PushConfig.defaultURL.path))")")
+    print("wierdrd \(wierdrdVersion)")
+    let config: PushConfig?
+    do { config = try PushConfig.load() } catch { config = nil; print("config: \(error)") }
+    if let config { print("config: \(config.summary)") }
     if let config, config.relay == nil { _ = try config.signer(); print("key: readable") }
     let state = PushState.load()
     print("channels: \(state.channels.isEmpty ? "none" : state.channels.map { "\($0.key) → \($0.value)" }.sorted().joined(separator: ", "))")
@@ -118,6 +127,7 @@ Task { @MainActor in
             await pusher.endAll()
             say("ended")
         default:
+            say("wierdrd \(wierdrdVersion)")
             let pusher = try makePusher()
             let c = try await connect()
             try await pusher.run(on: c)

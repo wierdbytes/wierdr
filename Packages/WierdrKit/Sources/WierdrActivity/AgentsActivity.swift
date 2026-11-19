@@ -4,7 +4,7 @@ import ActivityKit
 #endif
 
 /// The agents Live Activity: what the Lock Screen and the Dynamic Island show
-/// about the agents on a computer, as the Mac's pusher (`wierdr-push`) sends it
+/// about the agents on a computer, as the Mac's daemon (`wierdrd`) sends it
 /// through APNs and the widget extension draws it.
 ///
 /// Push payloads carry these as JSON (`attributes` and `content-state`), decoded by

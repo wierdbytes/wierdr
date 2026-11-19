@@ -6,7 +6,7 @@ import UIKit
 import WierdrActivity
 import WierdrRelay
 
-/// The app's part in the agents Live Activity, which `wierdr-push` on the Mac
+/// The app's part in the agents Live Activity, which `wierdrd` on the Mac
 /// starts, updates and ends through APNs: this device's push-to-start token goes
 /// into the connected computer's `wierdr-push` document (`PushRegistry`) each time
 /// a session goes live and whenever the token, the person's Live Activities setting

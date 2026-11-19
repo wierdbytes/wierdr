@@ -8,6 +8,7 @@
   [`BUILD.md`](docs/BUILD.md) — сборка, установка, устройства, симуляторы, WDA;
   [`live-activity.md`](docs/live-activity.md) — Live Activity и APNs, проверенные ловушки;
   [`relay.md`](docs/relay.md) — релей пушей (Cloudflare Worker в `Relay/`, App Attest, права), развёртывание;
+  [`wierdrd.md`](docs/wierdrd.md) — демон на Mac: формула Homebrew (тап `wierdbytes/apps`), установка из приложения, выпуск;
   [`app-store.md`](docs/app-store.md) — план публикации в App Store;
   [`claude-code.md`](docs/claude-code.md) — мод `cc` для Claude Code (метки `agent.*`, лимиты), проверенные ловушки;
   [`codex.md`](docs/codex.md) — плагин `codex` для Codex CLI (метки `agent.*`, лимиты, `--no-daemon`), проверенные ловушки;
@@ -22,5 +23,10 @@
 - Push в `master` с поднятой версией в `Integrations/pi/package.json` публикует `@wierdbytes/pi-wierdr` в npm
   ([`publish-pi.yml`](.github/workflows/publish-pi.yml)) — push только с разрешения.
   Выпуск и тесты — [`docs/pi.md`](docs/pi.md).
+- Push в `master` с поднятой версией в `Packages/WierdrKit/Sources/wierdrd/Version.swift` выпускает
+  wierdrd: релиз на GitHub и коммит формулы в тап `wierdbytes/homebrew-apps` от CI
+  ([`release-wierdrd.yml`](.github/workflows/release-wierdrd.yml)) — push только с разрешения.
+  Формулу в тапе руками не править: её пишет `scripts/wierdrd-release.sh`. Выпуск —
+  [`docs/wierdrd.md`](docs/wierdrd.md).
 - Herdr на Mac (эталон для сравнения, снимки через `herdr-app shot`):
   [`~/.config/herdr-app/AGENTS.md`](~/.config/herdr-app/AGENTS.md).

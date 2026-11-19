@@ -1,7 +1,7 @@
 # Пуши с компьютеров пользователей: релей APNs
 
 Вопрос: когда Wierdr будет в App Store, сможет ли пользователь у себя запустить сервер
-(`wierdr-push` рядом с herdr-core), который шлёт пуши в приложение: Live Activity агентов,
+(`wierdr-push`, теперь `wierdrd`, рядом с herdr-core), который шлёт пуши в приложение: Live Activity агентов,
 обычные уведомления?
 
 **Ответ: напрямую нет, через наш релей да.** Пуш в приложение из App Store подписывается
@@ -304,6 +304,7 @@ make project
 xcodebuild -project Wierdr.xcodeproj -scheme Wierdr -derivedDataPath build/DerivedData \
   -configuration Debug -destination "platform=iOS Simulator,id=$SIM" build
 xcrun simctl install $SIM build/DerivedData/Build/Products/Debug-iphonesimulator/Wierdr.app
+# в ветке лаборатории демон ещё называется wierdr-push
 (cd Packages/WierdrKit && swift build --product wierdr-push); P=Packages/WierdrKit/.build/debug/wierdr-push
 KEY=$($P lab key)
 xcrun simctl launch --console-pty $SIM pw.xff.wierdr -sealed-lab-key "$KEY"   # печатает push-to-start token
@@ -318,8 +319,9 @@ $P lab sizes
 `simctl io screenshot`. Первая активность придёт с вопросом «Allow Live Activities from
 Wierdr?».
 
-На iPhone: `wierdr-push` остановить (`launchctl bootout gui/$(id -u)/pw.xff.wierdr.push`,
-затем `wierdr-push reset`), поставить lab-сборку и запустить приложение:
+На iPhone: демон остановить (`brew services stop wierdrd`, затем `wierdrd reset`; до
+2026‑11‑19 — `launchctl bootout gui/$(id -u)/pw.xff.wierdr.push` и `wierdr-push reset`),
+поставить lab-сборку и запустить приложение:
 `xcrun devicectl device process launch --console … pw.xff.wierdr -- -sealed-lab-key "$KEY"`
 (аргументы приложения идут после `--`). Журнал виджета читается так:
 `… -- -sealed-lab-log YES`. Активность на экране видна в Notification Centre (свайп сверху

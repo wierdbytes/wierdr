@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage(TerminalFonts.sizeKey) private var fontSize = Double(TerminalFonts.defaultSize)
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var app
+    @Environment(LiveConnector.self) private var connector
     @State private var keyStatus: String?
     @State private var installing = false
 
@@ -61,8 +62,8 @@ struct SettingsView: View {
                         onDisconnect()
                     }
                 }
-                if Device.isPhone && !isDemo {
-                    LiveActivitySection()
+                if !isDemo, let daemon = connector.active?.daemon {
+                    DaemonSection(daemon: daemon, host: hostName ?? "this computer")
                 }
                 if Tutorial.isAvailable {
                     Section {
@@ -97,30 +98,44 @@ struct SettingsView: View {
     }
 }
 
-/// Where the agents Live Activity stands on this iPhone: registered with the
-/// connected computer (its `wierdr-push` drives it), or why not.
-private struct LiveActivitySection: View {
+/// Settings → Daemon: wierdrd on the connected computer (its state, and Install, Start or
+/// Update with Homebrew: `DaemonRows`), and on the iPhone where the agents Live Activity
+/// stands (registered with that computer, whose wierdrd drives it, or why not). More of
+/// what wierdrd does will come here.
+private struct DaemonSection: View {
+    var daemon: DaemonState
+    var host: String
     private var activities: LiveActivities { .shared }
 
     var body: some View {
+        let rows = DaemonRows(daemon: daemon, host: host)
         Section {
-            switch activities.registration {
-            case .registered(let host):
-                LabeledContent("Live Activity", value: "On \(host)")
-            case .off:
-                LabeledContent("Live Activity", value: "Off")
-                Button("Turn On in Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            rows
+            if Device.isPhone {
+                switch activities.registration {
+                case .registered(let host):
+                    LabeledContent("Live Activity", value: "On \(host)")
+                case .off:
+                    LabeledContent("Live Activity", value: "Off")
+                    Button("Turn On in Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                case .waiting:
+                    LabeledContent("Live Activity", value: "Waiting")
+                case .failed(let message):
+                    LabeledContent("Live Activity", value: "Not registered")
+                    Text(message).font(.footnote).foregroundStyle(.secondary)
                 }
-            case .waiting:
-                LabeledContent("Live Activity", value: "Waiting")
-            case .failed(let message):
-                LabeledContent("Live Activity", value: "Not registered")
-                Text(message).font(.footnote).foregroundStyle(.secondary)
             }
+        } header: {
+            Text("Daemon")
         } footer: {
-            Text("Your agents on the Lock Screen and in the Dynamic Island, while any is working, done or needs you. `wierdr-push` on the computer sends them (docs/live-activity.md).")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("wierdrd, Wierdr's helper on \(host), runs in the background. It sends your agents to the iPhone's Lock Screen and Dynamic Island, even while Wierdr is closed.")
+                rows.commandsFooter
+            }
         }
+        .onAppear { if daemon.phase == .checked && !daemon.isWorking { daemon.check() } }
     }
 }
 

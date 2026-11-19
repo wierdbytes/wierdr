@@ -1,14 +1,14 @@
 # Релей пушей
 
 Пуш в копию Wierdr из App Store подписывается только ключом APNs нашей команды
-([research/push-relay.md](research/push-relay.md)). Поэтому `wierdr-push` на Mac
+([research/push-relay.md](research/push-relay.md)). Поэтому `wierdrd` на Mac
 пользователя решает, что и когда показать в Live Activity, а отправляет пуш релей: он
 подписывает его нашим ключом. Релей — Cloudflare Worker в `Relay/` на
 `https://relay.wierdr.workat.dev` (`workers.dev` и preview URL выключены: один адрес, под
 правилами зоны). Аккаунт на тарифе Free (см. «Лимиты»).
 
 ```
-iPhone (Wierdr)                     Mac (wierdr-push)                   релей (Worker)              APNs
+iPhone (Wierdr)                     Mac (wierdrd)                       релей (Worker)              APNs
  App Attest: ключ, аттестация ──────────────────────────────────────▶ /v1/attest, /v1/devices
  право на токен ──SSH──▶ запись в `wierdr-push` (relay_grant)
                                      start / channels / broadcast ───▶ права, пуш, учёт ────────▶ HTTP/2
@@ -206,9 +206,10 @@ APNs держит не больше 10 000 каналов на приложен�
 
 ## Демон через релей
 
-В `~/.config/wierdr/push.json` добавить `"relay": "https://relay.wierdr.workat.dev"`. С ним
-`PushConfig.transport()` даёт `RelayClient`, без него — `APNsClient` с ключом (поля ключа
-тогда можно не указывать).
+Через релей демон ходит по умолчанию: без `~/.config/wierdr/push.json` (так у wierdrd из
+Homebrew, [wierdrd.md](wierdrd.md)) или с `"relay": "https://relay.wierdr.workat.dev"` в нём.
+Тогда `PushConfig.transport()` даёт `RelayClient`; с полями ключа и без `relay` —
+`APNsClient`. Файл, который есть, но не читается как конфиг, — ошибка, а не релей.
 
 - **Ошибки APNs** релей возвращает как есть (`502 {"error": "apns", "status", "reason"}`), и
   демон читает их как напрямую (плохой токен, плохой канал).
@@ -217,13 +218,13 @@ APNs держит не больше 10 000 каналов на приложен�
 - **Отказ при создании канала** откладывает только эту полосу. Постоянный отказ (400)
   откладывает устройство или полосу на 10 минут, а не все пуши. Ответ не в JSON (HTML от
   Cloudflare) — обычная ошибка.
-- **`wierdr-push status`** показывает транспорт, право каждого устройства (сколько дней
+- **`wierdrd status`** показывает транспорт, право каждого устройства (сколько дней
   осталось, продлено ли, отвергнуто ли) и очередь удаления.
-- **Переход с прямого режима на релей.** Сначала остановить демон, потом `wierdr-push reset`:
+- **Переход с прямого режима на релей.** Сначала остановить демон, потом `wierdrd reset`:
   иначе два процесса пишут один `push-state.json`, а каналы, созданные напрямую, через
   релей не удалить.
 
-На mentoair демон ходит через релей (`push.json.direct` — прежний конфиг).
+На mentoair демон — wierdrd из Homebrew, ходит через релей (`push.json` с `relay` и ключом; `push.json.direct` — прежний конфиг).
 
 ## Развёртывание
 

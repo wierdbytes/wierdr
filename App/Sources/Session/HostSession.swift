@@ -38,6 +38,8 @@ final class HostSession {
     private(set) var hostKeyQuestion: HostKeyQuestion?
     /// Name of the core we talk to (from `hello`), e.g. `mentoair`.
     private(set) var coreName: String?
+    /// wierdrd there: checked each time a connection goes live.
+    let daemon = DaemonState()
 
     @ObservationIgnored let engine: WorkspaceEngine
     @ObservationIgnored private var loop: Task<Void, Never>?
@@ -92,6 +94,7 @@ final class HostSession {
         loop?.cancel()
         loop = nil
         liveWatch?.cancel()
+        daemon.disconnected()
         wake()
         let c = current
         current = nil
@@ -206,6 +209,7 @@ final class HostSession {
                 guard let self, self.current === core else { return }
                 if self.workspace.phase == .live {
                     self.state = .live
+                    self.daemon.connected(core)
                     self.onLive?(core, self.coreName ?? self.endpoint.address)
                     return
                 }

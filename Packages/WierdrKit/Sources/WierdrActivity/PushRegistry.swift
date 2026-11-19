@@ -3,7 +3,7 @@ import Foundation
 /// The `wierdr-push` document in herdr-core on the computer the phone connects
 /// to: the devices that want the agents Live Activity and how to start it there.
 /// The app writes its own entry (compare-and-swap) whenever it connects and its
-/// push-to-start token changes; `wierdr-push` on that computer reads it.
+/// push-to-start token changes; `wierdrd` on that computer reads it.
 public struct PushRegistry: Codable, Hashable, Sendable {
     public static let documentName = "wierdr-push"
     public static let currentSchema = 1

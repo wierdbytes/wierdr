@@ -1,4 +1,4 @@
-// Wierdr's push relay (Cloudflare Worker): the Mac's `wierdr-push` decides what the
+// Wierdr's push relay (Cloudflare Worker): the Mac's `wierdrd` decides what the
 // agents Live Activity shows and when; the relay signs it with our APNs key and sends
 // it, as only our team's key can reach an App Store copy of Wierdr. See docs/relay.md.
 //

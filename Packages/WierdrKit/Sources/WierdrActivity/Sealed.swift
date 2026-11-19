@@ -5,7 +5,7 @@ import Foundation
 /// counts but not the agents' titles, spaces, models, machines or addresses, nor the
 /// computer's name.
 ///
-/// `wierdr-push` on the Mac makes the key (`ActivitySealKey`), keeps it in
+/// `wierdrd` on the Mac makes the key (`ActivitySealKey`), keeps it in
 /// `~/.config/wierdr/seal-key` and publishes it in its core's `wierdr-push-seal`
 /// document (`SealDocument`); the app reads it there when it connects (over SSH,
 /// past APNs) and keeps it as a file in the App Group (`ActivitySeal.store`), where
@@ -78,7 +78,7 @@ public struct ActivitySealKey: Sendable {
 }
 
 /// The `wierdr-push-seal` document in the Mac's core: the key the pusher seals with.
-/// Only `wierdr-push` writes it; whoever can read the core (and so sees the agents
+/// Only `wierdrd` writes it; whoever can read the core (and so sees the agents
 /// anyway) can read it.
 public struct SealDocument: Codable, Hashable, Sendable {
     public static let documentName = "wierdr-push-seal"
