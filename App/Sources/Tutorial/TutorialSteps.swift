@@ -16,19 +16,9 @@ enum TutorialPlace: Equatable {
     case anywhere
 }
 
-/// What the pointer shows a finger doing on the anchor.
+/// What the pointer shows a finger doing on the anchor (and the symbol by the card's action).
 enum TutorialGesture {
     case tap, hold, swipeLeft, swipeRight, pullUp
-
-    var label: String {
-        switch self {
-        case .tap: return "Tap"
-        case .hold: return "Touch and hold"
-        case .swipeLeft: return "Swipe left"
-        case .swipeRight: return "Swipe right"
-        case .pullUp: return "Pull up"
-        }
-    }
 
     var symbol: String {
         switch self {
@@ -39,6 +29,40 @@ enum TutorialGesture {
         case .pullUp: return "arrow.up"
         }
     }
+}
+
+/// A part of the tour, for the card's progress ("Someone needs you · 2 of 4", a segment each).
+enum TutorialChapter: Int, CaseIterable, Identifiable {
+    case list, needsYou, talk, tidy, limits
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .list: return "First look"
+        case .needsYou: return "Someone needs you"
+        case .talk: return "Talk to an agent"
+        case .tidy: return "Tidy and find"
+        case .limits: return "Your limits"
+        }
+    }
+}
+
+/// A line of a card's list: a mark and what it says, and the statuses' colors under it
+/// (`legend`: ● needs you ● done ● working).
+struct TutorialBullet {
+    enum Mark {
+        /// An SF Symbol.
+        case symbol(String)
+        /// One of the app's icons (`Icon`: bot, terminal), as the list draws them.
+        case icon(String)
+        /// A short text (5 · 7, ››).
+        case text(String)
+    }
+
+    var mark: Mark
+    var text: String
+    var legend = false
 }
 
 /// What the tour's done conditions read.
@@ -84,32 +108,76 @@ struct TutorialContext {
     }
 }
 
+/// A later part of a step, which the card's action and the pointer follow: the Pin
+/// button once the swipe uncovered it, the keyboard once the field is tapped. The last
+/// phase that holds is shown, else the step itself.
+struct TutorialPhase {
+    var action: String
+    /// The pointer goes there (else on the step's anchor).
+    var pointer: TutorialAnchor? = nil
+    /// Nil: the pointer rests (the person is at it, or waits).
+    var gesture: TutorialGesture? = nil
+    /// By the action, else the gesture's.
+    var symbol: String? = nil
+    /// It's this phase while this holds; without it, while `pointer` shows.
+    var when: (@MainActor (TutorialContext) -> Bool)? = nil
+}
+
 /// One step of the tour: a hint card, and (unless it's `free`) the screen dimmed but for
-/// the anchor; with a `gesture`, the pointer shows it on the anchor and only the anchor
-/// (and `also`) takes a finger, until `done` holds; without, Next.
+/// the anchor and the `spotlight`; with a `gesture`, the pointer shows it on the anchor and
+/// only the anchor (and `also`) takes a finger, until `done` holds; without, Next (or a
+/// tap on the anchor). The card says what it is (`text`, `bullets`) and, apart, what to do
+/// (`action`).
 struct TutorialStep: Identifiable {
     enum Kind { case normal, welcome, finish }
-    enum Card { case auto, top, bottom, center }
+    /// Where the card goes: by what the step shows (`auto`: under it in the screen's upper
+    /// half, else over it; `below` and `above` try that side first), or at the top, the
+    /// bottom or the middle.
+    enum Card { case auto, below, above, top, bottom, center }
 
     let id: String
+    /// Nil: the welcome and the end, outside the chapters.
+    var chapter: TutorialChapter? = nil
     var place: TutorialPlace
     var title: String
-    var text: String
+    /// What it is and why: a sentence or two.
+    var text = ""
+    var bullets: [TutorialBullet] = []
+    /// Small print under them.
+    var note: String? = nil
+    /// What to do: "Tap the ring" (by its gesture's symbol).
+    var action: String? = nil
     var anchor: TutorialAnchor? = nil
     var gesture: TutorialGesture? = nil
-    /// More places a finger may use (a swipe anywhere on the terminal, the keys).
+    /// More places a finger may use (a swipe anywhere on the terminal, the keys): lightly dimmed.
     var also: [TutorialAnchor] = []
+    /// More places shown with the anchor, not dimmed (a card with its header, an agent's tree),
+    /// which the card keeps clear of; a finger doesn't go through them.
+    var spotlight: [TutorialAnchor] = []
+    /// What the card goes by in a free step (the popover the last step opened).
+    var near: TutorialAnchor? = nil
+    var phases: [TutorialPhase] = []
     /// Nothing dimmed, nothing blocked: the person closes what the last step opened.
     var free = false
     var card: Card = .auto
     var kind: Kind = .normal
+    /// Only when needed (it's already done otherwise: a detour back); not counted in its chapter.
+    var extra = false
     /// Nil: an explanation, Next goes on.
     var done: (@MainActor (TutorialContext) -> Bool)? = nil
-    /// The pointer rests meanwhile (the person is at it: typing a message).
-    var quiet: (@MainActor (TutorialContext) -> Bool)? = nil
+    /// How long its result shows (the card's ✓, the screen held) before the next step.
+    var settle: Double = 0.6
 
     /// The demo has to be open (else the person left it: the tour ends).
     var needsDemo: Bool { place != .connect }
+
+    /// Something shown, nothing to do but read: Next.
+    var isExplanation: Bool { kind == .normal && gesture == nil && !free }
+
+    /// Every anchor it looks at.
+    var anchorsUsed: [TutorialAnchor] {
+        [anchor, near].compactMap { $0 } + also + spotlight + phases.compactMap(\.pointer)
+    }
 }
 
 /// What the app tells the tour that no observable state says: menus and panels opened
@@ -135,144 +203,163 @@ struct TutorialSignals: Equatable {
 // MARK: - The iPhone's tour
 
 extension TutorialStep {
-    /// The demo's actors: the first space's pi agent with its tree, its blocked scout.
-    private static let space = "sp1", other = "sp2", agent = "t5w", scout = "t60"
+    /// The demo's actors: the first space's pi agent with its tree, its blocked scout, and
+    /// the space folded (its agent is done: the folded header shows it).
+    private static let agent = "t5w", scout = "t60", folded = "sp3"
 
-    /// From the host list into the demo, across the list, an agent's screen, the status
-    /// ring, a sub-agent that asks, Go to and the limits.
+    /// From the host list into the demo: the list, someone who needs you answered, a
+    /// message to an agent, a row's swipe, Go to and the limits; at the end what to remember.
     static let phone: [TutorialStep] = [
         TutorialStep(
             id: "welcome", place: .connect, title: "Welcome to Wierdr",
-            text: "Your Herdr spaces, tabs and agents on your iPhone. A short tour shows you around on sample agents: you try each thing yourself.",
+            text: "Herdr's agents keep working on your Mac. Wierdr puts them in your pocket.",
+            bullets: [
+                TutorialBullet(mark: .symbol("exclamationmark.bubble.fill"), text: "See who needs you"),
+                TutorialBullet(mark: .symbol("hand.tap.fill"), text: "Answer in a tap"),
+                TutorialBullet(mark: .symbol("lock.fill"), text: "Straight to your Mac over SSH: no server, no account"),
+            ],
+            note: "A tour on sample agents, about 2 minutes: you try each thing yourself.",
             card: .center, kind: .welcome),
         TutorialStep(
-            id: "hosts", place: .connect, title: "Your computers",
-            text: "Add the Mac that runs Herdr here. Wierdr signs in over SSH and runs hc connect there, so you see what your desktop shows.",
-            anchor: .addHost),
-        TutorialStep(
-            id: "try-demo", place: .connect, title: "Try it on the demo",
-            text: "First, look around on sample agents. Tap Try the Demo.",
-            anchor: .tryDemo, gesture: .tap,
-            done: { $0.app.mode == .demo }),
+            id: "try-demo", chapter: .list, place: .connect, title: "Start with sample agents",
+            text: "Your Mac comes later: Add Host connects to it over SSH.",
+            action: "Tap Try the Demo",
+            anchor: .tryDemo, gesture: .tap, spotlight: [.addHost],
+            done: { $0.app.mode == .demo }, settle: 0.3),
 
         // The list.
         TutorialStep(
-            id: "cards", place: .list, title: "Spaces are cards",
-            text: "Each space of your desktop is a card: its header at the bottom, its agents over it, the newest lowest, near your thumb.",
-            anchor: .card(space)),
+            id: "fold", chapter: .list, place: .list, title: "One card per space",
+            text: "The list runs bottom up: the newest rows and the header stay by your thumb. Folded, a card sums up its agents.",
+            action: "Tap the header to fold it",
+            anchor: .spaceHeader(folded), gesture: .tap, spotlight: [.card(folded)], card: .below,
+            done: { $0.controller?.closedSpaces.contains(folded) == true }, settle: 1.4),
         TutorialStep(
-            id: "fold", place: .list, title: "Fold a card",
-            text: "Tap a card's header to fold it. A folded card sums up its agents' statuses in its header.",
-            anchor: .spaceHeader(other), gesture: .tap,
-            done: { $0.controller?.closedSpaces.contains(other) == true }),
-        TutorialStep(
-            id: "agent", place: .list, title: "An agent",
-            text: "What it's doing, and for how long on a pill in its status's color: red needs you, green is done, yellow is working. Under it, its context ring, model and effort.",
-            anchor: .agentRow(agent)),
-        TutorialStep(
-            id: "sub-agents", place: .list, title: "Sub-agents",
-            text: "The agents it started hang over it as a tree. Tap the chip to fold them; >_ shows the terminals it started.",
-            anchor: .botChip(agent), gesture: .tap, card: .top,
-            done: { $0.controller?.foldedAgents.contains(agent) == true }),
-        TutorialStep(
-            id: "pin", place: .list, title: "Swipe a row",
-            text: "Swipe right for Unread and Pin, left to close. Swipe this row right and tap Pin.",
-            anchor: .agentRow(agent), gesture: .swipeRight,
-            done: { $0.terminal(agent)?.pinned == true }),
-        TutorialStep(
-            id: "row-menu", place: .list, title: "More in its menu",
-            text: "Touch and hold a row for its menu.",
-            anchor: .agentRow(agent), gesture: .hold,
-            done: { $0.signals.listMenu.opens > $0.baseline.listMenu.opens }),
-        TutorialStep(
-            id: "row-menu-open", place: .anywhere, title: "The row's menu",
-            text: "Pin, Mark Unread, Split Right, Close Pane. Pick one, or tap anywhere else to close it.",
-            free: true, card: .top,
-            done: { !$0.signals.listMenu.open }),
-        TutorialStep(
-            id: "open", place: .list, title: "Open an agent",
-            text: "Tap the row: its terminal fills the screen.",
-            anchor: .agentRow(agent), gesture: .tap,
-            done: { $0.showing(agent) }),
+            id: "agent", chapter: .list, place: .list, title: "An agent at a glance",
+            bullets: [
+                TutorialBullet(mark: .symbol("text.alignleft"), text: "What it's working on"),
+                TutorialBullet(mark: .symbol("timer"), text: "For how long, in its status's color", legend: true),
+                TutorialBullet(mark: .symbol("chart.pie"), text: "Context used, model and effort"),
+                TutorialBullet(mark: .icon("bot"), text: "Its sub-agents, in the tree above it"),
+            ],
+            anchor: .agentRow(agent), spotlight: [.tree(agent)]),
 
-        // An agent's screen.
+        // Someone needs you.
         TutorialStep(
-            id: "title", place: .pane(agent), title: "What runs here",
-            text: "The title says what the agent is doing, ringed in its status's color. Tap it for the pane's menu.",
-            anchor: .paneTitle, gesture: .tap,
-            done: { $0.signals.paneMenu.opens > $0.baseline.paneMenu.opens }),
-        TutorialStep(
-            id: "pane-menu", place: .anywhere, title: "The pane's menu",
-            text: "Pin, a new tab, a split, the text size, Close. Tap outside it to close it.",
-            free: true, card: .bottom,
-            done: { !$0.signals.paneMenu.open }),
-        TutorialStep(
-            id: "message", place: .pane(agent), title: "Message the agent",
-            text: "Tap the field, type anything and send: it goes to the agent as if typed there. The paperclip attaches photos and files.",
-            anchor: .composer, gesture: .tap,
-            done: { $0.signals.messages > $0.baseline.messages },
-            quiet: { $0.controller?.composing != nil }),
-        TutorialStep(
-            id: "back", place: .pane(agent), title: "Back to the list",
-            text: "It answers in a moment. The badge counts the agents waiting for you elsewhere: tap \u{2039}, or swipe right anywhere, to go back.",
-            anchor: .paneBack, gesture: .tap, also: [.terminal],
-            done: { $0.onList }),
-
-        // The status ring, a sub-agent that asks.
-        TutorialStep(
-            id: "ring", place: .list, title: "All statuses in one ring",
-            text: "A dash per agent, the most urgent first: red needs you, green is done, yellow is working. The number counts the most urgent. Tap it to go to the first.",
+            id: "ring", chapter: .needsYou, place: .list, title: "The status ring",
+            text: "The ring has a dash per agent, the most urgent first. The number counts those who need you.",
+            action: "Tap the ring to go to the first",
             anchor: .statusRing, gesture: .tap,
-            done: { $0.peeking(scout) }),
+            done: { $0.peeking(scout) }, settle: 0.4),
         TutorialStep(
-            id: "keys", place: .peek(scout, parent: agent), title: "It needs you",
-            text: "The scout, a sub-agent, asks to read ~/.ssh/config. Answer without the keyboard: swipe left on the terminal for keys.",
+            id: "keys", chapter: .needsYou, place: .peek(scout, parent: agent), title: "Answer without the keyboard",
+            text: "The scout, one of its sub-agents, asks to read ~/.ssh/config. The keys stay off-screen, so they never cover the terminal.",
+            action: "Swipe left on the terminal",
             anchor: .terminal, gesture: .swipeLeft,
-            done: { $0.signals.keys.opens > $0.baseline.keys.opens }),
+            done: { $0.signals.keys.opens > $0.baseline.keys.opens }, settle: 0.4),
         TutorialStep(
-            id: "answer", place: .peek(scout, parent: agent), title: "Answer it",
-            text: "Keys go straight to the program: arrows, y and n, numbers. Tap \u{23CE} to allow.",
+            id: "answer", chapter: .needsYou, place: .peek(scout, parent: agent), title: "Allow it",
+            text: "Keys go straight to the program: arrows, y and n, numbers, esc.",
+            action: "Tap \u{23CE}",
             anchor: .keyEnter, gesture: .tap, also: [.keys, .terminal],
-            done: { $0.terminal(scout)?.status != .blocked }),
+            phases: [TutorialPhase(action: "Swipe left for the keys again", pointer: .terminal, gesture: .swipeLeft,
+                                   when: { !$0.signals.keys.open })],
+            done: { $0.terminal(scout)?.status != .blocked }, settle: 1.0),
         TutorialStep(
-            id: "peek-back", place: .peek(scout, parent: agent), title: "Back to work",
-            text: "A sub-agent shows in its parent's place; its menu keeps it as a tab of its own. Tap \u{2039} to go back.",
+            id: "back", chapter: .needsYou, place: .peek(scout, parent: agent), title: "Back to the list",
+            text: "The badge on \u{2039} tells how many others need you (or are done), in their status's color.",
+            action: "Tap \u{2039}, or swipe right anywhere",
             anchor: .paneBack, gesture: .tap, also: [.terminal, .keys],
-            done: { $0.onList }),
+            done: { $0.onList }, settle: 0.3),
 
-        // Go to.
+        // Talk to an agent.
         TutorialStep(
-            id: "pull", place: .list, title: "Go to",
-            text: "Pull the list up past its end to search everything.",
+            id: "open", chapter: .talk, place: .list, title: "Open an agent",
+            text: "Its terminal fills the screen, sized for the phone; a click on your Mac sizes it back.",
+            action: "Tap the row",
+            anchor: .agentRow(agent), gesture: .tap,
+            done: { $0.showing(agent) }, settle: 0.3),
+        TutorialStep(
+            id: "message", chapter: .talk, place: .pane(agent), title: "Message it",
+            text: "It arrives as if typed on your Mac. The paperclip adds photos and files.",
+            action: "Tap the field",
+            anchor: .composer, gesture: .tap,
+            phases: [TutorialPhase(action: "Type anything, then send", symbol: "keyboard",
+                                   when: { $0.controller?.composing != nil })],
+            done: { $0.signals.messages > $0.baseline.messages }, settle: 0.3),
+        TutorialStep(
+            id: "reply", chapter: .talk, place: .pane(agent), title: "It's on it",
+            text: "The ring round the title shows its status. Tap the title for tabs, splits and the text size.",
+            action: "Tap \u{2039}, or swipe right, to go back",
+            anchor: .paneBack, gesture: .tap, also: [.terminal, .paneTitle], spotlight: [.terminal],
+            phases: [TutorialPhase(action: "It's answering\u{2026}", symbol: "hourglass",
+                                   when: { $0.terminal(agent)?.status == .working })],
+            done: { $0.onList }, settle: 0.3),
+
+        // Tidy and find.
+        TutorialStep(
+            id: "pin", chapter: .tidy, place: .list, title: "Swipe a row",
+            bullets: [
+                TutorialBullet(mark: .symbol("arrow.right"), text: "Right: Pin and Unread"),
+                TutorialBullet(mark: .symbol("arrow.left"), text: "Left: Close"),
+                TutorialBullet(mark: .symbol("hand.point.up.left.fill"), text: "Touch and hold: everything else"),
+            ],
+            note: "Pinned rows stay at the bottom of their card, on your Mac too.",
+            action: "Swipe the row right",
+            anchor: .agentRow(agent), gesture: .swipeRight,
+            phases: [TutorialPhase(action: "Tap Pin", pointer: .swipeButton("pin"), gesture: .tap)],
+            done: { $0.terminal(agent)?.pinned == true }, settle: 1.2),
+        TutorialStep(
+            id: "pull", chapter: .tidy, place: .list, title: "Go to",
+            text: "Search every agent and space, without reaching for the top of the screen.",
+            action: "Pull the list up",
             anchor: .list, gesture: .pullUp,
-            done: { $0.controller?.showSwitcher == true }),
+            done: { $0.controller?.showSwitcher == true }, settle: 0.3),
         TutorialStep(
-            id: "go-to", place: .anywhere, title: "Find anything",
-            text: "Type to search agents and spaces, try \u{201C}login\u{201D}. Tap a result to open it, or swipe right to close Go to.",
+            id: "go-to", chapter: .tidy, place: .anywhere, title: "Find anything",
+            text: "Type a few letters of an agent or a space, try \u{201C}login\u{201D}. A tap on a result opens it.",
+            action: "Swipe right to close Go to", gesture: .swipeRight,
             free: true, card: .top,
-            done: { $0.controller?.showSwitcher == false }),
+            done: { $0.controller?.showSwitcher == false }, settle: 0.3),
+        TutorialStep(
+            id: "result-back", chapter: .tidy, place: .anywhere, title: "Back to the list",
+            text: "Go to opened it right here.",
+            action: "Tap \u{2039}, or swipe right anywhere",
+            anchor: .paneBack, gesture: .tap, also: [.terminal], extra: true,
+            done: { $0.onList }, settle: 0.3),
 
-        // The header.
+        // The limits.
         TutorialStep(
-            id: "limits", place: .list, title: "Your limits",
-            text: "Your Claude and Codex subscriptions as rings: the share used, colored by pace; the tick is how much of the window has gone. Tap them for details.",
+            id: "limits", chapter: .limits, place: .list, title: "Your plan limits",
+            text: "Your Claude and Codex usage at a glance: a ring for each limit.",
+            action: "Tap the rings",
             anchor: .limits, gesture: .tap,
-            done: { $0.signals.limits.opens > $0.baseline.limits.opens }),
+            done: { $0.signals.limits.opens > $0.baseline.limits.opens }, settle: 0.3),
         TutorialStep(
-            id: "limits-open", place: .anywhere, title: "Each limit",
-            text: "How much is used and when it resets. Tap outside to close it.",
-            free: true, card: .top,
-            done: { !$0.signals.limits.open }),
-        TutorialStep(
-            id: "plus", place: .list, title: "New spaces, Settings",
-            text: "+ starts a new space with a terminal or an agent, and opens Settings, where this tour waits if you want it again.",
-            anchor: .plus),
+            id: "limits-open", chapter: .limits, place: .anywhere, title: "How to read them",
+            bullets: [
+                TutorialBullet(mark: .symbol("circle.lefthalf.filled"), text: "The arc: the share used, green on pace, then yellow and red"),
+                TutorialBullet(mark: .symbol("line.diagonal"), text: "The tick: how much of the window has gone"),
+                TutorialBullet(mark: .text("5 7"), text: "Inside: 5 hours, 7 days, a model's letter"),
+                TutorialBullet(mark: .text("\u{203A}\u{203A}"), text: "Used faster than time goes: it may run out before the reset"),
+            ],
+            action: "Tap outside to close", gesture: .tap, near: .limitsPopover, free: true,
+            done: { !$0.signals.limits.open }, settle: 0.3),
+
         TutorialStep(
             id: "finish", place: .list, title: "You're all set",
-            text: "Connect your Mac to see your own agents here. The demo stays on the host list, a tap away.",
+            text: "Worth remembering:",
+            bullets: [
+                TutorialBullet(mark: .symbol("arrow.left"), text: "Swipe left on a terminal: keys"),
+                TutorialBullet(mark: .symbol("arrow.right"), text: "Swipe right: back"),
+                TutorialBullet(mark: .symbol("arrow.up"), text: "Pull the list up: Go to"),
+                TutorialBullet(mark: .symbol("hand.point.up.left.fill"), text: "Touch and hold a row: its menu"),
+                TutorialBullet(mark: .symbol("plus"), text: "A new space, Settings and this tour"),
+            ],
+            note: "With your Mac connected, the Lock Screen shows who needs you even with Wierdr closed (Live Activity).",
             card: .center, kind: .finish),
     ]
 
     /// Every anchor the tour uses (other views never look at the tour).
-    static let anchors: Set<TutorialAnchor> = Set(phone.flatMap { [$0.anchor].compactMap { $0 } + $0.also })
+    static let anchors: Set<TutorialAnchor> = Set(phone.flatMap(\.anchorsUsed))
 }

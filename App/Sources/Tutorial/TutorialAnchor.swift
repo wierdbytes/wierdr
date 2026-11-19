@@ -1,11 +1,12 @@
 import SwiftUI
 import UIKit
 
-/// A place on screen the tour points at (`TutorialStep.anchor`, `also`). Views mark
-/// themselves with `tutorialAnchor(_:)`; the tour's overlay finds them by their UIKit
-/// marker (`TutorialAnchors`), wherever they are: the iPhone's screens and the list's
-/// blocks are each in their own hosting controller, moved by Core Animation, so no
-/// SwiftUI preference or coordinate space reaches from them to the overlay's window.
+/// A place on screen the tour points at (`TutorialStep.anchor`, `also`, `spotlight`,
+/// `near`, a phase's `pointer`). Views mark themselves with `tutorialAnchor(_:)`; the
+/// tour's overlay finds them by their UIKit marker (`TutorialAnchors`), wherever they are:
+/// the iPhone's screens and the list's blocks are each in their own hosting controller,
+/// moved by Core Animation, so no SwiftUI preference or coordinate space reaches from them
+/// to the overlay's window.
 enum TutorialAnchor: Hashable {
     // The host list.
     case addHost, tryDemo
@@ -13,9 +14,15 @@ enum TutorialAnchor: Hashable {
     /// The list's room between the status bar and the header (the pull to Go to).
     case list
     case card(String), spaceHeader(String)
-    /// An agent's row (its terminal's address), and its sub-agents' chip.
-    case agentRow(String), botChip(String)
-    case statusRing, limits, plus
+    /// An agent's row (its terminal's address).
+    case agentRow(String)
+    /// The rows of an agent's tree (its address): many views, one place (`TutorialAnchors.union`).
+    case tree(String)
+    /// A row's swipe button (`PhoneSwipeAction.id`: pin, unread, …), while the row is open.
+    case swipeButton(String)
+    case statusRing, limits
+    /// The limits' popover, while it's out.
+    case limitsPopover
     // The pane screen.
     case paneTitle, paneBack, terminal, composer
     /// The key panel, and its ⏎.
@@ -118,14 +125,24 @@ final class TutorialAnchors {
     /// and mostly on screen. Nil when none is.
     func frame(_ anchor: TutorialAnchor) -> CGRect? {
         for entry in entries.reversed() where entry.anchor == anchor {
-            guard let view = entry.view, let window = view.window, !window.isHidden, Self.isShown(view) else { continue }
-            let rect = Self.drawnFrame(view, in: window)
-            guard rect.width >= 1, rect.height >= 1 else { continue }
-            let seen = rect.intersection(window.bounds)
-            guard !seen.isNull, seen.width * seen.height >= 0.4 * rect.width * rect.height else { continue }
-            return rect
+            if let rect = Self.shownFrame(entry.view) { return rect }
         }
         return nil
+    }
+
+    /// All its markers shown, as one rectangle (an agent's tree is a row each). Nil when none is.
+    func union(_ anchor: TutorialAnchor) -> CGRect? {
+        entries.filter { $0.anchor == anchor }.compactMap { Self.shownFrame($0.view) }
+            .reduce(nil) { (all: CGRect?, rect: CGRect) in all.map { $0.union(rect) } ?? rect }
+    }
+
+    private static func shownFrame(_ view: UIView?) -> CGRect? {
+        guard let view, let window = view.window, !window.isHidden, isShown(view) else { return nil }
+        let rect = drawnFrame(view, in: window)
+        guard rect.width >= 1, rect.height >= 1 else { return nil }
+        let seen = rect.intersection(window.bounds)
+        guard !seen.isNull, seen.width * seen.height >= 0.4 * rect.width * rect.height else { return nil }
+        return rect
     }
 
     /// Hidden or transparent up its chain: not shown.

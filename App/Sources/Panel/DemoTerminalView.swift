@@ -154,7 +154,7 @@ struct DemoScript {
         let task = Format.cleanTitle(t.message)
         // An earlier turn, so the screen is full like a real session.
         lines += [
-            TLine([s(" > ", .ansi(4)), s("Что сейчас в раскладке wierd-layout?", .bold)]),
+            TLine([s(" > ", .ansi(4)), s("What's in the wierd-layout layout now?", .bold)]),
             TLine(),
             TLine([s(" │ ", .ansi(2)), s("read ", .dim), s("~/.config/herdr-app/layouts/wierd-layout.json")]),
             TLine([s(" │ ", .ansi(2)), s("{")]),
@@ -262,6 +262,10 @@ struct DemoScript {
             boxed([s("  cwd: \(t.cwd ?? cwd)", .dim)]),
             TLine([s("╰" + String(repeating: "─", count: w - 2) + "╯", .hex("#d77757"))]),
             TLine(),
+        ]
+        // A sub-agent (the demo's scout): its own task, the file its row asks about.
+        if t.parent != nil { return scout(t, width: w) }
+        lines += [
             TLine([s("> ", .dim), s("move the dream scheduler onto the new job queue", .dim)]),
             TLine(),
             TLine([s("● ", .ansi(2)), s("Read", .bold), s("(src/queue.ts)")]),
@@ -316,6 +320,65 @@ struct DemoScript {
             TLine([s("   2. Yes, allow all edits during this session (shift+tab)")]),
             TLine([s("   3. No, and tell Claude what to do differently (esc)")]),
             TLine(),
+        ]
+    }
+
+    /// A Claude sub-agent (the demo's scout, t60): sent to compare the SSH config with
+    /// Wierdr's hosts, it asks to read the file its row's question names ("Allow reading
+    /// ~/.ssh/config?"); allowed (the message is then "Reading …"), it reads it and
+    /// answers; declined, it goes on without.
+    private mutating func scout(_ t: TerminalInfo, width w: Int) {
+        let message = t.message ?? ""
+        let path = message.hasPrefix("Allow reading ") ? String(message.dropFirst("Allow reading ".count).dropLast(message.hasSuffix("?") ? 1 : 0))
+            : message.hasPrefix("Reading ") ? String(message.dropFirst("Reading ".count)) : "~/.ssh/config"
+        let blocked = t.status == .blocked
+        lines += [
+            TLine([s("> ", .dim), s("which hosts in \(path) are new to Wierdr?", .dim)]),
+            TLine(),
+            TLine([s("● ", .fg), s("I'll read the SSH config and compare it")]),
+            TLine([s("  with Wierdr's host list.")]),
+            TLine(),
+            TLine([s("● ", blocked ? .ansi(3) : .ansi(2)), s("Read", .bold), s("(\(path))")]),
+        ]
+        if blocked {
+            lines += [
+                TLine(),
+                TLine([s(String(repeating: "─", count: w), .ansi(4))]),
+                TLine([s(" Read file", .boldAnsi(4))]),
+                TLine([s(" \(path)", .bold)]),
+                TLine(),
+                TLine([s(" Do you want to proceed?")]),
+                TLine([s(" ❯ ", .ansi(4)), s("1. Yes", .ansi(4))]),
+                TLine([s("   2. Yes, allow reading from "), s(".ssh/", .bold), s(" during this session")]),
+                TLine([s("   3. No, and tell Claude what to do differently (esc)")]),
+                TLine(),
+            ]
+            return
+        }
+        if message.hasPrefix("Reading ") {
+            lines.append(TLine([s("  ⎿  ", .dim), s("Read 24 lines", .dim)]))
+            lines += t.status == .working
+                ? [TLine(), TLine([s("✻ ", .hex("#d77757")), s("Comparing… ", .hex("#d77757")), s("(esc to interrupt)", .dim)])]
+                : [TLine(), TLine([s("● ", .fg), s("Two hosts there aren't in Wierdr yet:")]),
+                   TLine([s("  "), s("lf", .bold), s(" and "), s("build-box", .bold), s(".")])]
+        } else {
+            lines += [TLine([s("  ⎿  ", .dim), s("Not allowed", .ansi(1))]),
+                      TLine(),
+                      TLine([s("● ", .fg), s("Going on without it: only the hosts")]),
+                      TLine([s("  Wierdr already has.")])]
+        }
+        insertExchanges(at: lines.count,
+                        prompt: { TLine([s("> ", .dim), s($0)]) },
+                        working: TLine([s("✻ ", .hex("#d77757")), s("Thinking…", .hex("#d77757"))]),
+                        answer: { text in
+                            Self.wrapped(text).enumerated().map { i, l in TLine([s(i == 0 ? "● " : "  "), s(l)]) }
+                        })
+        lines += [
+            TLine(),
+            TLine([s(String(repeating: "─", count: w), .dim)]),
+            TLine([s("> ", .dim)], cursor: true),
+            TLine([s(String(repeating: "─", count: w), .dim)]),
+            TLine([s("  ? for shortcuts", .dim)]),
         ]
     }
 

@@ -6,8 +6,9 @@ import WierdrModel
 /// list (first launch with no hosts, "Take the Tour" there or in Settings), goes into the
 /// demo by its Try the Demo, and there has the person do each thing: the screen is dimmed
 /// but for what a step points at, which alone takes a finger, until the step's condition
-/// holds (`TutorialStep.done`); explanations go on with Next. Skip ends it at any step;
-/// it's marked seen once ended, and auto-starts no more.
+/// holds (`TutorialStep.done`); its result then shows for a moment (`succeeded`, the card's
+/// ✓); explanations go on with Next. Skip ends it at any step; it's marked seen once
+/// ended, and auto-starts no more. Steps come in chapters, which the card counts.
 ///
 /// The iPhone's layout only, for now (`isAvailable`).
 @MainActor
@@ -19,6 +20,8 @@ final class Tutorial {
     private(set) var index = 0
     /// The step's card and pointer are up (not while the app moves between steps).
     private(set) var shown = false
+    /// The step is done: its card says so and the screen is held, for its `settle`.
+    private(set) var succeeded = false
     /// The app left the step's place (a finger opened something else): the hint waits,
     /// the screen dimmed, until the tour takes it back (`takeBack`).
     private(set) var away = false
@@ -27,7 +30,8 @@ final class Tutorial {
     private(set) var signals = TutorialSignals()
     /// The signals as the step came (its done condition compares with them).
     @ObservationIgnored private(set) var baseline = TutorialSignals()
-    /// When the step's card came up (the overlay gives up on a missing anchor after a while).
+    /// When the step's card came up (the overlay gives up on a missing anchor after a while,
+    /// the pointer waits a moment).
     @ObservationIgnored private(set) var shownAt = Date.distantPast
 
     let steps = TutorialStep.phone
@@ -45,11 +49,22 @@ final class Tutorial {
     static var isAvailable: Bool { Device.isPhone }
 
     var step: TutorialStep? { isActive ? steps[index] : nil }
-    var count: Int { steps.count }
+
+    /// A menu the step didn't ask for is out (a row held, the pane's from its title):
+    /// nothing dimmed or blocked until it goes.
+    var detour: Bool { signals.listMenu.open || signals.paneMenu.open }
 
     var context: TutorialContext? { app.map { TutorialContext(app: $0, tour: self) } }
 
     func attach(_ app: AppModel) { self.app = app }
+
+    /// Where step `i` is in its chapter: its number there (an extra step has the one
+    /// before it) and how many its chapter counts. Nil outside the chapters.
+    func progress(of i: Int) -> (chapter: TutorialChapter, number: Int, count: Int)? {
+        guard let chapter = steps[i].chapter else { return nil }
+        let counted = steps.indices.filter { steps[$0].chapter == chapter && !steps[$0].extra }
+        return (chapter, max(1, counted.filter { $0 <= i }.count), counted.count)
+    }
 
     // MARK: Starting and ending
 
@@ -82,10 +97,10 @@ final class Tutorial {
         }
     }
 
-    /// An explanation's Next (the welcome's Start Tour).
+    /// An explanation's Next (the welcome's Start Tour, a tap on what it shows).
     func next() {
-        guard isActive, shown else { return }
-        complete(pause: 0.15)
+        guard isActive, shown, !succeeded else { return }
+        advance(after: 0.15)
     }
 
     /// Ends it where it is (Skip, Not Now, Keep Exploring).
@@ -96,6 +111,7 @@ final class Tutorial {
         confirmingSkip = false
         withAnimation(.easeOut(duration: 0.2)) {
             shown = false
+            succeeded = false
             isActive = false
         }
         presenter?.hide()
@@ -117,7 +133,7 @@ final class Tutorial {
     func marks(_ anchor: TutorialAnchor) -> Bool {
         // Not observed by views the tour never points at.
         guard TutorialStep.anchors.contains(anchor), isActive, let step else { return false }
-        return step.anchor == anchor || step.also.contains(anchor)
+        return step.anchorsUsed.contains(anchor)
     }
 
     /// A menu or panel the tour waits for opened or closed.
@@ -141,14 +157,15 @@ final class Tutorial {
         let gen = generation
         index = i
         shown = false
+        succeeded = false
         away = false
         confirmingSkip = false
         baseline = signals
         guard let ctx = context else { return end() }
         let step = steps[i]
         if step.needsDemo, ctx.app.mode != .demo { return end() }
-        // Already done (the person got ahead): on.
-        if step.done?(ctx) == true { return complete(pause: 0) }
+        // Already done (the person got ahead, an extra step not needed): on.
+        if step.done?(ctx) == true { return advance(after: 0) }
         var wait = 0.05
         if !ctx.isIn(step.place) {
             prepare(step.place, ctx)
@@ -165,9 +182,22 @@ final class Tutorial {
         }
     }
 
-    /// The step is done (or Next): its card goes, and after `pause` (the app's own move
-    /// settling) the next one comes.
-    private func complete(pause: Double) {
+    /// Done: the card says so, the screen held (the result showing), then on.
+    private func succeed() {
+        generation += 1
+        watchID += 1
+        let gen = generation
+        let settle = step?.settle ?? 0.5
+        withAnimation(.snappy(duration: 0.25)) { succeeded = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(settle))
+            guard self.generation == gen, self.isActive else { return }
+            self.advance(after: 0.15)
+        }
+    }
+
+    /// The card goes, and after `pause` (the app's own move settling) the next one comes.
+    private func advance(after pause: Double) {
         generation += 1
         watchID += 1
         let gen = generation
@@ -194,7 +224,7 @@ final class Tutorial {
             }
         }
         if left { return end() }
-        if done { return complete(pause: 0.5) }
+        if done { return succeed() }
         let off = !here && !step.free
         if away != off { withAnimation(.easeOut(duration: 0.2)) { away = off } }
         if off { takeBack() }

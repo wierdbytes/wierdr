@@ -124,7 +124,6 @@ struct PhoneAgentRowContent: View {
                               alert: counts.alert, label: kidLabel(counts),
                               action: hasAgentRows ? { controller.toggleKids(of: address) } : nil)
                     .fixedSize()
-                    .tutorialAnchor(.botChip(address))
             }
             if counts.allTerminals > 0 {
                 PhoneKidBadge(icon: "terminal", count: counts.allTerminals, open: terminalsOpen, alert: false,

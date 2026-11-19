@@ -31,7 +31,6 @@ struct SidebarHeader: View {
                 ComposerGlassGroup {
                     SidebarMenu()
                         .composerGlass(Circle(), theme: theme)
-                        .tutorialAnchor(.plus)
                 }
             }
         }

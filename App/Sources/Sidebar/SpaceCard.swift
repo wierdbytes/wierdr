@@ -106,12 +106,14 @@ struct SpaceCardLine: View {
                 PhoneKidRowContent(kid: kid, hasKids: hasKids,
                                    terminals: TreeFolds.terminals(of: kid.terminal.address, in: parent.row.tree))
             }
+            .tutorialAnchor(.tree(parent.row.terminal?.address ?? ""))
         case .record(let record, let parent):
             // No terminal of its own: no swipes, no menu, never selected; a tap opens its terminal.
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
                          edgeSwipesOnly: false, tap: { controller.open(record, in: parent.row) }) {
                 PhoneRecordRowContent(kid: record)
             }
+            .tutorialAnchor(.tree(parent.row.terminal?.address ?? ""))
         case .header(let title):
             Text(title)
                 .font(.ui(12))

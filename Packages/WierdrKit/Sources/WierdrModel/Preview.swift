@@ -1,7 +1,8 @@
 import Foundation
 
 /// A populated `Workspace` without a connection, for SwiftUI previews,
-/// screenshots and the app's demo mode. Mirrors the user's real desktop.
+/// screenshots and the app's demo mode. Mirrors the user's real desktop, its titles in
+/// English as the interface is (the tour is taken on it).
 extension Workspace {
     public static func preview() -> Workspace {
         let ws = Workspace()
@@ -25,7 +26,7 @@ extension Workspace {
 
         var terms: [TerminalInfo] = [
             TerminalInfo(address: "t5w", title: "π - wierdr", cwd: "/Users/mentor/me/dev/wierdr", processName: "pi",
-                         program: pi, status: .working, state: "working", message: "Wierdr iPad-приложение для herdr-core",
+                         program: pi, status: .working, state: "working", message: "Wierdr, an iPad app for herdr-core",
                          app: "pi", turn: 3, statusChangedAt: now.addingTimeInterval(-56),
                          meta: meta("Opus 5.5", "xhigh", 59_400, subagents: 1)),
             // t5w's sub-agents (hc run): a reviewer that started its own helper and a
@@ -53,13 +54,13 @@ extension Workspace {
                          state: "blocked", message: "Allow reading ~/.ssh/config?", app: "claude-code", turn: 1,
                          statusChangedAt: now.addingTimeInterval(-12), parent: "t5w"),
             TerminalInfo(address: "t6a", title: "π - herdr-app", cwd: "/Users/mentor/me/dev/herdr-app", processName: "pi",
-                         program: pi, status: .idle, state: "idle", message: "Исходники мобильного приложения herdr",
+                         program: pi, status: .idle, state: "idle", message: "Read the herdr mobile app's sources",
                          app: "pi", turn: 4, statusChangedAt: now.addingTimeInterval(-28 * 60),
                          labels: ["herdr.seen": "4"], meta: meta("Opus 5.5", "high", 49_700, cacheLeft: -10)),
             TerminalInfo(address: "t6b", title: "lazygit", cwd: "/Users/mentor/.local/share/chezmoi", processName: "lazygit",
                          program: lazygit),
             TerminalInfo(address: "t7a", title: "π - wierd-limits", cwd: "/Users/mentor/me/dev/wierd-limits", processName: "pi",
-                         program: pi, status: .done, state: "idle", message: "Установка мода herdr из репозитория",
+                         program: pi, status: .done, state: "idle", message: "Install the herdr mod from the repo",
                          app: "pi", turn: 2, statusChangedAt: now.addingTimeInterval(-3 * 3600),
                          meta: meta("Opus 5.5", "high", 22_800, cacheLeft: 20)),
             TerminalInfo(address: "t7b", title: "zsh", cwd: "/Users/mentor/me/dev/wierd-limits", processName: "zsh", program: zsh),

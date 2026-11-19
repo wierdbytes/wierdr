@@ -24,10 +24,11 @@ struct SidebarView: View {
             SpacesList(topInset: safeTop, bottomInset: headerHeight)
                 .overlay {
                     // The tour's pull to Go to: the list between the status bar and the header.
+                    // (Marked inside its padding: a background takes the padded frame.)
                     Color.clear
+                        .tutorialAnchor(.list)
                         .padding(.top, safeTop)
                         .padding(.bottom, headerHeight)
-                        .tutorialAnchor(.list)
                         .allowsHitTesting(false)
                 }
             PhoneEdgeFade(edge: .top, height: PhoneEdgeFade.statusBar(safeTop))

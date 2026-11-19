@@ -184,6 +184,7 @@ struct PhoneSwipeButtons: View {
                             .foregroundStyle(action.iconColor)
                             .offset(x: iconShift)
                     }
+                    .tutorialAnchor(.swipeButton(action.id))
                 if !action.fillsRow {
                     Text(action.title)
                         .font(.system(size: 11))

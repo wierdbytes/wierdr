@@ -1,18 +1,24 @@
 import SwiftUI
+import WierdrModel
 
-/// A step's hint: where it is in the tour and Skip, its title and text, and what to do:
-/// the gesture to make (the pointer shows it on the anchor) or Next. The welcome card
+/// A step's hint, in three parts: where it is (its chapter, "2 of 4", a segment per
+/// chapter) and Skip; what it shows (title, a sentence or two, a list, small print); and
+/// what to do (the action by its gesture's symbol, ✓ once done) or Next. The welcome card
 /// starts the tour or not; the last one adds your Mac or keeps you in the demo. Skip asks
-/// first, in the card.
+/// first, in the card. Its text follows Dynamic Type (up to the first accessibility size).
 struct TutorialCard: View {
     var step: TutorialStep
-    /// 1-based.
-    var number: Int
-    var count: Int
+    var progress: (chapter: TutorialChapter, number: Int, count: Int)?
     /// The step's anchor didn't show: Next instead of waiting for the gesture.
     var lost: Bool
+    /// The part of the step under way (its action instead of the step's).
+    var phase: TutorialPhase?
+    /// Done: ✓ in place of the action.
+    var succeeded: Bool
 
     @Environment(\.theme) private var theme
+    /// A bullet's mark: as tall as its text's first line.
+    @ScaledMetric(relativeTo: .subheadline) private var lineHeight: CGFloat = 20
 
     var body: some View {
         let tour = Tutorial.shared
@@ -29,47 +35,130 @@ struct TutorialCard: View {
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(theme.border, lineWidth: 1))
         .shadow(color: .black.opacity(theme.isDark ? 0.45 : 0.18), radius: 20, y: 8)
         .animation(.snappy(duration: 0.25), value: tour.confirmingSkip)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
     }
 
     @ViewBuilder
     private var content: some View {
-        if step.kind == .normal { progress.padding(.bottom, 10) }
+        if step.kind == .normal, let progress { progressView(progress).padding(.bottom, 12) }
         Text(step.title)
-            .font(.system(size: 17, weight: .semibold))
+            .font(.headline)
             .foregroundStyle(theme.foreground)
             .accessibilityAddTraits(.isHeader)
-        Text(step.text)
-            .font(.system(size: 15))
-            .foregroundStyle(theme.muted)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 4)
+        if !step.text.isEmpty {
+            Text(step.text)
+                .font(.subheadline)
+                .foregroundStyle(theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
+        }
+        if !step.bullets.isEmpty {
+            bullets.padding(.top, step.text.isEmpty ? 8 : 10)
+        }
+        if let note = step.note {
+            Text(note)
+                .font(.footnote)
+                .foregroundStyle(theme.dim)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+        }
         actions.padding(.top, 14)
     }
 
-    /// "4 of 25", a bar, and Skip.
-    private var progress: some View {
-        HStack(spacing: 10) {
-            Text("\(number) of \(count)")
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
-                .foregroundStyle(theme.dim)
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(theme.border)
-                    Capsule().fill(theme.accent)
-                        .frame(width: geo.size.width * CGFloat(number) / CGFloat(max(1, count)))
+    // MARK: Where it is
+
+    /// "Someone needs you · 2 of 4" and Skip; under them a segment per chapter, the ones
+    /// done full, this one by its steps.
+    private func progressView(_ p: (chapter: TutorialChapter, number: Int, count: Int)) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("\(p.chapter.title) \u{00B7} \(p.number) of \(p.count)")
+                    .font(.caption.weight(.medium).monospacedDigit())
+                    .foregroundStyle(theme.dim)
+                    .lineLimit(1)
+                    .accessibilityLabel("\(p.chapter.title), step \(p.number) of \(p.count)")
+                Spacer(minLength: 8)
+                Button("Skip") { Tutorial.shared.confirmingSkip = true }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(theme.muted)
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Ends the tour")
+            }
+            HStack(spacing: 4) {
+                ForEach(TutorialChapter.allCases) { chapter in
+                    let fill: CGFloat = chapter.rawValue < p.chapter.rawValue ? 1
+                        : chapter == p.chapter ? CGFloat(p.number) / CGFloat(max(1, p.count)) : 0
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(theme.border)
+                            Capsule().fill(theme.accent).frame(width: geo.size.width * fill)
+                        }
+                    }
                 }
             }
             .frame(height: 3)
             .accessibilityHidden(true)
-            Button("Skip") { Tutorial.shared.confirmingSkip = true }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(theme.muted)
-                .buttonStyle(.plain)
-                .accessibilityHint("Ends the tour")
         }
     }
+
+    // MARK: What it shows
+
+    private var bullets: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(Array(step.bullets.enumerated()), id: \.offset) { _, bullet in
+                HStack(alignment: .top, spacing: 10) {
+                    mark(bullet.mark)
+                        .frame(width: 24, height: lineHeight)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(bullet.text)
+                            .font(.subheadline)
+                            .foregroundStyle(theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if bullet.legend { legend }
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mark(_ mark: TutorialBullet.Mark) -> some View {
+        switch mark {
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(theme.accent)
+        case .icon(let name):
+            Icon(name, size: 15, color: theme.accent)
+        case .text(let text):
+            Text(text)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(theme.accent)
+                .lineLimit(1)
+                .fixedSize()
+        }
+    }
+
+    /// The statuses' colors, as the list draws them.
+    private var legend: some View {
+        HStack(spacing: 12) {
+            ForEach([(AgentStatus.blocked, "needs you"), (.done, "done"), (.working, "working")], id: \.1) { status, label in
+                HStack(spacing: 5) {
+                    Circle().fill(theme.color(for: status)).frame(width: 8, height: 8)
+                    Text(label)
+                        .font(.footnote)
+                        .foregroundStyle(theme.muted)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: What to do
 
     @ViewBuilder
     private var actions: some View {
@@ -88,23 +177,39 @@ struct TutorialCard: View {
                 primary(Self.hasHosts ? "Back to Hosts" : "Add My Mac") { tour.finishAddingHost() }
             }
         case .normal:
-            HStack {
-                if let gesture = step.gesture, !lost {
-                    Label(gesture.label, systemImage: gesture.symbol)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(theme.accent)
-                        .labelStyle(.titleAndIcon)
-                } else if step.free {
-                    Text("Waiting for you")
-                        .font(.system(size: 14))
-                        .foregroundStyle(theme.dim)
+            HStack(alignment: .center, spacing: 10) {
+                if succeeded {
+                    Label("Done", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(theme.color(for: .done))
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                } else if !lost, let action = phase?.action ?? step.action {
+                    Label {
+                        Text(action).fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: symbol)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(theme.accent)
+                    .transition(.opacity)
+                    .id(action)
                 }
-                Spacer()
-                if step.gesture == nil && !step.free || lost {
-                    primary(number == count ? "Done" : "Next") { tour.next() }
+                Spacer(minLength: 8)
+                if !succeeded, step.isExplanation || lost {
+                    primary("Next") { tour.next() }
                 }
             }
+            // As tall as Next where it is.
+            .frame(minHeight: !succeeded && (step.isExplanation || lost) ? 38 : nil)
+            .animation(.snappy(duration: 0.25), value: succeeded)
+            .animation(.easeOut(duration: 0.2), value: phase?.action)
         }
+    }
+
+    /// The action's: its phase's own, its gesture's (the pointer resting: an ellipsis).
+    private var symbol: String {
+        if let phase { return phase.symbol ?? phase.gesture?.symbol ?? "ellipsis" }
+        return step.gesture?.symbol ?? "hand.tap.fill"
     }
 
     /// Asking before the tour ends.
@@ -112,11 +217,12 @@ struct TutorialCard: View {
     private var confirm: some View {
         let tour = Tutorial.shared
         Text("End the tour?")
-            .font(.system(size: 17, weight: .semibold))
+            .font(.headline)
             .foregroundStyle(theme.foreground)
-        Text("You can take it again from Settings.")
-            .font(.system(size: 15))
+        Text("You can take it again from the host list or Settings.")
+            .font(.subheadline)
             .foregroundStyle(theme.muted)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 4)
         HStack {
             secondary("Continue") { tour.confirmingSkip = false }
@@ -129,10 +235,10 @@ struct TutorialCard: View {
     private func primary(_ title: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(theme.accentForeground)
                 .padding(.horizontal, 18)
-                .frame(height: 38)
+                .frame(minHeight: 38)
                 .background(theme.accent, in: Capsule())
                 .contentShape(Capsule())
         }
@@ -142,9 +248,9 @@ struct TutorialCard: View {
     private func secondary(_ title: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(theme.muted)
-                .frame(height: 38)
+                .frame(minHeight: 38)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

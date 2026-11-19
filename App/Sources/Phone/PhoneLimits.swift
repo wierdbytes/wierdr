@@ -71,6 +71,7 @@ private struct PhoneLimitAccount: View {
         .buttonStyle(AttachPressStyle())
         .popover(isPresented: $showsLimits, arrowEdge: .bottom) {
             PhoneLimitsPopover(id: account.id, multi: multi)
+                .tutorialAnchor(.limitsPopover)
                 .environment(controller)
                 .environment(\.theme, theme)
                 .presentationCompactAdaptation(.popover)
