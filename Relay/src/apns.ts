@@ -14,10 +14,18 @@ export interface APNsConfig {
 }
 
 /** Where a JWT is kept between isolates: APNs refuses a provider token renewed more
- *  often than every 20 minutes (`TooManyProviderTokenUpdates`). */
+ *  often than every 20 minutes (`TooManyProviderTokenUpdates`). `offer` keeps the first
+ *  token of a window (and key) and returns whichever is kept; `clear` drops it. */
 export interface TokenStore {
-  get(): Promise<{ iat: number; token: string } | null>;
-  put(iat: number, token: string): Promise<void>;
+  get(): Promise<StoredToken | null>;
+  offer(t: StoredToken): Promise<StoredToken | null>;
+  clear(): Promise<void>;
+}
+
+export interface StoredToken {
+  kid: string;
+  iat: number;
+  token: string;
 }
 
 export class APNsFailure extends Error {
@@ -29,7 +37,9 @@ export class APNsFailure extends Error {
 /** A JWT lasts its 30-minute window: every isolate in it signs the same claims, and the
  *  first one's token is shared through the store. */
 const WINDOW = 30 * 60;
-let cached: { iat: number; token: string; keyId: string } | null = null;
+let cached: StoredToken | null = null;
+/** How long a push-to-start may wait in APNs for a phone that's off line. */
+const START_EXPIRATION = 10 * 60;
 
 export class APNs {
   constructor(
@@ -41,10 +51,12 @@ export class APNs {
 
   async token(): Promise<string> {
     const iat = Math.floor(this.now() / WINDOW) * WINDOW;
-    if (cached && cached.iat === iat && cached.keyId === this.config.keyId) return cached.token;
+    const kid = this.config.keyId;
+    const fits = (t: StoredToken | null): t is StoredToken => !!t && t.iat === iat && t.kid === kid;
+    if (fits(cached)) return cached.token;
     const stored = await this.store.get();
-    if (stored && stored.iat === iat) {
-      cached = { ...stored, keyId: this.config.keyId };
+    if (fits(stored)) {
+      cached = stored;
       return stored.token;
     }
     const key = await crypto.subtle.importKey("pkcs8", pemBody(this.config.key), { name: "ECDSA", namedCurve: "P-256" },
@@ -53,10 +65,11 @@ export class APNs {
       utf8(JSON.stringify({ iss: this.config.teamId, iat })),
     )}`;
     const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, utf8(input)));
-    const token = `${input}.${b64url(sig)}`;
-    await this.store.put(iat, token);
-    cached = { iat, token, keyId: this.config.keyId };
-    return token;
+    const mine = { kid, iat, token: `${input}.${b64url(sig)}` };
+    // Two isolates in the same window: the first one stored wins, and both use it.
+    const kept = await this.store.offer(mine);
+    cached = fits(kept) ? kept : mine;
+    return cached.token;
   }
 
   private host(env: APNsEnv) {
@@ -82,6 +95,11 @@ export class APNs {
     try {
       reason = (JSON.parse(text) as { reason?: string }).reason ?? reason;
     } catch {}
+    if (reason === "InvalidProviderToken" || reason === "ExpiredProviderToken") {
+      // A token APNs won't take: the next call signs a new one.
+      cached = null;
+      await this.store.clear();
+    }
     throw new APNsFailure(r.status, reason);
   }
 
@@ -91,6 +109,7 @@ export class APNs {
         "apns-topic": `${this.config.bundle}.push-type.liveactivity`,
         "apns-push-type": "liveactivity",
         "apns-priority": String(priority),
+        "apns-expiration": String(Math.floor(this.now()) + START_EXPIRATION),
       },
       body: payload,
     });
@@ -117,6 +136,16 @@ export class APNs {
     const id = r.headers.get("apns-channel-id");
     if (!id) throw new APNsFailure(r.status, "NoChannelId");
     return id;
+  }
+
+  /** Every channel the app has in `env` (APNs' `all-channels`). */
+  async listChannels(env: APNsEnv): Promise<string[]> {
+    const r = await this.send(`${this.manage(env)}/1/apps/${this.config.bundle}/all-channels`, {
+      method: "GET",
+      headers: {},
+    });
+    const body = (await r.json()) as { channels?: unknown };
+    return Array.isArray(body.channels) ? body.channels.filter((c): c is string => typeof c === "string") : [];
   }
 
   async deleteChannel(env: APNsEnv, channel: string): Promise<void> {

@@ -52,6 +52,7 @@
 		6679ED6C6B8022148808B45C /* PhoneKeyPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56720A2FB2275CAC4539183 /* PhoneKeyPanel.swift */; };
 		6906CB2012BEE68B90983619 /* LICENSE-SymbolsNerdFont.txt in Resources */ = {isa = PBXBuildFile; fileRef = DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */; };
 		7A57026423B9387BD4E6A220 /* Device.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0666454A0F3654CFD8BB3434 /* Device.swift */; };
+		7BA850172F2779C55060DE13 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 5414B4EB3559CA74F9238D6D /* SwiftTerm */; };
 		7CC2C3A024443CF62DBEE2E2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52EDFAC9EB0534459E6950A3 /* SettingsView.swift */; };
 		818FF89F7C15CD20E61479AF /* DebugAutoConnect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E32A6DFB0783950D3599945 /* DebugAutoConnect.swift */; };
 		8377F88C268CF5DD0D793B99 /* Fonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12305F8F403DDBD0CA945AC3 /* Fonts.swift */; };
@@ -69,7 +70,7 @@
 		9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD1D033D2D7C97DEF34DCD0 /* Previews.swift */; };
 		9E306F2CA9F4E2F07E8C1467 /* ListMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11F7172C86560D747AF38A0E /* ListMenu.swift */; };
 		9F4371D40DBE38454BC60FC8 /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A94262DB139809864F08002 /* AppServices.swift */; };
-		A33C61072ABF9838EE2A68CD /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 5414B4EB3559CA74F9238D6D /* SwiftTerm */; };
+		A33C61072ABF9838EE2A68CD /* WierdrRelay in Frameworks */ = {isa = PBXBuildFile; productRef = 196F23366A89D8810A5E9A1C /* WierdrRelay */; };
 		A5A665F63667AD58A3437D8E /* HostSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B9899D1F0993F0A4EEFB4B /* HostSession.swift */; };
 		A8A992B35F53658971A79996 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F884493E41282F237E5D6C75 /* Assets.xcassets */; };
 		AF982C4C42B0466BC0894351 /* PhoneListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CAC83BAAFE0CB19F2F6FBF /* PhoneListRow.swift */; };
@@ -242,7 +243,8 @@
 				2603EB8A5D761C502BED791F /* HerdrSSH in Frameworks */,
 				57035D2E92266855712F81FF /* WierdrModel in Frameworks */,
 				2C98A2A2E414AC5E23D584D7 /* WierdrActivity in Frameworks */,
-				A33C61072ABF9838EE2A68CD /* SwiftTerm in Frameworks */,
+				A33C61072ABF9838EE2A68CD /* WierdrRelay in Frameworks */,
+				7BA850172F2779C55060DE13 /* SwiftTerm in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -547,6 +549,7 @@
 				8129A5BF2F3516F166B530D1 /* HerdrSSH */,
 				FAD500E79D2A09A7B26072EE /* WierdrModel */,
 				7A12E64658370AD428D4E972 /* WierdrActivity */,
+				196F23366A89D8810A5E9A1C /* WierdrRelay */,
 				5414B4EB3559CA74F9238D6D /* SwiftTerm */,
 			);
 			productName = Wierdr;
@@ -813,7 +816,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 84;
+				CURRENT_PROJECT_VERSION = 85;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -900,7 +903,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 84;
+				CURRENT_PROJECT_VERSION = 85;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1026,6 +1029,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		196F23366A89D8810A5E9A1C /* WierdrRelay */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WierdrRelay;
+		};
 		5414B4EB3559CA74F9238D6D /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = EE2D5E6ADC3BB968AFE880FC /* XCRemoteSwiftPackageReference "SwiftTerm" */;

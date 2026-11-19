@@ -4,6 +4,7 @@ import HerdrCore
 import Observation
 import UIKit
 import WierdrActivity
+import WierdrRelay
 
 /// The app's part in the agents Live Activity, which `wierdr-push` on the Mac
 /// starts, updates and ends through APNs: this device's push-to-start token goes
@@ -98,20 +99,26 @@ final class LiveActivities {
         sealKid = nil
         Task { [weak self] in
             let kid = await Self.keepSealKey(from: core)
-            if let token = self?.token { _ = await RelayRegistration.shared.grant(token: token, env: Self.apnsEnvironment) }
             guard let self, self.core === core else { return }
+            // The entry at once (with the grant kept), then again once the relay said
+            // whether the grant holds or gave a new one.
             self.sealKid = kid
             self.publish(fresh: true)
+            self.takeRelayGrant(check: true)
         }
     }
 
-    /// A new token while connected: its relay grant, then the entry again.
-    private func takeRelayGrant() {
-        guard let token, core != nil, RelayRegistration.shared.kept(token: token, env: Self.apnsEnvironment, within: 10 * 86400) == nil
-        else { return }
+    /// The relay grant for the token (`check`: asking the relay whether the kept one
+    /// holds), then the entry again if it changed.
+    private func takeRelayGrant(check: Bool = false) {
+        guard let token, core != nil, let relay = RelayRegistration.shared else { return }
+        let env = Self.apnsEnvironment
+        let before = relay.kept(token: token, env: env)
+        guard check || relay.kept(token: token, env: env, within: 10 * 86400) == nil else { return }
         Task { [weak self] in
-            guard await RelayRegistration.shared.grant(token: token, env: Self.apnsEnvironment) != nil else { return }
-            self?.publish()
+            let after = await relay.grant(token: token, env: env, check: check)
+            guard let self, after != before, self.token == token else { return }
+            self.publish(fresh: true)
         }
     }
 
@@ -153,7 +160,7 @@ final class LiveActivities {
             PushRegistry.Device(name: UIDevice.current.name, bundle: Bundle.main.bundleIdentifier ?? "pw.xff.wierdr",
                                 env: Self.apnsEnvironment, startToken: $0, updated: Date().timeIntervalSince1970,
                                 hasActivity: hasActivity, sealKid: sealKid,
-                                relayGrant: RelayRegistration.shared.kept(token: $0, env: Self.apnsEnvironment))
+                                relayGrant: RelayRegistration.shared?.kept(token: $0, env: Self.apnsEnvironment))
         } : nil
         if enabled && entry == nil { registration = .waiting; return }
         publishing?.cancel()
@@ -200,10 +207,11 @@ final class LiveActivities {
     }
 
     /// The APNs environment of this build's signature (`aps-environment` in the
-    /// embedded profile): `development` for Xcode and ad-hoc debugging builds.
+    /// embedded profile): `development` for Xcode and ad-hoc debugging builds. TestFlight
+    /// and the App Store re-sign without the profile, and push in production.
     static let apnsEnvironment: String = {
-        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
-              let data = try? Data(contentsOf: url),
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision") else { return "production" }
+        guard let data = try? Data(contentsOf: url),
               let start = data.range(of: Data("<?xml".utf8)),
               let end = data.range(of: Data("</plist>".utf8), in: start.lowerBound..<data.endIndex),
               let plist = try? PropertyListSerialization.propertyList(from: data[start.lowerBound..<end.upperBound], format: nil)

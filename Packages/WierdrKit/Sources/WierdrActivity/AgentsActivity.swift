@@ -67,7 +67,8 @@ public struct AgentsActivityAttributes: Codable, Hashable, Sendable {
             idle = try c.decode(Int.self, forKey: .idle)
             at = try c.decode(Double.self, forKey: .at)
             if try ActivitySeal.isSealed(decoder) {
-                let opened = try ActivitySeal.open([Agent].self, in: decoder, .agents)
+                let context = ActivitySealKey.agentsContext(blocked: blocked, done: done, working: working, idle: idle, at: at)
+                let opened = try ActivitySeal.open([Agent].self, in: decoder, .agents, context: context)
                 agents = opened ?? []
                 unreadable = opened == nil
             } else {

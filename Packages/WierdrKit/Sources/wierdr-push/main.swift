@@ -72,6 +72,10 @@ func status() async throws {
     }
     if state.running.isEmpty { print("running: nothing") }
     if !state.badTokens.isEmpty { print("refused tokens: \(state.badTokens.count)") }
+    if let oldest = state.pendingDeletes.map(\.since).min() {
+        let since = ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: oldest))
+        print("channels to delete: \(state.pendingDeletes.count) (queued since \(since); the daemon tries again)")
+    }
     let seal = (try? Data(contentsOf: ActivitySealKey.defaultURL)).flatMap { ActivitySealKey(base64: String(decoding: $0, as: UTF8.self)) }
     let c = try await connect()
     let sealDoc = try await c.getDoc(SealDocument.documentName)
@@ -86,8 +90,10 @@ func status() async throws {
     for (id, d) in registry.devices.sorted(by: { $0.key < $1.key }) {
         let when = Date(timeIntervalSince1970: d.updated)
         let key = d.sealKid == nil ? "no key" : d.sealKid == seal?.kid ? "key" : "old key \(d.sealKid!)"
-        let grant = d.relayGrantExpiry.map { "relay grant until \(ISO8601DateFormatter().string(from: $0).prefix(10))" }
-            ?? "no relay grant"
+        let until = d.relayGrantExpiry.map { " until \(ISO8601DateFormatter().string(from: $0).prefix(10))" } ?? ""
+        let grant = d.relayGrant == nil ? "no relay grant"
+            : state.badGrants.contains(d.relayGrant!) ? "relay grant refused\(until) (waiting for Wierdr to bring a new one)"
+            : "relay grant\(until)"
         print("device: \(d.name) \(d.bundle) \(d.env) token \(d.startToken.prefix(12))…, \(key), \(grant) (\(id), \(when))")
     }
     if registry.devices.isEmpty { print("devices: none (open Wierdr on the iPhone, connected to this Mac)") }

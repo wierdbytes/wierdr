@@ -77,11 +77,13 @@ public struct PushRegistry: Codable, Hashable, Sendable {
     }
 }
 
-/// The push relay's grants (`Relay/src/grants.ts`): `g1.<expiry unix seconds>.<mac>`.
+/// The push relay's grants (`Relay/src/grants.ts`): `g2.<expiry unix seconds>.<owner>.<mac>`
+/// (`owner`: the App Attest key it was given to); `g1.<expiry>.<mac>` before.
 public enum RelayGrant {
     public static func expiry(_ grant: String) -> Date? {
         let parts = grant.split(separator: ".")
-        guard parts.count == 3, parts[0] == "g1", let t = Double(parts[1]) else { return nil }
+        guard (parts.count == 4 && parts[0] == "g2") || (parts.count == 3 && parts[0] == "g1"),
+              let t = Double(parts[1]) else { return nil }
         return Date(timeIntervalSince1970: t)
     }
 }

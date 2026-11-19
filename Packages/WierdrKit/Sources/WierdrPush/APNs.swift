@@ -77,14 +77,27 @@ public final class APNsClient: Sendable {
         self.session = session
     }
 
+    /// How long APNs keeps a start for a phone that's off line. Without `apns-expiration` it
+    /// keeps it by its own policy, and a phone back hours later would start an activity
+    /// with a stale state on a channel long ended; the pusher starts it again instead.
+    static let startLifetime: TimeInterval = 600
+
     /// Starts a Live Activity on a device (`event: start` payload with `input-push-channel`).
     public func start(token: String, bundle: String, env: APNsEnvironment, payload: Data, priority: Int = 10) async throws {
+        _ = try await send(startRequest(token: token, bundle: bundle, env: env, payload: payload, priority: priority,
+                                        now: Date()))
+    }
+
+    /// The request `start` sends (tests read it).
+    func startRequest(token: String, bundle: String, env: APNsEnvironment, payload: Data, priority: Int,
+                      now: Date) -> URLRequest {
         var r = request("https://\(env.pushHost)/3/device/\(token)")
         r.setValue("\(bundle).push-type.liveactivity", forHTTPHeaderField: "apns-topic")
         r.setValue("liveactivity", forHTTPHeaderField: "apns-push-type")
         r.setValue(String(priority), forHTTPHeaderField: "apns-priority")
+        r.setValue(String(Int(now.timeIntervalSince1970 + Self.startLifetime)), forHTTPHeaderField: "apns-expiration")
         r.httpBody = payload
-        _ = try await send(r)
+        return r
     }
 
     /// Sends an update or end on a channel. The channel stores nothing: a device

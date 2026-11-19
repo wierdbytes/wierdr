@@ -11,6 +11,8 @@
 //   WierdrActivity  The agents Live Activity's data (attributes, content state)
 //                and the `wierdr-push` registration document: Foundation only,
 //                shared by the app, its widget extension and the Mac's pusher.
+//   WierdrRelay  The app's registration on Wierdr's push relay: App Attest, the grant
+//                for its push-to-start token (Foundation and CryptoKit; DeviceCheck in the app).
 //   WierdrPush   The Mac side of the Live Activity: the summary of a workspace,
 //                when to start/update/end it, APNs (token auth, broadcast channels).
 //   wierdr-cli   macOS-only debugging tool: talks to the local core through
@@ -29,6 +31,7 @@ let package = Package(
         .library(name: "WierdrModel", targets: ["WierdrModel"]),
         .library(name: "WierdrActivity", targets: ["WierdrActivity"]),
         .library(name: "WierdrPush", targets: ["WierdrPush"]),
+        .library(name: "WierdrRelay", targets: ["WierdrRelay"]),
         .executable(name: "wierdr-cli", targets: ["wierdr-cli"]),
         .executable(name: "wierdr-push", targets: ["wierdr-push"]),
     ],
@@ -66,6 +69,10 @@ let package = Package(
             swiftSettings: swift5
         ),
         .target(
+            name: "WierdrRelay",
+            swiftSettings: swift5
+        ),
+        .target(
             name: "WierdrPush",
             dependencies: [
                 "HerdrCore", "WierdrModel", "WierdrActivity",
@@ -95,7 +102,7 @@ let package = Package(
         ),
         .testTarget(
             name: "WierdrPushTests",
-            dependencies: ["WierdrPush", "WierdrActivity", "WierdrModel", "HerdrCore",
+            dependencies: ["WierdrPush", "WierdrActivity", "WierdrModel", "HerdrCore", "WierdrRelay",
                            .product(name: "Crypto", package: "swift-crypto")],
             swiftSettings: swift5
         ),

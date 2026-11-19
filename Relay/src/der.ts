@@ -139,6 +139,14 @@ export function parseCertificate(der: Uint8Array): Certificate {
   };
 }
 
+/** Whether `basicConstraints` (2.5.29.19) says the certificate is a CA (absent: not one). */
+export function isCA(cert: Certificate): boolean {
+  const ext = cert.extensions.get("2.5.29.19");
+  if (!ext) return false;
+  const [first] = children(readTLV(ext));
+  return first?.tag === 0x01 && first.value.length === 1 && first.value[0] !== 0;
+}
+
 const CURVES: Record<string, { name: string; size: number }> = {
   "1.2.840.10045.3.1.7": { name: "P-256", size: 32 },
   "1.3.132.0.34": { name: "P-384", size: 48 },

@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// The agents Live Activity, sealed for the phone: APNs (and a relay, later) see the
+/// The agents Live Activity, sealed for the phone: APNs and the push relay see the
 /// counts but not the agents' titles, spaces, models, machines or addresses, nor the
 /// computer's name.
 ///
@@ -13,8 +13,12 @@ import Foundation
 /// keychain, but reads the App Group, the locked phone too (see
 /// docs/research/push-relay.md).
 ///
-/// A sealed value is `base64(AES-GCM(zlib(JSON)))` (nonce ‖ ciphertext ‖ tag), its
-/// purpose and key id authenticated with it, next to `"kid"` in the payload.
+/// A sealed value is `base64(AES-GCM(padded(zlib(JSON))))` (nonce ‖ ciphertext ‖ tag):
+/// the compressed JSON after its 4-byte length, zeros up to a multiple of 64 bytes (so
+/// the length tells less); authenticated with it are its purpose, the key id and what it
+/// goes with in the open (`context`: the agents' seal is bound to the counts and time
+/// beside it, so those can't be changed or a seal moved to another push), next to
+/// `"kid"` in the payload.
 public struct ActivitySealKey: Sendable {
     /// The key's id: the first 8 hex digits of its SHA-256 (which key opens a seal).
     public let kid: String
@@ -39,23 +43,37 @@ public struct ActivitySealKey: Sendable {
     /// What a seal is of: a seal of one can't pass for the other.
     public enum Purpose: String, Sendable { case agents, attributes }
 
-    public func seal<T: Encodable>(_ value: T, _ purpose: Purpose) throws -> String {
+    public func seal<T: Encodable>(_ value: T, _ purpose: Purpose, context: String = "") throws -> String {
         let plain = try JSONEncoder().encode(value)
         let packed = try (plain as NSData).compressed(using: .zlib) as Data
-        let box = try AES.GCM.seal(packed, using: key, authenticating: Self.aad(purpose, kid))
+        var padded = Data(count: 4)
+        padded.withUnsafeMutableBytes { $0.storeBytes(of: UInt32(packed.count).bigEndian, as: UInt32.self) }
+        padded += packed
+        padded += Data(count: (64 - padded.count % 64) % 64)
+        let box = try AES.GCM.seal(padded, using: key, authenticating: Self.aad(purpose, kid, context))
         return box.combined!.base64EncodedString()
     }
 
-    public func open<T: Decodable>(_ type: T.Type, _ text: String, _ purpose: Purpose) -> T? {
+    public func open<T: Decodable>(_ type: T.Type, _ text: String, _ purpose: Purpose, context: String = "") -> T? {
         guard let data = Data(base64Encoded: text),
               let box = try? AES.GCM.SealedBox(combined: data),
-              let packed = try? AES.GCM.open(box, using: key, authenticating: Self.aad(purpose, kid)),
-              let plain = try? (packed as NSData).decompressed(using: .zlib) as Data else { return nil }
+              let padded = try? AES.GCM.open(box, using: key, authenticating: Self.aad(purpose, kid, context)),
+              padded.count >= 4 else { return nil }
+        let n = Int(padded.prefix(4).reduce(UInt32(0)) { $0 << 8 | UInt32($1) })
+        guard n <= padded.count - 4,
+              let plain = try? (Data(padded.dropFirst(4).prefix(n)) as NSData).decompressed(using: .zlib) as Data
+        else { return nil }
         return try? JSONDecoder().decode(T.self, from: plain)
     }
 
-    private static func aad(_ purpose: Purpose, _ kid: String) -> Data {
-        Data("wierdr-activity/\(purpose.rawValue)/\(kid)".utf8)
+    private static func aad(_ purpose: Purpose, _ kid: String, _ context: String) -> Data {
+        Data("wierdr-activity/\(purpose.rawValue)/\(kid)/\(context)".utf8)
+    }
+
+    /// What the agents' seal is bound to: the counts and time in the open beside it
+    /// (`at` by its bits, so no formatting can differ).
+    public static func agentsContext(blocked: Int, done: Int, working: Int, idle: Int, at: Double) -> String {
+        "\(blocked),\(done),\(working),\(idle),\(at.bitPattern)"
     }
 }
 
@@ -141,18 +159,19 @@ public enum ActivitySeal {
         return k
     }
 
-    /// Finds the key a payload names (tests put theirs here).
-    public nonisolated(unsafe) static var lookup: (String) -> ActivitySealKey? = { key(kid: $0) }
+    /// Finds the key a payload names (tests put theirs here, per task).
+    @TaskLocal public static var lookup: @Sendable (String) -> ActivitySealKey? = { key(kid: $0) }
 
     private static let lock = NSLock()
     private nonisolated(unsafe) static var cache: [String: ActivitySealKey] = [:]
 
     /// Opens what a payload sealed, if this phone has its key.
-    static func open<T: Decodable>(_ type: T.Type, in decoder: Decoder, _ purpose: ActivitySealKey.Purpose) throws -> T? {
+    static func open<T: Decodable>(_ type: T.Type, in decoder: Decoder, _ purpose: ActivitySealKey.Purpose,
+                                   context: String = "") throws -> T? {
         let c = try decoder.container(keyedBy: Keys.self)
         let text = try c.decode(String.self, forKey: .sealed)
         let kid = try c.decode(String.self, forKey: .kid)
-        return lookup(kid)?.open(type, text, purpose)
+        return lookup(kid)?.open(type, text, purpose, context: context)
     }
 
     /// Whether a payload is sealed.

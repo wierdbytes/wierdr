@@ -4,7 +4,7 @@
 // server" lists them.
 import { concat, equal, sha256, utf8, type Bytes } from "./bytes";
 import { decodeCBOR, decodeCBORAt, field, type CBOR } from "./cbor";
-import { children, ecdsaRaw, importECKey, parseCertificate, readTLV, signedBy } from "./der";
+import { children, ecdsaRaw, importECKey, isCA, parseCertificate, readTLV, signedBy } from "./der";
 
 export class AttestError extends Error {}
 
@@ -72,9 +72,21 @@ export interface Attested {
   env: AttestEnv;
   category?: number;
   bundleVersion?: string;
+  /** Apple's receipt (for the fraud metric, later). */
+  receipt?: Bytes;
 }
 
-export async function verifyAttestation(opts: {
+/** Any failure to read or check an attestation is an `AttestError` (a 403, not a 500). */
+export async function verifyAttestation(opts: Parameters<typeof attestation>[0]): Promise<Attested> {
+  try {
+    return await attestation(opts);
+  } catch (e) {
+    if (e instanceof AttestError) throw e;
+    throw new AttestError(`unreadable: ${(e as Error).message}`);
+  }
+}
+
+async function attestation(opts: {
   attestation: Uint8Array;
   /** The key identifier the app sends: SHA-256 of the public key. */
   keyId: Uint8Array;
@@ -95,12 +107,15 @@ export async function verifyAttestation(opts: {
   if (field(obj, "fmt") !== "apple-appattest") throw new AttestError("not apple-appattest");
   const x5c = field(field(obj, "attStmt"), "x5c");
   const authData = field(obj, "authData");
-  if (!Array.isArray(x5c) || x5c.length < 2 || !x5c.every((c) => c instanceof Uint8Array)) {
-    throw new AttestError("no certificate chain");
+  // App Attest sends the credential certificate and Apple's intermediate, nothing else.
+  if (!Array.isArray(x5c) || x5c.length !== 2 || !x5c.every((c) => c instanceof Uint8Array)) {
+    throw new AttestError("not a two-certificate chain");
   }
   if (!(authData instanceof Uint8Array)) throw new AttestError("no authData");
+  const receipt = field(field(obj, "attStmt"), "receipt");
 
-  // 1. The chain: credential certificate ← intermediate(s) ← Apple's root.
+  // 1. The chain: credential certificate ← intermediate ← Apple's root; only the
+  //    intermediate may be a CA, the credential certificate must not be one.
   const chain = [...(x5c as Uint8Array[]).map(parseCertificate), parseCertificate(opts.root)];
   for (let i = 0; i < chain.length; i++) {
     const c = chain[i];
@@ -109,6 +124,8 @@ export async function verifyAttestation(opts: {
       throw new AttestError(`certificate ${i} not signed by the next`);
     }
   }
+  if (isCA(chain[0])) throw new AttestError("the credential certificate is a CA");
+  if (!isCA(chain[1])) throw new AttestError("the intermediate isn't a CA");
   const cred = chain[0];
 
   // 2–4. The nonce in the credential certificate binds authData and the challenge.
@@ -133,7 +150,10 @@ export async function verifyAttestation(opts: {
   checkCategory(a);
 
   if (cred.curve !== "1.2.840.10045.3.1.7") throw new AttestError("not a P-256 key");
-  return { publicKey: cred.spki, env, category: a.category, bundleVersion: a.bundleVersion };
+  return {
+    publicKey: cred.spki, env, category: a.category, bundleVersion: a.bundleVersion,
+    receipt: receipt instanceof Uint8Array ? (receipt as Bytes) : undefined,
+  };
 }
 
 /** Checks an assertion over `clientData`; returns its counter (which must have grown). */
@@ -145,6 +165,15 @@ export async function verifyAssertion(opts: {
   appId: string;
   previousCounter: number;
 }): Promise<{ counter: number; category?: number; bundleVersion?: string }> {
+  try {
+    return await assertion(opts);
+  } catch (e) {
+    if (e instanceof AttestError) throw e;
+    throw new AttestError(`unreadable: ${(e as Error).message}`);
+  }
+}
+
+async function assertion(opts: Parameters<typeof verifyAssertion>[0]) {
   let obj: CBOR;
   try {
     obj = decodeCBOR(opts.assertion);

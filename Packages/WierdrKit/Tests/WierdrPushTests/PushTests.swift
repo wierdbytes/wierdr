@@ -221,9 +221,9 @@ private let channels = [lane.key: "CHAN=="]
     }
 
     func decode<T: Decodable>(_ type: T.Type, _ json: Any, keys: [ActivitySealKey]) throws -> T {
-        ActivitySeal.lookup = { kid in keys.first { $0.kid == kid } }
-        defer { ActivitySeal.lookup = { ActivitySeal.key(kid: $0) } }
-        return try JSONDecoder().decode(T.self, from: JSONSerialization.data(withJSONObject: json))
+        try ActivitySeal.$lookup.withValue({ kid in keys.first { $0.kid == kid } }) {
+            try JSONDecoder().decode(T.self, from: JSONSerialization.data(withJSONObject: json))
+        }
     }
 
     @Test func aSealedStartShowsOnlyCountsInTheOpen() throws {
@@ -501,7 +501,9 @@ private let channels = [lane.key: "CHAN=="]
         #expect(!d.same(as: phone))
     }
 
-    @MainActor @Test func throughTheRelayOnlyDevicesWithAGoodGrantGetPushes() {
+    /// A grant near its end still counts (the relay refuses an expired one, and the
+    /// device's activity shouldn't end a day early); a refused one doesn't.
+    @MainActor @Test func throughTheRelayOnlyDevicesWithAGrantNotRefusedGetPushes() {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("push-state-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }
         let pusher = Pusher(transport: relay, host: "mac", seal: .generate(), stateURL: url)
@@ -514,6 +516,99 @@ private let channels = [lane.key: "CHAN=="]
         pusher.devices = ["good": device("g1.1801000000.a"), "none": device(nil), "soon": device("g1.1800003600.b"),
                           "refused": device("g1.1801000000.c")]
         pusher.state.badGrants = ["g1.1801000000.c"]
-        #expect(Set(pusher.usableDevices(now: now).keys) == ["good"])
+        #expect(Set(pusher.usableDevices(now: now).keys) == ["good", "soon"])
+    }
+}
+
+/// The agents' seal is bound to the counts and time beside it, and padded.
+@Suite(.serialized) struct SealBindingTests {
+    let key = ActivitySealKey.generate()
+
+    func content(_ s: State) throws -> [String: Any] {
+        let data = ActivityPayload.update(state: s, alert: nil, stale: Date(), now: Date(), key: key)
+        let aps = try #require((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["aps"] as? [String: Any])
+        return try #require(aps["content-state"] as? [String: Any])
+    }
+
+    func read(_ json: [String: Any]) throws -> State {
+        try ActivitySeal.$lookup.withValue({ [key] kid in kid == key.kid ? key : nil }) {
+            try JSONDecoder().decode(State.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+    }
+
+    @Test func changedCountsOrTimeLeaveTheAgentsUnread() throws {
+        let s = state([agent("t1", .blocked), agent("t2", .working)], idle: 1)
+        var c = try content(s)
+        #expect(try read(c) == s)
+        c["blocked"] = 0
+        #expect(try read(c).unreadable, "a count changed on the way")
+        c = try content(s)
+        c["at"] = 1.0
+        #expect(try read(c).unreadable, "the time changed on the way")
+        // Another push's seal (other counts) doesn't open here either.
+        var other = try content(state([agent("t1", .working)]))
+        other["blocked"] = 1; other["working"] = 1
+        #expect(try read(other).unreadable)
+    }
+
+    @Test func aSealsLengthComesIn64ByteSteps() throws {
+        for n in 0..<6 {
+            let sealed = try key.seal((0..<n).map { agent("t\($0)", .working, title: String(repeating: "x", count: $0 * 7)) }, .agents)
+            let bytes = try #require(Data(base64Encoded: sealed))
+            #expect((bytes.count - 28) % 64 == 0, "nonce 12 + tag 16 around padded blocks")
+        }
+    }
+}
+
+/// Swift's payloads against the relay's checks: the relay's tests read
+/// `Relay/test/fixtures/swift-payloads.json`. `WIERDR_WRITE_FIXTURES=1 swift test`
+/// writes it; otherwise this checks its fields are still the ones Swift makes.
+@Suite struct RelayContractTests {
+    static let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Relay/test/fixtures/swift-payloads.json")
+
+    func payloads() -> [String: String] {
+        let key = ActivitySealKey.generate()
+        let now = Date(timeIntervalSince1970: 1_800_000_000.5)
+        let before = state([agent("t1", .working)], idle: 2)
+        let after = state([agent("lf/t9", .blocked, title: "Allow `rm -rf build`? " + String(repeating: "ж", count: 60)),
+                           agent("t1", .working), agent("t2", .done)], idle: 2)
+        let s = ActivityPayload.fitting(after, key: key)
+        let channel = "+sFfeOQ9EfEAAGoPFsFBMQ=="
+        let alert = Planner.alert(from: before, to: s)!
+        let text = { (d: Data) in String(decoding: d, as: UTF8.self) }
+        return [
+            "channel": channel,
+            "start": text(ActivityPayload.start(attributes: .init(host: String(repeating: "mentoair-", count: 30)), state: s,
+                                                channel: channel, alert: Planner().startAlert(s, sound: true),
+                                                stale: now.addingTimeInterval(1500), now: now, key: key)),
+            "update": text(ActivityPayload.update(state: s, alert: nil, stale: now.addingTimeInterval(1500), now: now, key: key)),
+            "update_alert": text(ActivityPayload.update(state: s, alert: alert, stale: now, now: now, key: key)),
+            "end": text(ActivityPayload.end(state: state([], idle: 4), dismissal: now, now: now, key: key)),
+        ]
+    }
+
+    /// A JSON value's shape: its keys, all the way down.
+    func shape(_ v: Any) -> String {
+        if let d = v as? [String: Any] { return "{" + d.keys.sorted().map { "\($0):\(shape(d[$0]!))" }.joined(separator: ",") + "}" }
+        if v is String { return "s" }
+        return "n"
+    }
+
+    @Test func theRelayGetsWhatSwiftMakes() throws {
+        let fresh = payloads()
+        if ProcessInfo.processInfo.environment["WIERDR_WRITE_FIXTURES"] == "1" {
+            let data = try JSONSerialization.data(withJSONObject: fresh, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: Self.url)
+            return
+        }
+        let kept = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: Self.url)) as? [String: String],
+                                "no \(Self.url.path): WIERDR_WRITE_FIXTURES=1 swift test")
+        for name in ["start", "update", "update_alert", "end"] {
+            let a = try JSONSerialization.jsonObject(with: Data(fresh[name]!.utf8))
+            let b = try JSONSerialization.jsonObject(with: Data(kept[name]!.utf8))
+            #expect(shape(a) == shape(b), "\(name) changed shape: WIERDR_WRITE_FIXTURES=1 swift test, then cd Relay && bun test")
+        }
     }
 }

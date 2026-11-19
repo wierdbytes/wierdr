@@ -11,7 +11,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.2.0"
-    CURRENT_PROJECT_VERSION: "84"
+    CURRENT_PROJECT_VERSION: "85"
 packages:
   WierdrKit:
     path: Packages/WierdrKit
@@ -34,6 +34,8 @@ targets:
         product: WierdrModel
       - package: WierdrKit
         product: WierdrActivity
+      - package: WierdrKit
+        product: WierdrRelay
       - package: SwiftTerm
       - target: WierdrWidgets
     settings:

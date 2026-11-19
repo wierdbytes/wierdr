@@ -24,6 +24,8 @@ public enum ActivityPayload {
         var aps = base(event: "start", state: state, now: now, key: key)
         aps["input-push-channel"] = channel
         aps["attributes-type"] = AgentsActivityAttributes.typeName
+        // The name is the Mac's to choose: kept short, so the sealed attributes stay small.
+        let attributes = AgentsActivityAttributes(host: String(attributes.host.prefix(100)))
         aps["attributes"] = key.map { sealed(attributes, .attributes, $0, open: [:]) } ?? json(attributes)
         aps["alert"] = alertJSON(alert)
         aps["stale-date"] = Int(stale.timeIntervalSince1970)
@@ -64,15 +66,17 @@ public enum ActivityPayload {
         guard let key else { return json(state) }
         var open = json(state) as? [String: Any] ?? [:]
         open["agents"] = nil
-        return sealed(state.agents, .agents, key, open: open)
+        let context = ActivitySealKey.agentsContext(blocked: state.blocked, done: state.done, working: state.working,
+                                                    idle: state.idle, at: state.at)
+        return sealed(state.agents, .agents, key, open: open, context: context)
     }
 
     /// `open` with `"sealed"` (the value) and `"kid"`.
     private static func sealed<T: Encodable>(_ value: T, _ purpose: ActivitySealKey.Purpose, _ key: ActivitySealKey,
-                                             open: [String: Any]) -> [String: Any] {
+                                             open: [String: Any], context: String = "") -> [String: Any] {
         var out = open
         // Sealing what was just encoded can't fail; an empty seal shows as unreadable.
-        out["sealed"] = (try? key.seal(value, purpose)) ?? ""
+        out["sealed"] = (try? key.seal(value, purpose, context: context)) ?? ""
         out["kid"] = key.kid
         return out
     }

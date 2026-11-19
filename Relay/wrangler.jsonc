@@ -1,13 +1,18 @@
-// Wierdr's push relay: docs/relay.md. Secrets (not here): APNS_KEY (the .p8 key, PEM)
-// and RELAY_SECRET (signs challenges and grants), set with `wrangler secret put`.
+// Wierdr's push relay: docs/relay.md. Secrets (not here), set with `wrangler secret put`:
+// APNS_KEY (the .p8 key, PEM), RELAY_SECRET (signs challenges and grants),
+// RELAY_SECRET_PREVIOUS (while rotating), ADMIN_TOKEN (the admin routes).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "wierdr-relay",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
-  "workers_dev": true,
+  // Only the custom domain: one host, under the zone's rules.
+  "workers_dev": false,
   "routes": [{ "pattern": "relay.wierdr.workat.dev", "custom_domain": true }],
-  "observability": { "enabled": true },
+  // Our own console lines only: invocation logs would keep every caller's address.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } },
+  // Channels past their grant are deleted, old rows pruned.
+  "triggers": { "crons": ["17 * * * *"] },
   "vars": {
     "BUNDLE": "pw.xff.wierdr",
     "TEAM_ID": "AUL4CCB2XY",
@@ -17,8 +22,10 @@
     { "binding": "DB", "database_name": "wierdr-relay", "database_id": "6e70f0b2-942d-4487-9129-76732dd3cfe4" }
   ],
   "ratelimits": [
-    // The app's calls: per client address (challenge, attest) and per App Attest key (devices).
+    // The app's calls: per client address (an IPv6 one by its /64) and per App Attest key.
     { "name": "LIMIT_APP", "namespace_id": "7101", "simple": { "limit": 20, "period": 60 } },
+    // Attestations (a certificate chain each): per client address.
+    { "name": "LIMIT_ATTEST", "namespace_id": "7103", "simple": { "limit": 5, "period": 60 } },
     // The daemon's calls: per device token or channel (status changes come at once, at most a few a minute).
     { "name": "LIMIT_PUSH", "namespace_id": "7102", "simple": { "limit": 60, "period": 60 } }
   ]

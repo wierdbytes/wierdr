@@ -87,3 +87,43 @@ test("iOS 27's authData extensions", () => {
   expect(a.category).toBe(3);
   expect(a.bundleVersion).toBe("1");
 });
+
+describe("the chain's shape", () => {
+  /** The attestation with its x5c replaced. */
+  async function withChain(x5c: Uint8Array[]) {
+    const o = await real("ios27_debug");
+    const map = decodeCBOR(o.attestation) as Map<unknown, unknown>;
+    // Re-encode: fmt, attStmt {x5c, receipt}, authData (definite lengths).
+    const enc = (v: unknown): number[] => {
+      const head = (major: number, n: number) =>
+        n < 24 ? [(major << 5) | n] : n < 256 ? [(major << 5) | 24, n] : n < 65536 ? [(major << 5) | 25, n >> 8, n & 255]
+          : [(major << 5) | 26, (n >>> 24) & 255, (n >> 16) & 255, (n >> 8) & 255, n & 255];
+      if (typeof v === "string") { const b = utf8(v); return [...head(3, b.length), ...b]; }
+      if (v instanceof Uint8Array) return [...head(2, v.length), ...v];
+      if (Array.isArray(v)) return [...head(4, v.length), ...v.flatMap(enc)];
+      if (v instanceof Map) return [...head(5, v.size), ...[...v].flatMap(([k, x]) => [...enc(k), ...enc(x)])];
+      throw new Error("unsupported");
+    };
+    const stmt = map.get("attStmt") as Map<unknown, unknown>;
+    stmt.set("x5c", x5c);
+    o.attestation = new Uint8Array(enc(map)) as Bytes;
+    return o;
+  }
+
+  test("re-encoded unchanged it still checks out (the encoder is right)", async () => {
+    const o = await real("ios27_debug");
+    await verifyAttestation(await withChain(chain(o.attestation)));
+  });
+
+  test("a chain of three (a leaf posing as an issuer) is refused", async () => {
+    const o = await real("ios27_debug");
+    const [leaf, intermediate] = chain(o.attestation);
+    expect(verifyAttestation(await withChain([leaf, leaf, intermediate]))).rejects.toThrow("two-certificate");
+  });
+
+  test("garbage certificates are an AttestError, not a crash", async () => {
+    const o = await real("ios27_debug");
+    expect(verifyAttestation(await withChain([new Uint8Array([0x30, 0x03, 1, 2, 3]), chain(o.attestation)[1]])))
+      .rejects.toBeInstanceOf(AttestError);
+  });
+});
