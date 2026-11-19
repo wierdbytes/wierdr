@@ -5,7 +5,7 @@ DERIVED  := build/DerivedData
 XCB      := xcodebuild -project Wierdr.xcodeproj -scheme Wierdr -derivedDataPath $(DERIVED) -skipPackagePluginValidation -skipMacroValidation
 BUNDLE_ID := pw.xff.wierdr
 
-.PHONY: project test sim sim-build sim-iphone device install install-iphone ipa clean
+.PHONY: project test sim sim-build sim-iphone device install install-iphone ipa testflight clean
 
 project:
 	xcodegen generate
@@ -44,6 +44,10 @@ install-iphone: device
 
 ipa: project
 	./scripts/make-ipa.sh
+
+# Archive and upload to App Store Connect (TestFlight); docs/BUILD.md.
+testflight:
+	./scripts/testflight.sh
 
 clean:
 	rm -rf build

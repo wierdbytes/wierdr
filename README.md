@@ -61,11 +61,13 @@ Wierdr is not on the App Store yet; a release is being prepared. Until then,
 
 1. In Wierdr, tap **Add Host**. Address: `your-mac.local` on the same Wi‑Fi, or the
    computer's Tailscale name. User: your user name on the computer (`whoami`). Sign in with:
-   **Password**. Then **Connect**.
+   **Password**. Then **Connect** and type the password: Wierdr asks for it each time and
+   never stores it.
 2. Confirm the host key. Its fingerprint should match the one this prints on the computer:
    `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`.
-3. In **Settings**, tap **Install This iPhone's Key on …** (iPad's on an iPad). Wierdr adds
-   its key to `~/.ssh/authorized_keys` and signs in with it from then on, without the password.
+3. After you sign in with the password, Wierdr offers its key: tap **Install This iPhone's
+   Key** (iPad's on an iPad; also in **Settings**). Wierdr adds its key to
+   `~/.ssh/authorized_keys` and signs in with it from then on, without the password.
 
 ### 4. Optional: more about each agent
 

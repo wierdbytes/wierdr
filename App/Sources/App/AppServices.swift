@@ -8,8 +8,9 @@ import WierdrModel
 /// Everything has a harmless default so the UI (and demo mode) runs today.
 struct AppServices {
     /// Opens a session to `host` and returns its live workspace (already
-    /// subscribed; `phase` reflects the connection). `password` is passed for
-    /// `.password` hosts (read from the Keychain by `loadPassword` if not given).
+    /// subscribed; `phase` reflects the connection). `password`: for `.password`
+    /// hosts, as the person typed it for this connection (never kept: the session
+    /// holds it in memory for its own reconnects, and drops it with itself).
     var connect: @MainActor (_ host: Host, _ password: String?) async throws -> Workspace
     /// Tears the session down.
     var disconnect: @MainActor (_ workspace: Workspace) async -> Void
@@ -19,9 +20,8 @@ struct AppServices {
     /// Creates the key if needed and returns its public part.
     var generateKey: @MainActor () async throws -> String
 
-    /// Stores/reads/deletes a host's password (Keychain).
-    var savePassword: @MainActor (_ host: Host.ID, _ password: String) -> Void
-    var loadPassword: @MainActor (_ host: Host.ID) -> String?
+    /// Deletes a host's password that builds before Build 89 kept in the Keychain
+    /// (passwords aren't kept any more).
     var deletePassword: @MainActor (_ host: Host.ID) -> Void
 
     /// The terminal view for a pane (SwiftTerm + attach stream when live).
@@ -47,8 +47,6 @@ struct AppServices {
         disconnect: { _ in },
         publicKey: { nil },
         generateKey: { throw AppError.notImplemented("Key generation is not implemented yet") },
-        savePassword: { _, _ in },
-        loadPassword: { _ in nil },
         deletePassword: { _ in },
         terminalViews: .demo
     )

@@ -4,10 +4,9 @@ import SwiftUI
 struct HostEditor: View {
     @State var host: Host
     var isNew: Bool
-    var onSave: (_ host: Host, _ password: String?) -> Void
+    var onSave: (_ host: Host) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var password = ""
     @State private var portText = ""
 
     var body: some View {
@@ -32,16 +31,12 @@ struct HostEditor: View {
                         Text("Password").tag(Host.Auth.password)
                     }
                     .pickerStyle(.segmented)
-                    if host.auth == .password {
-                        SecureField("Password", text: $password, prompt: Text(isNew ? "Password" : "Unchanged"))
-                            .textContentType(.password)
-                    }
                 } header: {
                     Text("Authentication")
                 } footer: {
                     Text(host.auth == .key
                          ? "Add this \(Device.kind)'s public key to ~/.ssh/authorized_keys on the computer."
-                         : "The password is stored in this \(Device.kind)'s Keychain.")
+                         : "Wierdr asks for the password each time it connects and doesn't keep it. Once connected, it can install this \(Device.kind)'s key there, so the next time needs none.")
                 }
 
                 if host.auth == .key {
@@ -57,7 +52,7 @@ struct HostEditor: View {
                         host.port = Int(portText) ?? 22
                         host.address = host.address.trimmingCharacters(in: .whitespaces)
                         host.user = host.user.trimmingCharacters(in: .whitespaces)
-                        onSave(host, host.auth == .password ? password : nil)
+                        onSave(host)
                         dismiss()
                     }
                     .disabled(host.address.trimmingCharacters(in: .whitespaces).isEmpty)

@@ -328,7 +328,7 @@ struct Endpoint: Hashable, Sendable {
         switch auth {
         case .key: return .key(try AppStores.keys.loadOrCreateIdentity())
         case .password(let password):
-            guard !password.isEmpty else { throw SessionError.failed("No password saved for this host. Edit it and enter the password.") }
+            guard !password.isEmpty else { throw SessionError.failed("No password given.") }
             return .password(password)
         }
     }

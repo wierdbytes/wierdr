@@ -53,6 +53,8 @@
 		6679ED6C6B8022148808B45C /* PhoneKeyPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A56720A2FB2275CAC4539183 /* PhoneKeyPanel.swift */; };
 		676EF61AE1D9EC7E298BCBC9 /* SetupViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADF32977148583B46049959F /* SetupViews.swift */; };
 		6906CB2012BEE68B90983619 /* LICENSE-SymbolsNerdFont.txt in Resources */ = {isa = PBXBuildFile; fileRef = DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */; };
+		6DBEC153CD8CCA0949B30FEE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2B972DC4EC4A5B89151D394E /* PrivacyInfo.xcprivacy */; };
+		77605BD7390ABA1AD31B3D31 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 56D82EC40808B602FFF8E656 /* PrivacyInfo.xcprivacy */; };
 		7A57026423B9387BD4E6A220 /* Device.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0666454A0F3654CFD8BB3434 /* Device.swift */; };
 		7BA850172F2779C55060DE13 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 5414B4EB3559CA74F9238D6D /* SwiftTerm */; };
 		7CC2C3A024443CF62DBEE2E2 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52EDFAC9EB0534459E6950A3 /* SettingsView.swift */; };
@@ -158,6 +160,7 @@
 		24C773688B33E3F0413C5204 /* KeyboardCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCover.swift; sourceTree = "<group>"; };
 		24CFA2C9F9D15FF3073EDD5A /* KeyPanelLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyPanelLayer.swift; sourceTree = "<group>"; };
 		2B68942611F05171A0763868 /* SpacesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesListView.swift; sourceTree = "<group>"; };
+		2B972DC4EC4A5B89151D394E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		2E36CF13C460CDEB0145C6CE /* WorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceView.swift; sourceTree = "<group>"; };
 		31CAC83BAAFE0CB19F2F6FBF /* PhoneListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneListRow.swift; sourceTree = "<group>"; };
 		351E2DA61EC61DF8DAEDBC58 /* LiveActivities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
@@ -171,6 +174,7 @@
 		44D0D83266FC227D2F050C23 /* WorkspaceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceCommands.swift; sourceTree = "<group>"; };
 		4FAB055678CBEED35D324983 /* SpacesList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesList.swift; sourceTree = "<group>"; };
 		52EDFAC9EB0534459E6950A3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		56D82EC40808B602FFF8E656 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		5823D0557BDD5B47A25FCE33 /* KeyboardFirstDismissal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardFirstDismissal.swift; sourceTree = "<group>"; };
 		5947DAF57B5949A202A62CE3 /* PhoneGoTo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneGoTo.swift; sourceTree = "<group>"; };
 		60C13DE55007AF44DEA645DC /* programs.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = programs.json; sourceTree = "<group>"; };
@@ -476,6 +480,7 @@
 				1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */,
 				F884493E41282F237E5D6C75 /* Assets.xcassets */,
 				FE150153042D0CA31A91D6D1 /* Info.plist */,
+				2B972DC4EC4A5B89151D394E /* PrivacyInfo.xcprivacy */,
 				DE26974C234B1E0F63F4FB12 /* WierdrWidgets.entitlements */,
 				057B9322AE6CCBE3260E5568 /* WierdrWidgets.swift */,
 			);
@@ -519,6 +524,7 @@
 			children = (
 				3FDE13B0AE2E033B2732E515 /* Assets.xcassets */,
 				B31D6E8D3C59D052EA1953BB /* Icons.xcassets */,
+				56D82EC40808B602FFF8E656 /* PrivacyInfo.xcprivacy */,
 				60C13DE55007AF44DEA645DC /* programs.json */,
 				C31BACBD440CB6BC0A75178C /* Fonts */,
 			);
@@ -649,6 +655,7 @@
 				6906CB2012BEE68B90983619 /* LICENSE-SymbolsNerdFont.txt in Resources */,
 				3DC5E946BB41856BBC6EED50 /* OFL-Geist.txt in Resources */,
 				663DD5DB3F4E821E4CBC1689 /* OFL-JetBrainsMono.txt in Resources */,
+				77605BD7390ABA1AD31B3D31 /* PrivacyInfo.xcprivacy in Resources */,
 				2A3D21E671673CE9B484D247 /* SymbolsNerdFont-Regular.ttf in Resources */,
 				47BF8AAE6DBDAC87A6FE6A20 /* programs.json in Resources */,
 			);
@@ -660,6 +667,7 @@
 			files = (
 				A8A992B35F53658971A79996 /* Assets.xcassets in Resources */,
 				4B704ED73B2F9DB9B717E328 /* Icons.xcassets in Resources */,
+				6DBEC153CD8CCA0949B30FEE /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -836,7 +844,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 88;
+				CURRENT_PROJECT_VERSION = 89;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -923,7 +931,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 88;
+				CURRENT_PROJECT_VERSION = 89;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

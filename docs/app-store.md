@@ -24,21 +24,22 @@ Apple Developer, Cloudflare или юридическое решение.
 
 - Принять действующие соглашения в developer account: раньше API отвечал
   `REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`.
-- Создать запись приложения для `pw.xff.wierdr`: SKU, основной язык.
+- **Сделано (2026‑11‑19):** соглашения приняты (валидация сборки проходит), запись
+  приложения Wierdr для `pw.xff.wierdr` создана.
 - Статус trader по EU Digital Services Act. Если trader, адрес, телефон и почта видны
   публично. Без статуса приложения в EU нет.
 - Если платно — соглашение, налоги, банк.
-- Сертификат Apple Distribution и профили App Store. Xcode с аккаунтом заводит их сам
-  (`make ipa` с `method app-store`, сейчас там `debugging`).
+- **Сделано:** подпись для App Store облачная, через ключ API. Профили Xcode заводит сам
+  (`make testflight`, [BUILD.md](BUILD.md#testflight)).
 
 ## 2. Код и сборка (код)
 
 - **Версия:** `MARKETING_VERSION` 0.2.0 → 1.0.0, номера сборок продолжаются.
-- **Манифест приватности.** `PrivacyInfo.xcprivacy` у приложения и у виджета сейчас нет, а
-  без него сборку отклонят. В нём:
-  - API, требующие причины: UserDefaults (CA92.1), даты файлов и т. п., если используются,
-    в том числе в SwiftNIO, SwiftTerm и swift‑crypto (проверить по бинарю);
-  - собранные данные (п. 5).
+- **Манифест приватности. Сделано:** `PrivacyInfo.xcprivacy` у приложения и у виджета.
+  - API, требующие причины, сверены по символам бинаря: UserDefaults (CA92.1), `stat` и
+    `fstat` (SwiftTerm, C617.1). У SwiftNIO и swift‑crypto свои манифесты.
+  - Собранные данные: Device ID, не связан с человеком, без трекинга. Ответы App Privacy
+    (п. 5) должны с ним совпасть.
 - **Шифрование.** Сейчас `ITSAppUsesNonExemptEncryption = NO`, а это, скорее всего,
   неверно: SSH (swift‑nio‑ssh) и AES‑GCM печати. Разобрать, идёт ли вся криптография через
   CryptoKit системы (swift‑crypto на платформах Apple вызывает её). От этого зависят

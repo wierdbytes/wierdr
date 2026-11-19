@@ -295,14 +295,75 @@ struct IntegrationRows: View {
     }
 }
 
-/// After the first connection to a host where something wants setting up (wierdrd not
-/// running, an integration missing from a harness there): what each is, and its button.
-/// Settings has the same rows for later (Daemon, Agent Integrations).
+/// Signed in with a password: the button that installs this device's key on the host
+/// (`AppModel.installKeyAndSwitch`), so the next connection needs none. Rows of the setup
+/// sheet's Sign In section; Settings → Connection has the same button.
+struct KeyInstallRows: View {
+    var host: String
+    @Environment(AppModel.self) private var app
+    @State private var installing = false
+    @State private var installed = false
+    @State private var error: String?
+
+    var body: some View {
+        LabeledContent {
+            HStack(spacing: 6) {
+                if installed {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).accessibilityHidden(true)
+                }
+                Text(installed ? "This \(Device.kind)'s Key" : "Password")
+            }
+        } label: {
+            Text("Signs In With")
+        }
+        if !installed {
+            Button {
+                install()
+            } label: {
+                HStack {
+                    Label("Install This \(Device.kind)'s Key", systemImage: "key")
+                    if installing { Spacer(); ProgressView() }
+                }
+            }
+            .disabled(installing)
+        }
+        if let error {
+            Label { Text(error).textSelection(.enabled) } icon: {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func install() {
+        installing = true
+        error = nil
+        Task {
+            do {
+                try await app.installKeyAndSwitch()
+                installed = true
+            } catch {
+                self.error = error.localizedDescription
+            }
+            installing = false
+        }
+    }
+}
+
+/// After a host's first connection, when something there wants setting up (wierdrd not
+/// running, an integration missing from a harness there), and after every sign-in with a
+/// password (the key, on top): what each is, and its button. Settings has the same rows
+/// for later (Connection, Daemon, Agent Integrations).
 struct HostSetupSheet: View {
     var daemon: DaemonState
     var integrations: IntegrationsState
     var host: String
+    /// This connection signed in with a password: the Sign In section (it stays once the
+    /// key is in, to say so).
+    var offersKey: Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         let daemonRows = DaemonRows(daemon: daemon, host: host)
@@ -326,6 +387,15 @@ struct HostSetupSheet: View {
                     .padding(.vertical, 8)
                 }
                 .listRowBackground(Color.clear)
+                if offersKey {
+                    Section {
+                        KeyInstallRows(host: host)
+                    } header: {
+                        Text("Sign In")
+                    } footer: {
+                        Text("Wierdr asks for the password each time and doesn't keep it. With this \(Device.kind)'s key in ~/.ssh/authorized_keys on \(host), it signs in without one.")
+                    }
+                }
                 Section {
                     daemonRows
                 } header: {
@@ -359,7 +429,7 @@ struct HostSetupSheet: View {
     }
 
     private var somethingOffered: Bool {
-        HostSetup.daemonWantsSetup(daemon.verdict) || integrations.status?.offers == true
+        app.signedInWithPassword || HostSetup.daemonWantsSetup(daemon.verdict) || integrations.status?.offers == true
     }
 }
 
@@ -373,19 +443,27 @@ enum HostSetup {
     }
 }
 
-/// Shows `HostSetupSheet` once per host: after its first connection's checks, when wierdrd
-/// or an integration there wants setting up.
+/// Shows `HostSetupSheet`: at once after a sign-in with a password (the key on top), every
+/// time; and once per host after its first connection's checks, when wierdrd or an
+/// integration there wants setting up. At most once per connection (this view lives as
+/// long as the session: `WorkspaceView` is made anew for each).
 struct SetupOffer: ViewModifier {
     @Environment(AppModel.self) private var app
     @Environment(LiveConnector.self) private var connector
     @State private var shown = false
+    /// Shown on this connection already (closed before the checks ended: not again).
+    @State private var presented = false
+    /// Read when this connection began: the key installed from the sheet keeps its section.
+    @State private var withPassword: Bool?
 
     func body(content: Content) -> some View {
         content
             .onChange(of: checksDone, initial: true) { _, _ in consider() }
+            .onChange(of: shown) { _, now in if now { presented = true } }
             .sheet(isPresented: $shown) {
                 if let session = connector.active, case .live(let host) = app.mode {
-                    HostSetupSheet(daemon: session.daemon, integrations: session.integrations, host: host.displayName)
+                    HostSetupSheet(daemon: session.daemon, integrations: session.integrations, host: host.displayName,
+                                   offersKey: withPassword ?? false)
                 }
             }
     }
@@ -398,7 +476,11 @@ struct SetupOffer: ViewModifier {
     static func key(_ host: Host.ID) -> String { "setup.checked.\(host.uuidString)" }
 
     private func consider() {
-        guard checksDone, case .live(let host) = app.mode, let session = connector.active else { return }
+        guard case .live(let host) = app.mode, let session = connector.active else { return }
+        if withPassword == nil { withPassword = host.auth == .password }
+        // A password sign-in: the key, at once, every connection.
+        if withPassword == true, !presented, !Tutorial.shared.isActive { shown = true }
+        guard checksDone else { return }
         let daemon = HostSetup.daemonWantsSetup(session.daemon.verdict)
         let integrations = session.integrations.status?.offers == true
         // Nothing known yet (both probes failed): ask again on the next connection.
@@ -411,7 +493,7 @@ struct SetupOffer: ViewModifier {
         #endif
         guard always || !UserDefaults.standard.bool(forKey: key) else { return }
         UserDefaults.standard.set(true, forKey: key)
-        guard !Tutorial.shared.isActive, daemon || integrations || always else { return }
+        guard !presented, !Tutorial.shared.isActive, daemon || integrations || always else { return }
         shown = true
     }
 }

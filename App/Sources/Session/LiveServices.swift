@@ -4,7 +4,7 @@ import HerdrSSH
 import WierdrModel
 
 /// Owns the live `HostSession` and provides the `AppServices` the UI uses:
-/// connect/disconnect, this device's SSH key, host passwords (Keychain) and
+/// connect/disconnect, this device's SSH key, clearing passwords older builds kept, and
 /// the live terminal views.
 @MainActor
 @Observable
@@ -23,12 +23,6 @@ final class LiveConnector {
             generateKey: {
                 _ = try AppStores.keys.loadOrCreateIdentity()
                 return Self.publicKeyLine() ?? ""
-            },
-            savePassword: { id, password in
-                try? AppStores.keys.savePassword(password, host: Self.passwordKey(id), port: 0, user: "wierdr")
-            },
-            loadPassword: { id in
-                (try? AppStores.keys.password(host: Self.passwordKey(id), port: 0, user: "wierdr")) ?? nil
             },
             deletePassword: { id in
                 try? AppStores.keys.deletePassword(host: Self.passwordKey(id), port: 0, user: "wierdr")

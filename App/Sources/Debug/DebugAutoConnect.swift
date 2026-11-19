@@ -30,7 +30,7 @@ enum DebugAutoConnect {
         host.port = hp.count > 1 ? Int(hp[1]) ?? 22 : 22
         host.user = userPart
         host.auth = .key
-        app.save(host, password: nil)
+        app.save(host)
         await app.connect(to: host)
         if let e = app.connectionError { print("[debug] connect failed: \(e)") }
         // `WIERDR_SELECT_SPACE=<name>`: show that space first (avoids resizing other terminals while testing).

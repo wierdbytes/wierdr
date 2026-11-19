@@ -79,9 +79,14 @@ One method per connection, the one configured:
   without a passphrase: `cp id_ed25519 /tmp/k && ssh-keygen -p -N "" -f /tmp/k`).
   Stored like a generated key (account `identity.ecdsa-p256` for P-256). One
   identity at a time.
-- **Password**. `SSHKeyStore.savePassword(_:host:port:user:)` /
-  `password(host:port:user:)` / `deletePassword(...)` keep it in the Keychain
-  (account `password.<user>@<host>:<port>`).
+- **Password**. The app never stores it: it asks on every connection (a
+  `SecureField` alert on the host list, `AppModel.passwordRequest`), and the
+  session keeps it in memory only for its own reconnects. After each password
+  sign-in the setup sheet offers to install the device's key
+  ([host-setup.md](host-setup.md)). `SSHKeyStore.savePassword(_:host:port:user:)` /
+  `password(host:port:user:)` / `deletePassword(...)` (account
+  `password.<user>@<host>:<port>`) stay in the package; the app only deletes, at
+  launch, what builds before 89 kept (account `password.wierdr@host-<host id>:0`).
 
 If the server refuses, `connect` throws `.authenticationFailed(methodsOffered:)`
 with what the server would accept (`publickey`, `password`), so the UI can say
@@ -186,7 +191,11 @@ scripts/test-sshd.sh stop
 ssh -p 2222 -i /tmp/wierdr-sshd/client_ed25519 -o UserKnownHostsFile=/dev/null 127.0.0.1 'echo ok'
 ```
 
-It only accepts your user, by key (a non-root sshd cannot check passwords).
+It only accepts your user, by key (a non-root sshd cannot check passwords). For
+password sign-in, `scripts/test-pwsshd.sh start` runs a throwaway asyncssh server on
+`127.0.0.1:2223` (your user, password `wierdr-test`, every exec is `hc connect`);
+installing the device's key from such a session writes this Mac's real
+`~/.ssh/authorized_keys`.
 From the iOS simulator: host `127.0.0.1`, port 2222, your user name, and either
 import `/tmp/wierdr-sshd/client_ed25519` or append the app's public key to
 `/tmp/wierdr-sshd/authorized_keys`.

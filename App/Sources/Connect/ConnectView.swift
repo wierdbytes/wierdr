@@ -5,6 +5,8 @@ struct ConnectView: View {
     @Environment(AppModel.self) private var app
     @State private var editing: Host?
     @State private var deleting: Host?
+    /// What's typed into the password prompt (cleared as it goes).
+    @State private var password = ""
 
     var body: some View {
         NavigationStack {
@@ -105,8 +107,8 @@ struct ConnectView: View {
                 }
             }
             .sheet(item: $editing) { host in
-                HostEditor(host: host, isNew: !app.hosts.hosts.contains { $0.id == host.id }) { saved, password in
-                    app.save(saved, password: password)
+                HostEditor(host: host, isNew: !app.hosts.hosts.contains { $0.id == host.id }) { saved in
+                    app.save(saved)
                 }
             }
             .onChange(of: app.addHostRequested, initial: true) { _, requested in
@@ -114,10 +116,23 @@ struct ConnectView: View {
                 app.addHostRequested = false
                 editing = Host()
             }
+            // A password host: asked for each connection, never kept.
+            .alert("Password for \(app.passwordRequest?.target ?? "")", isPresented: passwordShown, presenting: app.passwordRequest) { host in
+                SecureField("Password", text: $password)
+                    .textContentType(.password)
+                Button("Cancel", role: .cancel) { password = "" }
+                Button("Connect") {
+                    let typed = password
+                    password = ""
+                    Task { await app.connect(to: host, password: typed) }
+                }
+            } message: { _ in
+                Text("Wierdr doesn't keep it: it asks each time it connects.")
+            }
             .confirmationDialog("Delete \u{201C}\(deleting?.displayName ?? "")\u{201D}?", isPresented: deleteShown, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) { if let h = deleting { app.delete(h) } }
             } message: {
-                Text("Its saved password and screen layout are removed from this \(Device.kind).")
+                Text("Its screen layout is removed from this \(Device.kind).")
             }
         }
     }
@@ -140,6 +155,10 @@ struct ConnectView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
+    }
+
+    private var passwordShown: Binding<Bool> {
+        Binding(get: { app.passwordRequest != nil }, set: { if !$0 { app.passwordRequest = nil } })
     }
 
     private var deleteShown: Binding<Bool> {

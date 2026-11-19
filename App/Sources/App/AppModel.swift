@@ -22,12 +22,19 @@ final class AppModel {
     private(set) var failedHost: Host?
     /// The host list opens its editor for a new host (the tour's Add My Mac).
     var addHostRequested = false
+    /// A password host to connect to, waiting for its password: the host list asks for it.
+    /// Passwords are never kept, so every connection to such a host asks (Connect, Retry,
+    /// the iPhone's return to the last host at launch); the session holds it in memory for
+    /// its own reconnects.
+    var passwordRequest: Host?
 
     let hosts = HostStore()
     @ObservationIgnored var services: AppServices
 
     init(services: AppServices = .placeholder) {
         self.services = services
+        // Builds before 89 kept passwords in the Keychain: none stays.
+        for host in hosts.hosts { services.deletePassword(host.id) }
     }
 
     var workspace: Workspace? { session?.workspace }
@@ -48,15 +55,20 @@ final class AppModel {
     }
 
     /// Connects to `host` and opens its workspace. Errors land in `connectionError`.
+    /// A password host without `password` asks for it first (`passwordRequest`).
     func connect(to host: Host, password: String? = nil) async {
         guard connecting == nil else { return }
+        if host.auth == .password, (password ?? "").isEmpty {
+            connectionError = nil
+            passwordRequest = host
+            return
+        }
         connecting = host.id
         connectionError = nil
         failedHost = nil
         defer { connecting = nil }
         do {
-            let pw = password ?? (host.auth == .password ? services.loadPassword(host.id) : nil)
-            let ws = try await services.connect(host, pw)
+            let ws = try await services.connect(host, host.auth == .password ? password : nil)
             let screen = ScreenState(snapshot: Self.loadScreen(for: host.id))
             screen.onChange = { snapshot in Self.saveScreen(snapshot, for: host.id) }
             services.bindScreen(ws, screen)
@@ -100,25 +112,26 @@ final class AppModel {
         if let live { await services.disconnect(live) }
     }
 
-    /// Installs this device's key on the connected computer and switches the
-    /// host to key login (the saved password is deleted).
+    /// Signed in with a password on this connection (the setup sheet offers the key).
+    var signedInWithPassword: Bool {
+        if case .live(let host) = mode { return host.auth == .password }
+        return false
+    }
+
+    /// Installs this device's key on the connected computer and switches the host to
+    /// key login: the next connection needs no password.
     func installKeyAndSwitch() async throws {
         guard case .live(var host) = mode else { return }
         try await services.installKey()
         host.auth = .key
-        hosts.save(host)   // the saved password stays until key login has worked once
+        hosts.save(host)
         mode = .live(host)
     }
 
     // MARK: Hosts
 
-    func save(_ host: Host, password: String?) {
+    func save(_ host: Host) {
         hosts.save(host)
-        if host.auth == .password, let password, !password.isEmpty {
-            services.savePassword(host.id, password)
-        } else if host.auth == .key {
-            services.deletePassword(host.id)
-        }
     }
 
     func delete(_ host: Host) {

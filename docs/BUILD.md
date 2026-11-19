@@ -34,8 +34,9 @@
 устройством** → профиль Apple Development разработчика → **Доверять**.
 
 Дальше в Wierdr на iPhone: **Add Host** → дома `mentoair.local`, вне дома по Tailscale
-`mentoair-1` (или его адрес в tailnet, `100.x.y.z`), пользователь `mentor`, вход **Password** → Connect,
-подтвердить отпечаток (см. «Подготовка Mac»), потом **Settings → Install This iPhone’s Key on …**.
+`mentoair-1` (или его адрес в tailnet, `100.x.y.z`), пользователь `mentor`, вход **Password** → Connect
+и пароль (приложение его не хранит), подтвердить отпечаток (см. «Подготовка Mac»), потом в листе
+после входа **Install This iPhone’s Key**.
 iOS спросит доступ к локальной сети — разреши (для `mentoair.local`).
 
 ## Установка на iPad
@@ -61,6 +62,31 @@ Xcode › Devices and Simulators — дальше `make install` работае�
 
 Debug‑сборка: `make install CONFIG=Debug` (парсинг вывода терминала в Debug ~7× медленнее).
 
+## TestFlight
+
+```sh
+make testflight                     # архив, подпись для App Store, загрузка в App Store Connect
+scripts/testflight.sh --export      # то же без загрузки: dist/Wierdr-appstore.ipa
+```
+
+- **Ключ API** App Store Connect: `~/.appstoreconnect/.env` (`ASC_KEY_ID`, `ASC_ISSUER_ID`)
+  и `~/.appstoreconnect/private_keys/AuthKey_<id>.p8`. Через него идут и подпись, и загрузка.
+- **Подпись облачная.** Сертификата Apple Distribution в связке ключей нет: Xcode
+  подписывает облачным сертификатом команды и сам заводит профили App Store. Для этого
+  ключу нужна роль Admin.
+- **Номер сборки** — `CURRENT_PROJECT_VERSION` из `project.yml`. Для каждой загрузки он
+  новый: подними его в `project.yml` или задай на один запуск (`BUILD=90 make testflight`).
+- **Окружения сами становятся production:** экспорт для App Store меняет `aps-environment`
+  на `production`, а App Attest в TestFlight и App Store работает в production.
+- **Без загрузки проверить:** `scripts/testflight.sh --export`, затем
+  `xcrun altool --validate-app -f dist/Wierdr-appstore.ipa -t ios --api-key … --api-issuer …`.
+- **После загрузки** App Store Connect несколько минут обрабатывает сборку. Потом она
+  появляется в TestFlight › Internal Testing у тестеров группы. Ревью для внутренних
+  тестеров не нужно.
+- **Манифесты приватности:** `App/Resources/PrivacyInfo.xcprivacy` (UserDefaults `CA92.1`;
+  `fstat` из SwiftTerm `C617.1`; push‑токен и ключ App Attest как Device ID) и
+  `App/Widgets/PrivacyInfo.xcprivacy`. SwiftNIO и swift‑crypto кладут свои манифесты.
+
 ## Подготовка Mac
 
 1. **Системные настройки › Основные › Общий доступ › Удалённый вход** — вкл.
@@ -70,10 +96,11 @@ Debug‑сборка: `make install CONFIG=Debug` (парсинг вывода �
    - адрес: `mentoair.local` (та же Wi‑Fi), IP Mac в LAN или через Tailscale
      `mentoair-1` / его адрес `100.x.y.z`;
    - пользователь: `mentor`, порт 22;
-   - вход: **Password** для первого раза. Потом в Settings нажми
-     **Install This iPad’s Key on …** — Wierdr допишет свой ключ в `~/.ssh/authorized_keys`
-     и переключит хост на вход по ключу. Либо скопируй публичный ключ из редактора хоста
-     (Copy/Share) и добавь в `~/.ssh/authorized_keys` сам.
+   - вход: **Password** для первого раза (пароль спрашивается при каждом подключении и не
+     хранится). После входа лист «Set Up mentoair» предложит **Install This iPad’s Key** (та же
+     кнопка в Settings) — Wierdr допишет свой ключ в `~/.ssh/authorized_keys` и переключит
+     хост на вход по ключу. Либо скопируй публичный ключ из редактора хоста (Copy/Share) и
+     добавь в `~/.ssh/authorized_keys` сам.
 4. Первое подключение спросит про ключ хоста. Отпечаток ED25519 этого Mac:
    `SHA256:YKysidsqfwHmxS7eFJTAbqVwmY2mQ33PdJtS4S4XXFs`
    (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`).
