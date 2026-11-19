@@ -1,0 +1,73 @@
+# Publishes Integrations/pi as @wierdbytes/pi-wierdr when its package.json
+# version isn't on npm yet. Authentication is npm's Trusted Publishing (OIDC):
+# no tokens or secrets.
+#
+# IMPORTANT: this file's name (`publish-pi.yml`) and the repository
+# (`wierdbytes/wierdr`) are registered as the package's Trusted Publisher on
+# npmjs.com (`npm trust list @wierdbytes/pi-wierdr`). Renaming the file means
+# registering it again, or `npm publish` fails the OIDC handshake.
+#
+# The repository is private, so npm makes no provenance attestation.
+
+name: publish-pi
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - Integrations/pi/**
+      - .github/workflows/publish-pi.yml
+  workflow_dispatch: # re-run for any commit
+
+concurrency:
+  group: publish-pi
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC (Trusted Publishing)
+    defaults:
+      run:
+        working-directory: Integrations/pi
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+
+      - id: check
+        name: Is this version on npm already?
+        run: |
+          set -euo pipefail
+          name=$(jq -r .name package.json)
+          version=$(jq -r .version package.json)
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "= $name@$version is on npm, nothing to publish"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "+ $name@$version will be published"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.publish == 'true'
+        uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: latest
+
+      - if: steps.check.outputs.publish == 'true'
+        run: npm install -g npm@latest # OIDC needs npm >= 11.5.1
+
+      - if: steps.check.outputs.publish == 'true'
+        run: bun install --frozen-lockfile
+
+      - if: steps.check.outputs.publish == 'true'
+        run: bun run test
+
+      - if: steps.check.outputs.publish == 'true'
+        name: Publish
+        run: npm publish

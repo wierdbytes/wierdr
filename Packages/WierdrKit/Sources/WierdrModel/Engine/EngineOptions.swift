@@ -16,7 +16,7 @@ public struct EngineOptions: Sendable, Hashable {
     public var machinePollInterval: TimeInterval
     /// How often git facts and `shared.json` colors are refreshed (seconds).
     public var refreshInterval: TimeInterval
-    /// Subscription limits pi-herdr publishes (`limits`), read from every machine; nil: not read.
+    /// Subscription limits pi-wierdr publishes (`limits`), read from every machine; nil: not read.
     public var limitsDocument: String?
 
     public init(documentName: String = "herdr-app", labelPrefix: String = "herdr", display: Display? = nil,

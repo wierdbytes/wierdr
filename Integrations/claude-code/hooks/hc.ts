@@ -3,7 +3,7 @@
  * stdout. A hooks module has no sockets, but it can run a program with
  * `$.process.run(argv, { stdin })`, and `hc connect` reads one request line,
  * answers one line and exits at the end of its input. The same methods and
- * params pi-herdr sends over the socket: `terminal.label` for the labels,
+ * params pi-wierdr sends over the socket: `terminal.label` for the labels,
  * `doc.get` / `doc.set` for the limits document.
  *
  * Pure helpers: building the request line, reading the answer. `register.ts`

@@ -6,3 +6,6 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 /dist/
+
+# Integrations/pi (bun)
+node_modules/

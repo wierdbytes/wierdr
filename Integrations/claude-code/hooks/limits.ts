@@ -1,13 +1,13 @@
 /**
  * Claude subscription limits (Pro, Max) as Claude Code reports them
  * (`session.measure`, `$.session.usage().rateLimits`), folded into the
- * herdr-core document @wierdbytes/pi-herdr writes, `limits` (schema 1), so
+ * herdr-core document @wierdbytes/pi-wierdr writes, `limits` (schema 1), so
  * every herdr client shows the same numbers, whichever agent read them.
  *
- * The document's shape and its folding rules are pi-herdr's (`limits.ts`),
+ * The document's shape and its folding rules are pi-wierdr's (`herdr/limits.ts`),
  * copied here: several writers fold their readings into one document, and
  * they must agree. The account key is too: the first 8 hex digits of
- * sha256 of the Anthropic organization id, which pi-herdr reads from the
+ * sha256 of the Anthropic organization id, which pi-wierdr reads from the
  * `anthropic-organization-id` header and Claude Code keeps as
  * `oauthAccount.organizationUuid` in `~/.claude.json`, so Claude Code's and
  * pi's readings land in one account.
@@ -36,7 +36,7 @@ export interface ReadingWindow {
 
 export interface LimitReading {
   provider: string
-  /** Who read it: pi-herdr writes `header` / `stream`, this mod `claude-code`. */
+  /** Who read it: pi-wierdr writes `header` / `stream`, this mod `claude-code`. */
   source: string
   plan?: string
   /** The window that limits the account right now. */
@@ -62,7 +62,7 @@ export interface RateLimitLike {
   resetsAt?: string
 }
 
-/** Claude Code's window kinds → the document's window ids (pi-herdr's header claims). */
+/** Claude Code's window kinds → the document's window ids (pi-wierdr's header claims). */
 const WINDOWS: Record<string, { id: string; label: string; seconds: number }> = {
   five_hour: { id: '5h', label: '5 hours', seconds: 18_000 },
   seven_day: { id: '7d', label: '7 days', seconds: 604_800 },
@@ -108,7 +108,7 @@ export function readingFromRateLimits(rateLimits: readonly RateLimitLike[] | und
 // The account
 // ============================================
 
-/** The first 8 hex digits of sha256(`accountId`), or `main` without one: pi-herdr's `accountSlug`. */
+/** The first 8 hex digits of sha256(`accountId`), or `main` without one: pi-wierdr's `accountSlug`. */
 export async function accountSlug(accountId: string | undefined): Promise<string> {
   if (!accountId) return 'main'
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(accountId))
@@ -154,7 +154,7 @@ export function accountFromConfig(text: string | undefined): ConfigAccount {
 }
 
 // ============================================
-// The document (pi-herdr's, unchanged)
+// The document (pi-wierdr's, unchanged)
 // ============================================
 
 /** One usage window as the document keeps it. Times are unix seconds. */

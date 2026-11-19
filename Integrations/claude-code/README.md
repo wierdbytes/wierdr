@@ -1,6 +1,6 @@
 # cc — Claude Code for herdr and Wierdr
 
-A Claude Code [mod](https://code.claude.com/docs/en/plugins/mods/overview) that tells [herdr](https://herdr.dev) and Wierdr which model, effort and context size each Claude Code runs with, and how much of your Claude subscription limits is used ([Limits](#limits)). It is what [`@wierdbytes/pi-herdr`](https://www.npmjs.com/package/@wierdbytes/pi-herdr) does for pi, with the same labels and the same document, so a herdr agent list shows both alike:
+A Claude Code [mod](https://code.claude.com/docs/en/plugins/mods/overview) that tells [herdr](https://herdr.dev) and Wierdr which model, effort and context size each Claude Code runs with, and how much of your Claude subscription limits is used ([Limits](#limits)). It is what [`@wierdbytes/pi-wierdr`](https://www.npmjs.com/package/@wierdbytes/pi-wierdr) does for pi, with the same labels and the same document, so a herdr agent list shows both alike:
 
 ```
  D  Fix login redirect loop                    ◌
@@ -40,7 +40,7 @@ Nothing to configure: it has no options, and the labels and the limits are alway
 | `agent.subagents` | `1` | Subagents and teammates alive (`$.agent.list()`: `pending`, `running`, `waiting`, and `idle`, a teammate between turns waiting for a message). Absent when none |
 | `agent.subagents_meta` | `{"ahelper-508256b46aa016ee":{"title":"Helper","name":"helper","status":"idle","since":1795034399598,"model":"Claude Haiku 5.5","model_id":"claude-haiku-5-5","effort":"medium","ctx":35244,"ctx_max":1000000,"started":1795034394841}}` | Each of those, as JSON by its `$.agent.list()` id: `title` (the Agent call's description, which its OSC 7501 record has as its title), `name` (a teammate's, what SendMessage addresses), `status` and `since` (epoch ms, when the mod saw it get that status), `model` and `model_id` (named as `agent.model`), `effort` (its last request's), `ctx` (its last request's input side), `ctx_max` (its model's window; before 2.1.327 only for the session's model), `started` (epoch ms). Ids sorted, a field not known left out. Absent when none is alive. A subagent's record in the terminal's `records` has the same key; a teammate's is keyed by its task (`t4x1csoe5`), which no API names, so readers join it by title; a teammate between turns has no record at all |
 
-Read them in a herdr mod from `terminals()`, as pi-herdr's:
+Read them in a herdr mod from `terminals()`, as pi-wierdr's:
 
 ```js
 const t = terminals().find((t) => t.address === agent.address);
@@ -50,7 +50,7 @@ meta["agent.model"]; // "Claude Opus 5.5"
 
 ## Limits
 
-On a claude.ai subscription (Pro, Max) Claude Code knows the 5-hour and 7-day windows from every response. The mod folds them into herdr-core's `limits` document on the machine Claude runs on, the one pi-herdr writes (schema 1; see [pi-herdr's README](https://www.npmjs.com/package/@wierdbytes/pi-herdr#limits)), so herdr, Wierdr and any script show the same numbers:
+On a claude.ai subscription (Pro, Max) Claude Code knows the 5-hour and 7-day windows from every response. The mod folds them into herdr-core's `limits` document on the machine Claude runs on, the one pi-wierdr writes (schema 1; see [pi-wierdr's README](https://www.npmjs.com/package/@wierdbytes/pi-wierdr#limits)), so herdr, Wierdr and any script show the same numbers:
 
 ```json
 "claude.849d2d8c": {
@@ -63,10 +63,10 @@ On a claude.ai subscription (Pro, Max) Claude Code knows the 5-hour and 7-day wi
 }
 ```
 
-- The account is the first 8 hex digits of sha256 of the organization id (`oauthAccount.organizationUuid` in `~/.claude.json`, or `$CLAUDE_CONFIG_DIR/.claude.json`): the same key pi-herdr derives from the `anthropic-organization-id` header, so Claude Code's and pi's readings land in one account. `main` when no account is signed in.
+- The account is the first 8 hex digits of sha256 of the organization id (`oauthAccount.organizationUuid` in `~/.claude.json`, or `$CLAUDE_CONFIG_DIR/.claude.json`): the same key pi-wierdr derives from the `anthropic-organization-id` header, so Claude Code's and pi's readings land in one account. `main` when no account is signed in.
 - `plan` is `organizationType` without `claude_`, with Max's tier from `organizationRateLimitTier` (`max_5x`, `max_20x`), which readers show as Max and Ultra.
 - `five_hour` → `5h`, `seven_day` → `7d`; a gateway's `spend_limit` is not a subscription window and is left out. A window at 100 % or more is `exhausted`; Claude Code reports no other status, nor which window binds.
-- Written on Claude Code's first measurement, whenever a window moves a whole point (`session.measure`), and at the end of every turn, so `at` stays fresh. Each write reads the document, folds the reading in with pi-herdr's rules (within one window `used` only grows; a later window replaces it) and writes it back at that version, retrying when someone wrote in between. Readings within 500 ms go out as one write.
+- Written on Claude Code's first measurement, whenever a window moves a whole point (`session.measure`), and at the end of every turn, so `at` stays fresh. Each write reads the document, folds the reading in with pi-wierdr's rules (within one window `used` only grows; a later window replaces it) and writes it back at that version, retrying when someone wrote in between. Readings within 500 ms go out as one write.
 - `claude -p` runs write limits too (they spend the same subscription), but no labels.
 
 ## How it works

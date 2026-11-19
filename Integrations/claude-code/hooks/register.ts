@@ -2,7 +2,7 @@
  * cc — tells herdr which model, effort and context size Claude Code runs
  * with, as `agent.*` labels on the herdr-core terminal it runs in, and folds
  * the claude.ai subscription limits into herdr-core's `limits` document: what
- * @wierdbytes/pi-herdr does for pi, with the same keys and the same document,
+ * @wierdbytes/pi-wierdr does for pi, with the same keys and the same document,
  * so herdr's agent lists, the desktop and Wierdr read both alike.
  *
  * Claude Code already reports its status (idle, working, blocked) over OSC

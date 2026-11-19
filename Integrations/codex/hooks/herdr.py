@@ -3,7 +3,7 @@
 Codex hooks for herdr and Wierdr: `herdr.py <event>` with the hook's JSON
 on stdin. Writes the `agent.*` labels on the herdr-core terminal Codex runs
 in and folds the ChatGPT subscription limits into herdr-core's `limits`
-document, as @wierdbytes/pi-herdr does for pi.
+document, as @wierdbytes/pi-wierdr does for pi.
 
 Prints nothing (a SessionStart or UserPromptSubmit hook's stdout becomes
 model context) and always exits 0: a broken hook must never disturb Codex.

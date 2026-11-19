@@ -7,7 +7,7 @@ Claude Code в терминале herdr-core показывается в Wierdr 
 - **сам Claude Code** (без плагинов) шлёт свой статус по OSC 7501;
 - **мод `cc`** из этого репозитория ([`Integrations/claude-code`](../Integrations/claude-code/README.md))
   пишет метки `agent.*` на свой терминал и лимиты подписки в документ `limits` — то же,
-  что для pi делает `@wierdbytes/pi-herdr`, с теми же ключами и тем же документом.
+  что для pi делает `@wierdbytes/pi-wierdr`, с теми же ключами и тем же документом.
 
 В Wierdr для мода ничего не меняется: он читает метки (`AgentLabels.meta` в
 `TerminalFacts.swift`) и документ (`Limits.swift`) одинаково, кто бы их ни записал.
@@ -20,7 +20,7 @@ Claude Code в терминале herdr-core показывается в Wierdr 
 | Фоновые саб‑агенты и фоновые шеллы (по записи на каждый, с заголовком) | Claude Code сам, OSC 7501 | `records` терминала |
 | Модель, провайдер, effort, контекст, окно, сессия, кэш, число саб‑агентов, pid | мод `cc` | метки `agent.*` |
 | Каждый живой саб‑агент и тиммейт (и простаивающий между ходами): заголовок, имя, статус и с какого момента, модель, effort, контекст, окно, старт | мод `cc` | метка `agent.subagents_meta` (JSON) |
-| Лимиты подписки (5 часов, 7 дней) | мод `cc` (и pi-herdr для pi) | документ `limits` |
+| Лимиты подписки (5 часов, 7 дней) | мод `cc` (и pi-wierdr для pi) | документ `limits` |
 
 Метки (все строки, только у интерактивного Claude и только в терминале herdr-core):
 `agent.app` = `claude-code`, `agent.pid` = pid Claude, `agent.model` =
@@ -100,7 +100,7 @@ Claude Code в терминале herdr-core показывается в Wierdr 
 
 Запись — через `hc connect`: модулю хуков нельзя сокеты, но можно
 `$.process.run(['hc', 'connect'], { stdin })`; `hc connect` читает одну строку JSON‑RPC,
-отвечает одной строкой и выходит по EOF. Методы те же, что у pi-herdr: `terminal.label`,
+отвечает одной строкой и выходит по EOF. Методы те же, что у pi-wierdr: `terminal.label`,
 `doc.get`, `doc.set`. `HC_SOCKET` выставляется в `HC_TERMINAL_SOCKET`, чтобы попасть в ядро
 своего терминала (сам `hc` смотрит на `HC_SOCKET` / `HC_SESSION`, не на
 `HC_TERMINAL_SOCKET`). Изменения за 150 мс сливаются в один запрос, одинаковые значения не
@@ -114,12 +114,12 @@ Claude Code в терминале herdr-core показывается в Wierdr 
 
 **Лимиты.** На подписке claude.ai `session.measure` и `$.session.usage()` дают окна
 `five_hour` и `seven_day` (`percentUsed`, `resetsAt`). Мод пишет их в `limits` (схема 1)
-как окна `5h` и `7d` с правилами слияния pi-herdr (CAS: `doc.get` → свёртка → `doc.set` с
+как окна `5h` и `7d` с правилами слияния pi-wierdr (CAS: `doc.get` → свёртка → `doc.set` с
 версией, повтор при конфликте; внутри одного окна `used` только растёт; чтения за 500 мс —
 одной записью). Пишет на первом измерении, при сдвиге окна на целый процент и в конце
 каждого хода (иначе `at` устаревал бы: Claude меряет только на целых процентах). Ключ
 аккаунта — первые 8 hex sha256 от `oauthAccount.organizationUuid` из `~/.claude.json`
-(`$CLAUDE_CONFIG_DIR/.claude.json`) — совпадает с тем, что pi-herdr берёт из заголовка
+(`$CLAUDE_CONFIG_DIR/.claude.json`) — совпадает с тем, что pi-wierdr берёт из заголовка
 `anthropic-organization-id` (проверено: оба пишут `claude.849d2d8c`), поэтому чтения Claude
 Code и pi складываются в один аккаунт. `plan` — `organizationType` без `claude_` с уровнем
 Max из `organizationRateLimitTier` (`max_5x`, `max_20x` → Max / Ultra в
@@ -217,7 +217,7 @@ hc keys wierdrtest-cc-1 / e x i t; hc keys wierdrtest-cc-1 enter   # метки 
 `wierdr-cli ws` пишет `ahelper-508256b46aa016ee [agent] idle "Helper" meta[@helper Haiku 5.5 @medium
 ctx=35244/1000000 since 26s …]`; сообщение ему снова делает его `running`; `/model sonnet` без промпта сразу дал `Claude Sonnet 5.5`; после `/exit` меток нет.
 В `wierdrtest-limits` — аккаунт `claude.849d2d8c` с теми же `used` и `resets_at`, что
-pi-herdr записал в настоящий `limits`; `claude -p` в том же терминале меток не писал, а
+pi-wierdr записал в настоящий `limits`; `claude -p` в том же терминале меток не писал, а
 лимиты обновил.
 
 Тесты без сессии: `claude plugin test Integrations/claude-code` (чистая логика и хуки через

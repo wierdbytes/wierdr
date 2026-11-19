@@ -41,6 +41,8 @@ https://<mac>.<tailnet>.ts.net/wierdr/ → «Установить» (или `mak
 - [docs/architecture.md](docs/architecture.md) — слои и устройство кода.
 - [docs/hc-protocol-client.md](docs/hc-protocol-client.md) — клиент протокола herdr-core.
 - [docs/ssh.md](docs/ssh.md) — SSH, ключи, known hosts.
+- [docs/pi.md](docs/pi.md), [docs/claude-code.md](docs/claude-code.md), [docs/codex.md](docs/codex.md) —
+  что пишет данные агентов (метки `agent.*`, лимиты): расширение pi и плагины Claude Code и Codex.
 - [docs/live-activity.md](docs/live-activity.md) — Live Activity агентов на iPhone (Lock Screen,
   Dynamic Island): `wierdr-push` на Mac, APNs, настройка.
 - [docs/research/](docs/research/) — разбор модели herdr-app и спецификация UI твоего сетапа.
@@ -52,6 +54,8 @@ App/                    SwiftUI-приложение (iPad + iPhone, одна с
 App/Widgets/            виджет-расширение: Live Activity агентов
 Packages/WierdrKit/     HerdrCore · HerdrSSH · WierdrModel · WierdrActivity · WierdrPush ·
                         wierdr-cli · wierdr-push (+ тесты)
+Integrations/           что пишет данные агентов для Wierdr: pi (npm @wierdbytes/pi-wierdr, docs/pi.md),
+                        claude-code (плагин cc@wierdr), codex (плагин codex@wierdr)
 Design/icons/           SVG-иконки Herdr → App/Resources/Icons.xcassets (scripts/gen-assets.py)
 project.yml             XcodeGen → Wierdr.xcodeproj
 Makefile                project · test · sim · sim-iphone · device · install · install-iphone · ipa

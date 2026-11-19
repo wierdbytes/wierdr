@@ -3,7 +3,7 @@ import HerdrCore
 import Testing
 @testable import WierdrModel
 
-/// A `limits` document as @wierdbytes/pi-herdr writes it.
+/// A `limits` document as @wierdbytes/pi-wierdr writes it.
 enum LimitsFixture {
     static func doc(_ accounts: [String: JSONValue]) -> JSONValue {
         ["schema": 1, "updated_at": 1000, "accounts": .object(JSONObject(accounts))]

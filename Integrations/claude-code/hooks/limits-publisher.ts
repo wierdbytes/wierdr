@@ -1,6 +1,6 @@
 /**
  * Writes the readings into herdr-core's `limits` document without losing
- * anyone's writes, as pi-herdr's `limits-publisher.ts` does:
+ * anyone's writes, as pi-wierdr's `herdr/limits-publisher.ts` does:
  *
  *   - every reading is written, even with the same numbers: `at` says when
  *     the subscription last confirmed them, so readers tell live from stale;

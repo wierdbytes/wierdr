@@ -1,6 +1,6 @@
 """
 What Codex tells herdr about itself, as `agent.*` labels on its herdr-core
-terminal: the keys and value shapes @wierdbytes/pi-herdr writes for pi and
+terminal: the keys and value shapes @wierdbytes/pi-wierdr writes for pi and
 the Claude Code mod `cc` for Claude, so a herdr agent list and Wierdr read
 all three alike. Pure functions.
 """
@@ -12,7 +12,7 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 
 APP = "codex"
 
-# Every label pi-herdr owns, and `agent.subagents_meta` (the sub-agents' rows,
+# Every label pi-wierdr owns, and `agent.subagents_meta` (the sub-agents' rows,
 # as the Claude Code mod writes it). Codex writes all but the cache ones
 # (OpenAI reports no cache lifetime); a full write clears those too, so
 # nothing an earlier agent in this terminal left stays behind.

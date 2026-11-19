@@ -1,7 +1,7 @@
 import Foundation
 import HerdrCore
 
-// Subscription limits (Claude, Codex) as @wierdbytes/pi-herdr publishes them:
+// Subscription limits (Claude, Codex) as @wierdbytes/pi-wierdr publishes them:
 // every provider response pi gets is folded into herdr-core's `limits`
 // document on the machine pi runs on (schema 1, see that package's README).
 // Wierdr reads it from every connected machine, merges the accounts, and the
@@ -60,7 +60,7 @@ public struct LimitAccount: Identifiable, Hashable, Sendable {
 
 /// Reading, merging and judging limits. Pure functions.
 public enum Limits {
-    /// The herdr-core document pi-herdr writes.
+    /// The herdr-core document pi-wierdr writes.
     public static let documentName = "limits"
     static let schema: Int64 = 1
     /// Two readings of one window can disagree on the reset by a little (Codex derives it).
@@ -107,7 +107,7 @@ public enum Limits {
 
     // MARK: Merging
 
-    /// Folds window `b` into `a`, as pi-herdr does: within one window (same
+    /// Folds window `b` into `a`, as pi-wierdr does: within one window (same
     /// reset, give or take two minutes) the used share only grows; a later
     /// window replaces it, an earlier one is dropped; a window without a reset
     /// (not started) replaces one only after its reset passed.

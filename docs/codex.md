@@ -7,7 +7,7 @@ ChatGPT в сайдбаре. Для этого две части:
 - **сам Codex** (без плагинов) шлёт свой статус по OSC 7501;
 - **плагин `codex`** из этого репозитория ([`Integrations/codex`](../Integrations/codex/README.md))
   пишет метки `agent.*` на свой терминал и лимиты в документ `limits` — то же, что
-  `@wierdbytes/pi-herdr` делает для pi и мод `cc` ([claude-code.md](claude-code.md)) для
+  `@wierdbytes/pi-wierdr` делает для pi и мод `cc` ([claude-code.md](claude-code.md)) для
   Claude Code, с теми же ключами и тем же документом.
 
 В Wierdr для плагина ничего не меняется: метки читает `AgentLabels.meta` в
@@ -22,7 +22,7 @@ ChatGPT в сайдбаре. Для этого две части:
 | Заголовок `<спиннер> <имя треда> \| <проект>`, пока Codex ждёт ответа — `[ ! ] Action Required \| …` | Codex сам (OSC title) | `title` |
 | Модель, провайдер, effort, контекст, окно, сессия, число саб‑агентов, pid | плагин `codex` | метки `agent.*` |
 | Каждый работающий саб‑агент: путь задачи, ник, с какого момента работает, модель, effort, контекст, окно, старт | плагин `codex` | метка `agent.subagents_meta` (JSON) |
-| Лимиты подписки ChatGPT (5 часов, 7 дней, другие семейства) | плагин `codex` (и pi-herdr для pi) | документ `limits` |
+| Лимиты подписки ChatGPT (5 часов, 7 дней, другие семейства) | плагин `codex` (и pi-wierdr для pi) | документ `limits` |
 
 Чего Codex сам не даёт: `msg`, записей (`records`) для саб‑агентов (они работают внутри
 процесса Codex, без своего терминала; их строки в Wierdr — из `agent.subagents_meta`), модели и
@@ -82,7 +82,7 @@ TUI, `vscode` у app-server, `exec`, у саб‑агента — объект `
 rollout — `default_reasoning_level` модели из `$CODEX_HOME/models_cache.json`; без окна —
 `context_window × effective_context_window_percent` оттуда же.
 
-Запись — прямо в сокет `HC_TERMINAL_SOCKET` (JSON‑RPC строками, как pi-herdr; одно
+Запись — прямо в сокет `HC_TERMINAL_SOCKET` (JSON‑RPC строками, как pi-wierdr; одно
 соединение на запуск хука, несколько запросов): `terminal.get` (foreground pid и текущие
 метки), `terminal.label` (шлются только изменения), `doc.get` / `doc.set`.
 
@@ -147,13 +147,13 @@ Rollout саб‑агента берётся из `transcript_path` у `Subagent
 
 **Лимиты.** Из последних `token_count` (по одному на `limit_id`, внутри последнего хода)
 собирается чтение: семейство `codex` — окна `5h` / `7d` (`window_minutes` 300 / 10080),
-другие — `<limit_id>.<окно>` с подписью `<limit_name> <окно>`, как у pi-herdr; ≥ 100 % —
-`exhausted`. Свёртка — правила pi-herdr (CAS: `doc.get` → свёртка → `doc.set` с версией, до 5
+другие — `<limit_id>.<окно>` с подписью `<limit_name> <окно>`, как у pi-wierdr; ≥ 100 % —
+`exhausted`. Свёртка — правила pi-wierdr (CAS: `doc.get` → свёртка → `doc.set` с версией, до 5
 попыток при конфликте; в одном окне `used` только растёт; более позднее окно заменяет).
 `at` — время строки в rollout. Уже записанное чтение повторно не пишется. Ключ аккаунта —
 первые 8 hex sha256 от `tokens.account_id` из `$CODEX_HOME/auth.json` (запасные: claim
 `https://api.openai.com/auth` → `chatgpt_account_id` в id‑токене, `creator_account_id` из
-`session_meta`). Проверено: `codex.d4800446` — тот же ключ, что у pi-herdr. `label` — e‑mail
+`session_meta`). Проверено: `codex.d4800446` — тот же ключ, что у pi-wierdr. `label` — e‑mail
 из id‑токена, `plan` — `plan_type`, `source` — `codex`, `host` — `gethostname()`. Токены
 не читаются дальше этого и никуда не пишутся. `codex exec` и саб‑агенты пишут лимиты, но не
 метки.

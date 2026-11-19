@@ -2,7 +2,7 @@
  * When the main conversation's prompt cache expires, and how long it lives
  * from a refresh, as `agent.cache_until` / `agent.cache_ttl`.
  *
- * The same reading as pi-statusline's countdown and pi-herdr's `cache.ts`: a
+ * The same reading as pi-statusline's countdown and pi-wierdr's `herdr/cache.ts`: a
  * cache entry's lifetime restarts every time a request reads or writes it, at
  * the moment the request is sent. Claude Code says what each request did in
  * the `turn.step` result's usage: `ephemeral_1h_input_tokens` > 0 means it

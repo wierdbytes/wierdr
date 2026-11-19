@@ -9,7 +9,7 @@
  * an earlier Claude that crashed), so its first write sends every owned key,
  * removing whatever was left behind instead of trusting an empty picture.
  *
- * The same rules as @wierdbytes/pi-herdr's `publisher.ts`, with the timer
+ * The same rules as @wierdbytes/pi-wierdr's `herdr/publisher.ts`, with the timer
  * handed in (`$.clock.after`).
  */
 

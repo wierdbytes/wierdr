@@ -8,7 +8,7 @@ import WierdrModel
 /// a tick where the window's time stands, its share used colored by pace, and
 /// when it resets. Closed, the account shows its headline limit (the pinned
 /// one, else the one that runs out first). Data: `Workspace.limits`, from the
-/// `limits` documents pi-herdr writes on each machine.
+/// `limits` documents pi-wierdr writes on each machine.
 ///
 /// Tap an account to open or close it; tap a limit to pin it as the
 /// account's headline (again: unpin). Both are remembered on this device.

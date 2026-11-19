@@ -1,7 +1,7 @@
 """
 The smallest herdr-core client the hooks need: JSON-RPC lines over the
 socket herdr-core hands every terminal (`HC_TERMINAL_SOCKET`), as
-@wierdbytes/pi-herdr talks to it. One connection per hook run, one line per
+@wierdbytes/pi-wierdr talks to it. One connection per hook run, one line per
 request, one line per answer: `terminal.get` (the foreground pid and the
 labels), `terminal.label` (empty value removes), `doc.get` / `doc.set`.
 

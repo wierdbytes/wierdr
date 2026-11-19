@@ -4,7 +4,7 @@
  * Claude Code reports its status over OSC 7501 on its own (`status.app` =
  * `claude-code`, idle / working / blocked…), but that report has no room for
  * the model, the effort or the context size. They travel as `agent.*` labels
- * on the herdr-core terminal instead, the same keys @wierdbytes/pi-herdr
+ * on the herdr-core terminal instead, the same keys @wierdbytes/pi-wierdr
  * writes for pi, so herdr's agent lists and Wierdr read both alike.
  *
  * Pure functions only: the wiring lives in `register.ts`.

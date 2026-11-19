@@ -100,7 +100,7 @@ class Fold(unittest.TestCase):
                 },
             }},
         })
-        # pi-herdr read more of the same window a bit later from another machine: it stays.
+        # pi-wierdr read more of the same window a bit later from another machine: it stays.
         doc["accounts"]["codex.d4800446"]["windows"]["5h"].update(used=9, at=1795028900)
         doc["accounts"]["codex.d4800446"].update(at=1795028900, host="other", source="stream")
         older = limits.fold_reading(doc, reading, account, 1795028870, "mentoair")

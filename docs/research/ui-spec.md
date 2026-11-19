@@ -474,7 +474,7 @@ or permission ("approve Bash: rm -rf build", `kind` permission|question|auth), e
 error's first line. Its session's stable title (AI-made or `/rename`) is the terminal title
 (OSC 0/2, `"Ok reply test"`, spinner glyphs in front while busy).
 
-### 10.3 `agent.*` labels written by pi (`@wierdbytes/pi-herdr`), live values
+### 10.3 `agent.*` labels written by pi (`@wierdbytes/pi-wierdr`), live values
 ```
 agent.app=pi                 agent.model=Claude Opus 5.5    agent.model_id=claude-opus-5-5
 agent.provider=anthropic     agent.effort=xhigh             agent.ctx=102488
@@ -512,7 +512,7 @@ agent.subagents_meta={"<sub-agent thread id>":{"title":"probe","name":"Kepler","
   "started":…}}  (JSON, every sub-agent while one of its turns runs)
 ```
 No cache labels. Its limits: account `codex.<slug>` in `limits` (windows 5h/7d, plan, label
-the e-mail), as pi-herdr writes them.
+the e-mail), as pi-wierdr writes them.
 
 Other agents have no `agent.*` labels (nor Claude Code or Codex without their plugins) → their
 rows show the program name in the model slot and no ring.

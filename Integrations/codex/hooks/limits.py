@@ -1,13 +1,13 @@
 """
 ChatGPT subscription limits (Plus, Pro...) as Codex records them in the
 rollout (`token_count` events' `rate_limits`), folded into the herdr-core
-document @wierdbytes/pi-herdr writes, `limits` (schema 1), so every herdr
+document @wierdbytes/pi-wierdr writes, `limits` (schema 1), so every herdr
 client shows the same numbers, whichever agent read them.
 
-The document's shape and its folding rules are pi-herdr's (`limits.ts`),
+The document's shape and its folding rules are pi-wierdr's (`herdr/limits.ts`),
 ported line by line: several writers fold their readings into one
 document, and they must agree. So is the account key: the first 8 hex
-digits of sha256 of the ChatGPT account id, which pi-herdr takes from its
+digits of sha256 of the ChatGPT account id, which pi-wierdr takes from its
 own auth.json and Codex keeps in `$CODEX_HOME/auth.json`, so Codex's and
 pi's readings land in one account. Pure functions, except reading auth.json.
 """
@@ -69,7 +69,7 @@ def duration_id(seconds: int) -> str:
 
 
 def codex_window(family: str, family_label: Optional[str], used: Optional[float], seconds: Optional[int], resets_at: Optional[float]):
-    """pi-herdr's `codexWindow`: the main family keeps plain ids ("5h", "7d")."""
+    """pi-wierdr's `codexWindow`: the main family keeps plain ids ("5h", "7d")."""
     if used is None:
         return None
     base = duration_id(seconds) if seconds else "window"
@@ -185,7 +185,7 @@ def account_from_auth(text: Optional[str]) -> Dict[str, str]:
 
 
 # ============================================
-# The document (pi-herdr's, unchanged)
+# The document (pi-wierdr's, unchanged)
 # ============================================
 
 

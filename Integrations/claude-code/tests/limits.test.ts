@@ -12,7 +12,7 @@ import {
 } from '../hooks/limits'
 
 describe('readingFromRateLimits', () => {
-  test('five_hour and seven_day as pi-herdr names them; spend_limit left out', () => {
+  test('five_hour and seven_day as pi-wierdr names them; spend_limit left out', () => {
     const reading = readingFromRateLimits(
       [
         { kind: 'seven_day', percentUsed: 52, resetsAt: '2026-11-22T08:00:00.000Z' },
@@ -45,7 +45,7 @@ describe('readingFromRateLimits', () => {
 })
 
 describe('the account', () => {
-  test('the slug is pi-herdr\'s: sha256, 8 hex digits, or main', async () => {
+  test('the slug is pi-wierdr\'s: sha256, 8 hex digits, or main', async () => {
     expect(await accountSlug('abc')).toBe('ba7816bf')
     expect(await accountSlug('3f2a9c1e-5b7d-4e8a-9c21-6d0f4b8a7e13')).toBe('c3c54697')
     expect(await accountSlug(undefined)).toBe('main')
@@ -109,7 +109,7 @@ describe('the document', () => {
     })
   })
 
-  test('pi-herdr\'s reading of the same account folds with ours', () => {
+  test('pi-wierdr\'s reading of the same account folds with ours', () => {
     const pi = asLimitsDoc({
       schema: 1,
       updated_at: 1795023000,

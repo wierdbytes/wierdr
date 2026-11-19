@@ -1,6 +1,6 @@
 # codex — Codex CLI for herdr and Wierdr
 
-A [Codex](https://github.com/openai/codex) plugin that tells [herdr](https://herdr.dev) and Wierdr which model, effort and context size each Codex runs with, and how much of your ChatGPT subscription limits is used ([Limits](#limits)). It does for Codex what [`@wierdbytes/pi-herdr`](https://www.npmjs.com/package/@wierdbytes/pi-herdr) does for pi and [`cc`](../claude-code/README.md) does for Claude Code. It writes the same labels and the same document, so a herdr agent list shows all three the same way:
+A [Codex](https://github.com/openai/codex) plugin that tells [herdr](https://herdr.dev) and Wierdr which model, effort and context size each Codex runs with, and how much of your ChatGPT subscription limits is used ([Limits](#limits)). It does for Codex what [`@wierdbytes/pi-wierdr`](https://www.npmjs.com/package/@wierdbytes/pi-wierdr) does for pi and [`cc`](../claude-code/README.md) does for Claude Code. It writes the same labels and the same document, so a herdr agent list shows all three the same way:
 
 ```
  D  Fix login redirect loop                    ◌
@@ -50,7 +50,7 @@ Nothing to configure. Outside a herdr-core terminal (no `HC_TERMINAL_ID` / `HC_T
 
 There are no `agent.cache_until` / `agent.cache_ttl` labels: OpenAI doesn't report a cache lifetime. The first write clears any that an earlier agent left in the terminal.
 
-Read them in a herdr mod from `terminals()`, the same way as pi-herdr's labels:
+Read them in a herdr mod from `terminals()`, the same way as pi-wierdr's labels:
 
 ```js
 const t = terminals().find((t) => t.address === agent.address);
@@ -60,7 +60,7 @@ meta["agent.model"]; // "GPT-6.1 Sol"
 
 ## Limits
 
-On a ChatGPT plan (Plus, Pro…), every Codex response reports the 5-hour and weekly windows. The plugin folds them into herdr-core's `limits` document on the machine Codex runs on. pi-herdr writes the same document (schema 1; see [pi-herdr's README](https://www.npmjs.com/package/@wierdbytes/pi-herdr#limits)), so herdr, Wierdr and any script show the same numbers:
+On a ChatGPT plan (Plus, Pro…), every Codex response reports the 5-hour and weekly windows. The plugin folds them into herdr-core's `limits` document on the machine Codex runs on. pi-wierdr writes the same document (schema 1; see [pi-wierdr's README](https://www.npmjs.com/package/@wierdbytes/pi-wierdr#limits)), so herdr, Wierdr and any script show the same numbers:
 
 ```json
 "codex.d4800446": {
@@ -73,9 +73,9 @@ On a ChatGPT plan (Plus, Pro…), every Codex response reports the 5-hour and we
 }
 ```
 
-- The account key is the first 8 hex digits of sha256 of the ChatGPT account id. The id comes from `tokens.account_id` in `$CODEX_HOME/auth.json`, or from the id token's `chatgpt_account_id`, or (with the credentials in the keyring) from the session's `creator_account_id`. pi-herdr derives the same key, so Codex's and pi's readings land in one account. `label` is the account's e-mail from the id token. Nothing else is read from `auth.json`, and no token is ever written or logged.
-- `plan` is Codex's `plan_type`. The `codex` family's windows are `5h` / `7d` (from `window_minutes`). Other limit families get pi-herdr's names: `<limit_id>.<window>`, labelled `<limit_name> <window>`. A window at 100 % or more is `exhausted`, and so is the account when Codex reports `rate_limit_reached_type`.
-- The readings come from the session's rollout (`token_count` events). Each one is written with the time Codex recorded it, at the end of every turn and at most every 30 s during a turn. Each write reads the document, folds the reading in with pi-herdr's rules (within one window `used` only grows; a later window replaces it) and writes it back at that version, retrying when another writer got in between. A reading already written isn't written again.
+- The account key is the first 8 hex digits of sha256 of the ChatGPT account id. The id comes from `tokens.account_id` in `$CODEX_HOME/auth.json`, or from the id token's `chatgpt_account_id`, or (with the credentials in the keyring) from the session's `creator_account_id`. pi-wierdr derives the same key, so Codex's and pi's readings land in one account. `label` is the account's e-mail from the id token. Nothing else is read from `auth.json`, and no token is ever written or logged.
+- `plan` is Codex's `plan_type`. The `codex` family's windows are `5h` / `7d` (from `window_minutes`). Other limit families get pi-wierdr's names: `<limit_id>.<window>`, labelled `<limit_name> <window>`. A window at 100 % or more is `exhausted`, and so is the account when Codex reports `rate_limit_reached_type`.
+- The readings come from the session's rollout (`token_count` events). Each one is written with the time Codex recorded it, at the end of every turn and at most every 30 s during a turn. Each write reads the document, folds the reading in with pi-wierdr's rules (within one window `used` only grows; a later window replaces it) and writes it back at that version, retrying when another writer got in between. A reading already written isn't written again.
 - `codex exec` runs and sub-agents write limits too (they spend the same subscription), but no labels.
 
 ## How it works
@@ -119,7 +119,7 @@ codex plugin marketplace add "$PWD"                         # the local marketpl
 codex plugin add codex@wierdr                               # copies the plugin into ~/.codex/plugins/cache; re-run after edits (and re-trust)
 ```
 
-`hooks/herdr.py` wires the events. Everything else is plain code, tested directly: `meta.py` (labels, model names), `rollout.py` (reading the rollout's tail), `limits.py` (readings, account, pi-herdr's fold), `guard.py` (whose hook it is), `subagents.py`, `hc.py`.
+`hooks/herdr.py` wires the events. Everything else is plain code, tested directly: `meta.py` (labels, model names), `rollout.py` (reading the rollout's tail), `limits.py` (readings, account, pi-wierdr's fold), `guard.py` (whose hook it is), `subagents.py`, `hc.py`.
 
 To point the limits at a scratch document while testing, start Codex with `WIERDR_CODEX_LIMITS_DOC=<name>`. `WIERDR_CODEX_DEBUG=1` makes every hook append a line (event, decision, labels sent) to `$PLUGIN_DATA/debug.log`.
 

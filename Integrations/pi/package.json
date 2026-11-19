@@ -1,0 +1,70 @@
+{
+  "name": "@wierdbytes/pi-wierdr",
+  "version": "0.1.0",
+  "description": "pi for herdr and Wierdr: model, effort, context and cache as agent.* labels on pi's herdr-core terminal, Claude / Codex subscription limits as herdr-core's limits document, pi's bash commands in herdr-core terminals, and sub-agents as their own pi in herdr-core terminals nested under the agent that started them. Replaces @wierdbytes/pi-herdr and @wierdbytes/pi-agents.",
+  "type": "module",
+  "files": [
+    "*.ts",
+    "herdr/*.ts",
+    "agents/*.ts",
+    "!**/*.test.ts",
+    "*.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "extension",
+    "herdr",
+    "herdr-core",
+    "wierdr",
+    "terminal-labels",
+    "rate-limits",
+    "bash",
+    "subagents"
+  ],
+  "license": "MIT",
+  "author": "wierdbytes",
+  "homepage": "https://github.com/wierdbytes/wierdr/tree/master/Integrations/pi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wierdbytes/wierdr.git",
+    "directory": "Integrations/pi"
+  },
+  "bugs": {
+    "url": "https://github.com/wierdbytes/wierdr/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./client": "./agents/client.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@wierdbytes/pi-common": "^0.5.1"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": ">=1.5.0",
+    "@earendil-works/pi-coding-agent": ">=1.5.0",
+    "@earendil-works/pi-tui": ">=1.5.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^1.5.0",
+    "@earendil-works/pi-coding-agent": "^1.5.0",
+    "@earendil-works/pi-tui": "^1.5.0",
+    "typebox": "^1.1.24",
+    "vitest": "^4.0.18"
+  }
+}
