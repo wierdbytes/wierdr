@@ -6,8 +6,8 @@ Wierdr (`pw.xff.wierdr`) — нативное приложение для iPad �
 сайдбара и терминальной панели перенесён с твоего сетапа (`wierd-layout`: `wierd-chrome`,
 `wierd-agents`, `wierd-tabs`, `wierd-pane`, `agent-counts`) без панели лимитов.
 
-Скриншоты: `docs/screenshots/` (`ipad-*` — демо‑режим, `live-*` — живое подключение к
-твоему ядру из симулятора, `terminal-*` — терминал, `iphone-*` — iPhone, см. §7).
+Скриншоты: `docs/screenshots/` (`ipad-*` — демо‑режим, `terminal-*` — терминал,
+`iphone-*` — iPhone, см. §7).
 
 ## 1. Подключение
 
@@ -561,7 +561,7 @@ iPad — карточки спейсов (сворачиваются, перет
   получает там право на свой токен через App Attest ([relay.md](relay.md)).
   Настройка и устройство: [live-activity.md](live-activity.md).
 
-![Live Activity](screenshots/iphone-live-activity.png)
+![Live Activity](screenshots/iphone-live-activity.jpg)
 
 - Тексты «This iPhone's key», «Install This iPhone's Key on …» и т. п. называют устройство.
 - **Тур по приложению** — §8.
