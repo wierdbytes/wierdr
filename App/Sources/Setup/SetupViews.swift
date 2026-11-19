@@ -10,8 +10,14 @@ struct DaemonRows: View {
 
     var body: some View {
         LabeledContent("wierdrd") {
-            HStack(spacing: 8) {
-                if busy { ProgressView() }
+            HStack(spacing: 6) {
+                if busy {
+                    ProgressView()
+                } else if daemon.verdict == .running && !daemon.isWorking {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .accessibilityHidden(true)
+                }
                 Text(statusText)
             }
         }
@@ -107,9 +113,6 @@ struct DaemonRows: View {
         }
         if let error = daemon.error {
             return Note(text: error, symbol: "exclamationmark.triangle.fill", color: .orange)
-        }
-        if daemon.justSetUp, daemon.verdict == .running {
-            return Note(text: "wierdrd runs on \(host). It starts again at login.", symbol: "checkmark.circle.fill", color: .green)
         }
         guard let s = daemon.status else { return nil }
         switch s.verdict {
@@ -329,7 +332,7 @@ struct HostSetupSheet: View {
                     Text("Daemon")
                 } footer: {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("wierdrd runs in the background and sends your agents to the iPhone's Lock Screen and Dynamic Island, even while Wierdr is closed.")
+                        Text("Wierdr needs the daemon for its extra features, such as push notifications.")
                         daemonRows.commandsFooter
                     }
                 }

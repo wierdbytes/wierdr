@@ -132,7 +132,7 @@ private struct DaemonSection: View {
             Text("Daemon")
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
-                Text("wierdrd, Wierdr's helper on \(host), runs in the background. It sends your agents to the iPhone's Lock Screen and Dynamic Island, even while Wierdr is closed.")
+                Text("Wierdr needs the daemon for its extra features, such as push notifications.")
                 rows.commandsFooter
             }
         }

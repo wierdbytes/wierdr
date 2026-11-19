@@ -21,8 +21,6 @@ final class DaemonState {
     private(set) var status: Daemon.Status?
     /// Why the last probe or action failed, for the person.
     private(set) var error: String?
-    /// The last action went through and wierdrd runs.
-    private(set) var justSetUp = false
     /// The first probe on this session is done (successfully or not).
     private(set) var firstCheckDone = false
 
@@ -60,7 +58,6 @@ final class DaemonState {
                 guard g == generation else { return }
                 status = s
                 error = nil
-                if s.running == false { justSetUp = false }
             } catch {
                 guard g == generation else { return }
                 self.error = HostSession.describe(error)
@@ -78,7 +75,6 @@ final class DaemonState {
         let g = generation
         phase = .working(action)
         error = nil
-        justSetUp = false
         Task {
             do {
                 try await Daemon.perform(action, brew: brew, on: core)
@@ -89,9 +85,7 @@ final class DaemonState {
                 }
                 guard g == generation else { return }
                 status = s
-                if s.running {
-                    justSetUp = true
-                } else {
+                if !s.running {
                     error = "Homebrew finished, but wierdrd isn't running"
                         + (s.lastExit.flatMap(Int.init).map { " (it exited with \($0))" } ?? "")
                         + (s.lastLog.map { ": \($0)" } ?? ".")
