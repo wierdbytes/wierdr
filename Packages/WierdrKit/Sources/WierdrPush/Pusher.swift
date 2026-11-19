@@ -3,17 +3,36 @@ import HerdrCore
 import WierdrActivity
 import WierdrModel
 
-/// `~/.config/wierdr/push.json`: the APNs key that signs the pushes.
+/// `~/.config/wierdr/push.json`: how the pushes go out. Either Wierdr's relay
+/// (`relay`, its URL: it signs them) or straight to APNs, signed with the team's key
+/// on this Mac (`key_file`, `key_id`, `team_id`).
 public struct PushConfig: Codable, Sendable {
     /// Path to the `.p8` key (APNs, of the team that signs the app); `~` allowed.
-    public var keyFile: String
-    public var keyID: String
-    public var teamID: String
+    public var keyFile: String?
+    public var keyID: String?
+    public var teamID: String?
+    /// The relay's URL (`https://relay.wierdr.workat.dev`): when set, the pushes go through it.
+    public var relay: String?
     /// The computer's name on the activity (default: this Mac's name).
     public var host: String?
 
     enum CodingKeys: String, CodingKey {
-        case keyFile = "key_file", keyID = "key_id", teamID = "team_id", host
+        case keyFile = "key_file", keyID = "key_id", teamID = "team_id", relay, host
+    }
+
+    /// The relay, or APNs with the key.
+    public func transport() throws -> PushTransport {
+        if let relay {
+            guard let url = URL(string: relay), url.scheme == "https" else { throw PushError("relay: not an https URL: \(relay)") }
+            return RelayClient(base: url)
+        }
+        return APNsClient(signer: try signer())
+    }
+
+    /// What `status` says about it.
+    public var summary: String {
+        if let relay { return "relay \(relay)" }
+        return "key \(keyID ?? "?"), team \(teamID ?? "?"), \(keyFile ?? "?")"
     }
 
     public static var defaultURL: URL {
@@ -29,6 +48,9 @@ public struct PushConfig: Codable, Sendable {
     }
 
     public func signer() throws -> APNsSigner {
+        guard let keyFile, let keyID, let teamID else {
+            throw PushError("push.json: set relay, or key_file, key_id and team_id")
+        }
         let path = (keyFile as NSString).expandingTildeInPath
         guard let pem = try? String(contentsOfFile: path, encoding: .utf8) else { throw PushError("can't read \(path)") }
         return try APNsSigner(p8: pem, keyID: keyID, teamID: teamID)
@@ -46,8 +68,24 @@ public struct PushState: Codable, Sendable {
     public var channels: [String: String] = [:]
     public var running: [String: Planner.Running] = [:]
     public var badTokens: Set<String> = []
+    /// Through the relay: each channel's grant (spare and running ones).
+    public var channelGrants: [String: String] = [:]
+    /// Device grants the relay refused (until the app brings a new one).
+    public var badGrants: Set<String> = []
 
     public init() {}
+
+    enum CodingKeys: String, CodingKey { case channels, running, badTokens, channelGrants, badGrants }
+
+    /// Fields a newer pusher added may be missing.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        channels = try c.decodeIfPresent([String: String].self, forKey: .channels) ?? [:]
+        running = try c.decodeIfPresent([String: Planner.Running].self, forKey: .running) ?? [:]
+        badTokens = try c.decodeIfPresent(Set<String>.self, forKey: .badTokens) ?? []
+        channelGrants = try c.decodeIfPresent([String: String].self, forKey: .channelGrants) ?? [:]
+        badGrants = try c.decodeIfPresent(Set<String>.self, forKey: .badGrants) ?? []
+    }
 
     public static var defaultURL: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/wierdr/push-state.json")
@@ -101,7 +139,7 @@ extension ActivitySealKey {
 public final class Pusher {
     public let workspace = Workspace()
     let engine: WorkspaceEngine
-    let apns: APNsClient
+    let transport: PushTransport
     let host: String
     let seal: ActivitySealKey
     let stateURL: URL
@@ -117,9 +155,9 @@ public final class Pusher {
     var engineEnded: Error?
     public var log: (String) -> Void = { print($0) }
 
-    public init(apns: APNsClient, host: String, seal: ActivitySealKey, stateURL: URL = PushState.defaultURL,
+    public init(transport: PushTransport, host: String, seal: ActivitySealKey, stateURL: URL = PushState.defaultURL,
                 settings: Planner.Settings = .init()) {
-        self.apns = apns
+        self.transport = transport
         self.host = host
         self.seal = seal
         self.stateURL = stateURL
@@ -205,8 +243,8 @@ public final class Pusher {
 
     func tick(now: Date) async {
         guard now >= pausedUntil else { return }
-        let usable = devices.filter { !state.badTokens.contains($0.value.startToken) }
-        await ensureChannels(for: usable)
+        let usable = usableDevices(now: now)
+        await ensureChannels(for: usable, now: now)
         let summary = ActivityPayload.fitting(ActivitySummary.state(of: workspace, now: now), key: seal)
         let actions = planner.step(now: now, summary: summary, devices: usable, channels: state.channels)
         var failed = false
@@ -219,7 +257,8 @@ public final class Pusher {
         }
         // An ended activity's channel is done with.
         for case let .end(lane, channel, _) in actions where state.channels[lane.key] != channel {
-            try? await apns.deleteChannel(channel, bundle: lane.bundle, env: lane.env)
+            try? await transport.deleteChannel(channel, grant: state.channelGrants[channel], bundle: lane.bundle, env: lane.env)
+            state.channelGrants[channel] = nil
         }
         if failed {
             backoff = min(max(backoff * 2, 5), 300)
@@ -233,17 +272,38 @@ public final class Pusher {
         }
     }
 
-    /// A spare channel for every lane with devices (kept in the state file).
-    func ensureChannels(for devices: [String: PushRegistry.Device]) async {
-        for d in devices.values {
+    /// Devices the pushes can go to: a token APNs didn't refuse and, through the relay, a
+    /// grant it didn't refuse and that won't run out within the day.
+    func usableDevices(now: Date) -> [String: PushRegistry.Device] {
+        devices.filter { _, d in
+            guard !state.badTokens.contains(d.startToken) else { return false }
+            guard transport.needsGrants else { return true }
+            guard let grant = d.relayGrant, !state.badGrants.contains(grant),
+                  let expiry = d.relayGrantExpiry, expiry > now.addingTimeInterval(86400) else { return false }
+            return true
+        }
+    }
+
+    /// A spare channel for every lane with devices (kept in the state file); through the
+    /// relay, a spare whose grant runs out within two days is replaced (an activity lives 8 hours).
+    func ensureChannels(for devices: [String: PushRegistry.Device], now: Date) async {
+        for (_, d) in devices.sorted(by: { $0.key < $1.key }) {
             guard let env = APNsEnvironment(rawValue: d.env) else { continue }
             let lane = Lane(bundle: d.bundle, env: env)
+            if let spare = state.channels[lane.key], transport.needsGrants,
+               (state.channelGrants[spare].flatMap(RelayGrant.expiry) ?? .distantPast) < now.addingTimeInterval(2 * 86400) {
+                try? await transport.deleteChannel(spare, grant: state.channelGrants[spare], bundle: lane.bundle, env: lane.env)
+                state.channels[lane.key] = nil
+                state.channelGrants[spare] = nil
+            }
             guard state.channels[lane.key] == nil else { continue }
             do {
-                let id = try await apns.createChannel(bundle: lane.bundle, env: lane.env)
-                state.channels[lane.key] = id
+                let made = try await transport.createChannel(bundle: lane.bundle, env: lane.env,
+                                                            device: d.relayGrant.map { (d.startToken, $0) })
+                state.channels[lane.key] = made.id
+                if let grant = made.grant { state.channelGrants[made.id] = grant }
                 state.save(stateURL)
-                log("new channel for \(lane.key): \(id)")
+                log("new channel for \(lane.key): \(made.id)\(transport.needsGrants ? " (through the relay, for \(d.name))" : "")")
             } catch {
                 log("can't create a channel for \(lane.key): \(error) (is Broadcast on for the App ID's Push Notifications?)")
                 pausedUntil = Date().addingTimeInterval(60)
@@ -259,8 +319,14 @@ public final class Pusher {
             let payload = ActivityPayload.start(attributes: AgentsActivityAttributes(host: host), state: s,
                                                 channel: channel, alert: alert, stale: stale, now: now, key: seal)
             do {
-                try await apns.start(token: token, bundle: lane.bundle, env: lane.env, payload: payload)
+                try await transport.start(token: token, grant: devices[device]?.relayGrant, bundle: lane.bundle,
+                                          env: lane.env, payload: payload, priority: 10)
                 log("start on \(devices[device]?.name ?? device): \(Self.describe(s))")
+                return true
+            } catch let r as RelayRefusal where r.isBadGrant {
+                log("start on \(devices[device]?.name ?? device): \(r); waiting for Wierdr to bring a new grant")
+                if let grant = devices[device]?.relayGrant { state.badGrants.insert(grant) }
+                planner.drop(device: device, lane: lane)
                 return true
             } catch let e as APNsError where e.isBadToken {
                 log("start on \(devices[device]?.name ?? device): \(e); forgetting its token")
@@ -275,8 +341,8 @@ public final class Pusher {
         case let .update(lane, channel, s, priority, alert):
             let payload = ActivityPayload.update(state: s, alert: alert, stale: stale, now: now, key: seal)
             do {
-                try await apns.broadcast(channel: channel, bundle: lane.bundle, env: lane.env, payload: payload,
-                                         priority: priority)
+                try await transport.broadcast(channel: channel, grant: state.channelGrants[channel], bundle: lane.bundle,
+                                              env: lane.env, payload: payload, priority: priority)
                 log("update p\(priority): \(Self.describe(s))\(alert.map { " — alert \($0.title): \($0.body)" } ?? "")")
                 return true
             } catch let e as APNsError where e.isBadChannel {
@@ -291,8 +357,8 @@ public final class Pusher {
         case let .end(lane, channel, s):
             let payload = ActivityPayload.end(state: s, dismissal: now.addingTimeInterval(-1), now: now, key: seal)
             do {
-                try await apns.broadcast(channel: channel, bundle: lane.bundle, env: lane.env, payload: payload,
-                                         priority: 10)
+                try await transport.broadcast(channel: channel, grant: state.channelGrants[channel], bundle: lane.bundle,
+                                              env: lane.env, payload: payload, priority: 10)
                 log("end")
             } catch {
                 log("end failed: \(error)")
@@ -312,18 +378,21 @@ public final class Pusher {
         let now = Date()
         for r in planner.running.values {
             _ = await perform(.end(lane: r.lane, channel: r.channel, state: r.last), now: now)
-            try? await apns.deleteChannel(r.channel, bundle: r.lane.bundle, env: r.lane.env)
+            try? await transport.deleteChannel(r.channel, grant: state.channelGrants[r.channel], bundle: r.lane.bundle,
+                                               env: r.lane.env)
         }
         planner.running = [:]
         state.running = [:]
         state.badTokens = []
+        state.badGrants = []
         // Spare channels too: the next start makes a new one.
         for (key, channel) in state.channels {
             let parts = key.split(separator: " ")
             guard parts.count == 2, let env = APNsEnvironment(rawValue: String(parts[1])) else { continue }
-            try? await apns.deleteChannel(channel, bundle: String(parts[0]), env: env)
+            try? await transport.deleteChannel(channel, grant: state.channelGrants[channel], bundle: String(parts[0]), env: env)
         }
         state.channels = [:]
+        state.channelGrants = [:]
         state.save(stateURL)
     }
 }

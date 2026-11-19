@@ -50,5 +50,7 @@
 	<true/>
 	<key>WierdrAppGroup</key>
 	<string>group.pw.xff.wierdr</string>
+	<key>WierdrRelay</key>
+	<string>https://relay.wierdr.workat.dev</string>
 </dict>
 </plist>

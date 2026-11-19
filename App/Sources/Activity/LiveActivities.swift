@@ -13,7 +13,8 @@ import WierdrActivity
 /// again); a second activity (a start that crossed an end) is ended. The pushes come
 /// sealed: when a session goes live, the computer's key (its `wierdr-push-seal`
 /// document) goes into the App Group, where the widget extension reads it, and the
-/// entry says which key this iPhone has.
+/// entry says which key this iPhone has. The entry also carries the push relay's grant
+/// for the token (`RelayRegistration`), for a pusher that goes through the relay.
 @MainActor
 @Observable
 final class LiveActivities {
@@ -53,6 +54,7 @@ final class LiveActivities {
                 guard let self else { return }
                 self.token = data.hexString
                 self.publish()
+                self.takeRelayGrant()
             }
         }
         Task { [weak self] in
@@ -96,9 +98,20 @@ final class LiveActivities {
         sealKid = nil
         Task { [weak self] in
             let kid = await Self.keepSealKey(from: core)
+            if let token = self?.token { _ = await RelayRegistration.shared.grant(token: token, env: Self.apnsEnvironment) }
             guard let self, self.core === core else { return }
             self.sealKid = kid
             self.publish(fresh: true)
+        }
+    }
+
+    /// A new token while connected: its relay grant, then the entry again.
+    private func takeRelayGrant() {
+        guard let token, core != nil, RelayRegistration.shared.kept(token: token, env: Self.apnsEnvironment, within: 10 * 86400) == nil
+        else { return }
+        Task { [weak self] in
+            guard await RelayRegistration.shared.grant(token: token, env: Self.apnsEnvironment) != nil else { return }
+            self?.publish()
         }
     }
 
@@ -139,7 +152,8 @@ final class LiveActivities {
         let entry: PushRegistry.Device? = enabled ? token.map {
             PushRegistry.Device(name: UIDevice.current.name, bundle: Bundle.main.bundleIdentifier ?? "pw.xff.wierdr",
                                 env: Self.apnsEnvironment, startToken: $0, updated: Date().timeIntervalSince1970,
-                                hasActivity: hasActivity, sealKid: sealKid)
+                                hasActivity: hasActivity, sealKid: sealKid,
+                                relayGrant: RelayRegistration.shared.kept(token: $0, env: Self.apnsEnvironment))
         } : nil
         if enabled && entry == nil { registration = .waiting; return }
         publishing?.cancel()

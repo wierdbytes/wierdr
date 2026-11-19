@@ -54,7 +54,7 @@ func connect() async throws -> CoreConnection {
 func makePusher() throws -> Pusher {
     let config = try PushConfig.load()
     let host = config.host ?? Host.current().localizedName ?? ProcessInfo.processInfo.hostName
-    let pusher = Pusher(apns: APNsClient(signer: try config.signer()), host: host, seal: try ActivitySealKey.loadOrCreate())
+    let pusher = Pusher(transport: try config.transport(), host: host, seal: try ActivitySealKey.loadOrCreate())
     pusher.log = say
     return pusher
 }
@@ -62,8 +62,8 @@ func makePusher() throws -> Pusher {
 @MainActor
 func status() async throws {
     let config = try? PushConfig.load()
-    print("config: \(config.map { "key \($0.keyID), team \($0.teamID), \($0.keyFile)" } ?? "missing (\(PushConfig.defaultURL.path))")")
-    if let config { _ = try config.signer(); print("key: readable") }
+    print("config: \(config.map(\.summary) ?? "missing (\(PushConfig.defaultURL.path))")")
+    if let config, config.relay == nil { _ = try config.signer(); print("key: readable") }
     let state = PushState.load()
     print("channels: \(state.channels.isEmpty ? "none" : state.channels.map { "\($0.key) → \($0.value)" }.sorted().joined(separator: ", "))")
     for r in state.running.values {
@@ -86,7 +86,9 @@ func status() async throws {
     for (id, d) in registry.devices.sorted(by: { $0.key < $1.key }) {
         let when = Date(timeIntervalSince1970: d.updated)
         let key = d.sealKid == nil ? "no key" : d.sealKid == seal?.kid ? "key" : "old key \(d.sealKid!)"
-        print("device: \(d.name) \(d.bundle) \(d.env) token \(d.startToken.prefix(12))…, \(key) (\(id), \(when))")
+        let grant = d.relayGrantExpiry.map { "relay grant until \(ISO8601DateFormatter().string(from: $0).prefix(10))" }
+            ?? "no relay grant"
+        print("device: \(d.name) \(d.bundle) \(d.env) token \(d.startToken.prefix(12))…, \(key), \(grant) (\(id), \(when))")
     }
     if registry.devices.isEmpty { print("devices: none (open Wierdr on the iPhone, connected to this Mac)") }
     let ws = Workspace()

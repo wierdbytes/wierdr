@@ -556,7 +556,9 @@ iPad — карточки спейсов (сворачиваются, перет
   агенту открывает его панель. «Нужен ты» зажигает экран со звуком, «закончил» — без звука. Её шлёт `wierdr-push` на Mac через APNs; приложение
   регистрирует iPhone в ядре при подключении (Settings → Live Activity: «On <компьютер>»)
   и берёт там ключ печати: Apple видит в пушах только счётчики, alert — «Needs you» /
-  «Done» без имён; без ключа — счётчики и «Open Wierdr to see the agents».
+  «Done» без имён; без ключа — счётчики и «Open Wierdr to see the agents». Без своего
+  ключа APNs демон шлёт пуши через релей Wierdr (`relay.wierdr.workat.dev`): приложение
+  получает там право на свой токен через App Attest ([relay.md](relay.md)).
   Настройка и устройство: [live-activity.md](live-activity.md).
 
 ![Live Activity](screenshots/iphone-live-activity.png)

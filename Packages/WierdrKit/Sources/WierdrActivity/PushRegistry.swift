@@ -34,25 +34,33 @@ public struct PushRegistry: Codable, Hashable, Sendable {
         /// The id of the seal key (`SealDocument`) the app keeps for the widget, if any:
         /// without it the activity there shows the counts but not the agents.
         public var sealKid: String?
+        /// The push relay's grant for `startToken` (`g1.<expiry>.<mac>`, from the app's App
+        /// Attest registration): a pusher going through the relay starts the activity here
+        /// and makes channels with it.
+        public var relayGrant: String?
 
         public init(name: String, bundle: String, env: String, startToken: String, updated: Double,
-                    hasActivity: Bool? = nil, sealKid: String? = nil) {
+                    hasActivity: Bool? = nil, sealKid: String? = nil, relayGrant: String? = nil) {
             self.name = name; self.bundle = bundle; self.env = env
             self.startToken = startToken; self.updated = updated; self.hasActivity = hasActivity
-            self.sealKid = sealKid
+            self.sealKid = sealKid; self.relayGrant = relayGrant
         }
+
+        /// When `relayGrant` runs out (nil without one or when it can't be read).
+        public var relayGrantExpiry: Date? { relayGrant.flatMap(RelayGrant.expiry) }
 
         enum CodingKeys: String, CodingKey {
             case name, bundle, env, updated
             case startToken = "start_token"
             case hasActivity = "has_activity"
             case sealKid = "seal_kid"
+            case relayGrant = "relay_grant"
         }
 
         /// The same registration, whenever written.
         public func same(as other: Device) -> Bool {
             name == other.name && bundle == other.bundle && env == other.env && startToken == other.startToken
-                && hasActivity == other.hasActivity && sealKid == other.sealKid
+                && hasActivity == other.hasActivity && sealKid == other.sealKid && relayGrant == other.relayGrant
         }
     }
 
@@ -66,6 +74,15 @@ public struct PushRegistry: Codable, Hashable, Sendable {
         let e = JSONEncoder()
         e.outputFormatting = [.sortedKeys]
         return (try? e.encode(self)) ?? Data("{}".utf8)
+    }
+}
+
+/// The push relay's grants (`Relay/src/grants.ts`): `g1.<expiry unix seconds>.<mac>`.
+public enum RelayGrant {
+    public static func expiry(_ grant: String) -> Date? {
+        let parts = grant.split(separator: ".")
+        guard parts.count == 3, parts[0] == "g1", let t = Double(parts[1]) else { return nil }
+        return Date(timeIntervalSince1970: t)
     }
 }
 

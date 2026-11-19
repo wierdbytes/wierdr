@@ -79,7 +79,9 @@ iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)         
   идущие активности и отвергнутые токены лежат в `~/.config/wierdr/push-state.json`,
   поэтому перезапуск демона продолжает ту же активность.
 - **Подпись запросов**: токен JWT (ES256) от `.p8` ключа APNs команды, переиспользуется
-  50 мин; HTTP/2 через `URLSession`.
+  50 мин; HTTP/2 через `URLSession`. Или через релей (`"relay"` в `push.json`): тогда
+  подписывает он, а демону нужны права устройств (`relay_grant` в их записях, приложение
+  берёт его через App Attest) и каналов. Подробно: [relay.md](relay.md).
 - Приложение, если на телефоне оказалось две активности Wierdr (start разминулся с end),
   оставляет последнюю.
 
@@ -171,6 +173,8 @@ iOS 18.4 на живой активности; через ~43 с / ~21 мин / 
    EOF
    scripts/push-agent.sh install      # release-сборка → ~/.local/share/wierdr-push (+ ссылка в ~/.local/bin), LaunchAgent
    ```
+   Без своего ключа — через релей: `{"relay": "https://relay.wierdr.workat.dev"}`
+   ([relay.md](relay.md)).
 3. Поставить на iPhone сборку с Live Activity (`make ipa && scripts/iphone.sh install`) и
    один раз открыть Wierdr, подключённый к этому Mac. В **Settings → Live Activity**
    должно стать «On mentoair».

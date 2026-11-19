@@ -39,6 +39,10 @@ Live Activity»).
 
 ## Релей для Wierdr
 
+> Сделан 19.11.2026: Cloudflare Worker в `Relay/` с App Attest, см. [relay.md](../relay.md).
+> Ниже — исходный замысел; отличия: права выдаются на App Attest без БД (подписаны HMAC),
+> каналы заводятся по праву устройства, релей пропускает только запечатанные пуши.
+
 ```
 iPhone (Wierdr) ──SSH──▶ Mac пользователя: herdr-core + wierdr-push ──HTTPS──▶ релей (наш) ──HTTP/2──▶ APNs
       ▲                                                                                              │
@@ -325,8 +329,9 @@ Wierdr?».
 1. Решить, нужна ли закрытость Live Activity от релея. Теперь она возможна: ключ
    файлом в App Group, печать открывает виджет (проверено на iPhone, в том числе на
    заблокированном).
-2. Протокол транспорта в `WierdrPush` и `RelayClient`; прототип релея (HMAC-права, App
-   Attest, лимиты).
+2. ~~Протокол транспорта в `WierdrPush` и `RelayClient`; прототип релея~~ — сделано
+   19.11.2026 ([relay.md](../relay.md)): `PushTransport`, `RelayClient`, Worker с App Attest,
+   HMAC‑правами и лимитами; проверено на iPhone.
 3. ~~Печать по умолчанию~~ — сделано 19.11.2026 (Build 83): пуши запечатаны всегда, ключ
    демона — в документе `wierdr-push-seal`, телефон кладёт его в App Group, `kid`, alert без
    имён, `fitting` по запечатанному размеру ([live-activity.md](../live-activity.md#запечатано)).

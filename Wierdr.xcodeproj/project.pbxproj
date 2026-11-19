@@ -92,6 +92,7 @@
 		E2F038B36F830D478AD82211 /* WierdrWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 057B9322AE6CCBE3260E5568 /* WierdrWidgets.swift */; };
 		E641C6D379526278652AAD39 /* ModelAliases.swift in Sources */ = {isa = PBXBuildFile; fileRef = B80B3C068CD2BFADEDBF7680 /* ModelAliases.swift */; };
 		E855C0D8271FC22D92E3CAB9 /* WorkspaceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95EECB6B23A9B256ADC3200B /* WorkspaceController.swift */; };
+		EAB13DB1FC1F556848339681 /* RelayRegistration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B63AAA583363CB64F13B188 /* RelayRegistration.swift */; };
 		EAC16D41AEBCC5EC9EC37FEB /* SpacesList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAB055678CBEED35D324983 /* SpacesList.swift */; };
 		EC18DDA987FF0473A49F2D7E /* WierdrApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12BEB38073DA12C77FA628AC /* WierdrApp.swift */; };
 		EC192EE4130459A9871E6286 /* DemoTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73B8BBCCDAF57164EE74D110 /* DemoTerminalView.swift */; };
@@ -147,6 +148,7 @@
 		14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalKeyBar.swift; sourceTree = "<group>"; };
 		1A26A269D22F1730952287B9 /* TerminalLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalLabView.swift; sourceTree = "<group>"; };
 		1AF2BC817415DFF36FE83826 /* PaneTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneTreeView.swift; sourceTree = "<group>"; };
+		1B63AAA583363CB64F13B188 /* RelayRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayRegistration.swift; sourceTree = "<group>"; };
 		1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentsLiveActivity.swift; sourceTree = "<group>"; };
 		20A5417D9BCC91A5B4906C41 /* SpaceHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceHeader.swift; sourceTree = "<group>"; };
 		24C773688B33E3F0413C5204 /* KeyboardCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCover.swift; sourceTree = "<group>"; };
@@ -517,6 +519,7 @@
 			isa = PBXGroup;
 			children = (
 				351E2DA61EC61DF8DAEDBC58 /* LiveActivities.swift */,
+				1B63AAA583363CB64F13B188 /* RelayRegistration.swift */,
 			);
 			path = Activity;
 			sourceTree = "<group>";
@@ -697,6 +700,7 @@
 				9DC3C5848715E4C861AFF5A3 /* Previews.swift in Sources */,
 				F355AA2AB188BF28FD81CBC8 /* PullToSearch.swift in Sources */,
 				CC6CA5DD5FA692EB2E3DF779 /* QuickSwitcher.swift in Sources */,
+				EAB13DB1FC1F556848339681 /* RelayRegistration.swift in Sources */,
 				B326FE920950C00CBFBA3688 /* RowMenu.swift in Sources */,
 				7CC2C3A024443CF62DBEE2E2 /* SettingsView.swift in Sources */,
 				E2019B79A2F0067DC6F63E40 /* SidebarHeader.swift in Sources */,
@@ -809,7 +813,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 83;
+				CURRENT_PROJECT_VERSION = 84;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -896,7 +900,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 83;
+				CURRENT_PROJECT_VERSION = 84;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;

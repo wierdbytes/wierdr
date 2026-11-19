@@ -451,3 +451,69 @@ private let channels = [lane.key: "CHAN=="]
         #expect(PushRegistry.decode(nil) == PushRegistry())
     }
 }
+
+/// Through the relay: the calls as JSON, its refusals and APNs' read as they would straight.
+@Suite struct RelayTests {
+    let relay = RelayClient(base: URL(string: "https://relay.example")!)
+
+    @Test func callsAreJSONToItsPaths() throws {
+        let r = try relay.request("v1/start", ["env": "development", "token": "aa", "grant": "g1.1.x", "payload": "{}", "priority": 10])
+        #expect(r.url?.absoluteString == "https://relay.example/v1/start")
+        #expect(r.httpMethod == "POST")
+        let body = try #require(try JSONSerialization.jsonObject(with: r.httpBody ?? Data()) as? [String: Any])
+        #expect(body["token"] as? String == "aa")
+        #expect(body["payload"] as? String == "{}")
+        #expect(body["priority"] as? Int == 10)
+    }
+
+    @Test func refusalsReadAsTheyWouldStraight() {
+        let apns = RelayClient.error(status: 502, json: ["error": "apns", "status": 410, "reason": "Unregistered"], data: Data())
+        #expect((apns as? APNsError)?.isBadToken == true)
+        let grant = RelayClient.error(status: 403, json: ["error": "grant_expired", "message": "grant_expired"], data: Data())
+        #expect((grant as? RelayRefusal)?.isBadGrant == true)
+        let limited = RelayClient.error(status: 429, json: ["error": "rate_limited"], data: Data())
+        #expect((limited as? RelayRefusal)?.isBadGrant == false)
+    }
+
+    @Test func pushJSONPicksTheRelayOrTheKey() throws {
+        let relayed = try JSONDecoder().decode(PushConfig.self, from: Data(#"{"relay": "https://relay.wierdr.workat.dev"}"#.utf8))
+        #expect(try relayed.transport().needsGrants)
+        let none = try JSONDecoder().decode(PushConfig.self, from: Data("{}".utf8))
+        #expect(throws: PushError.self) { try none.transport() }
+        let plain = try JSONDecoder().decode(PushConfig.self, from: Data(#"{"relay": "http://relay.example"}"#.utf8))
+        #expect(throws: PushError.self) { try plain.transport() }
+    }
+
+    @Test func anOlderStateFileStillReads() throws {
+        let old = #"{"channels": {"pw.xff.wierdr development": "CHAN=="}, "running": {}, "badTokens": ["bb"]}"#
+        let s = try JSONDecoder().decode(PushState.self, from: Data(old.utf8))
+        #expect(s.channels["pw.xff.wierdr development"] == "CHAN==")
+        #expect(s.badTokens == ["bb"])
+        #expect(s.channelGrants.isEmpty)
+    }
+
+    @Test func aGrantSaysWhenItRunsOut() {
+        #expect(RelayGrant.expiry("g1.1800000000.abc") == Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(RelayGrant.expiry("nope") == nil)
+        var d = phone
+        d.relayGrant = "g1.1800000000.abc"
+        #expect(String(decoding: PushRegistry(devices: ["d": d]).encoded(), as: UTF8.self).contains("\"relay_grant\":\"g1.1800000000.abc\""))
+        #expect(!d.same(as: phone))
+    }
+
+    @MainActor @Test func throughTheRelayOnlyDevicesWithAGoodGrantGetPushes() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("push-state-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let pusher = Pusher(transport: relay, host: "mac", seal: .generate(), stateURL: url)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func device(_ grant: String?) -> PushRegistry.Device {
+            var d = phone
+            d.relayGrant = grant
+            return d
+        }
+        pusher.devices = ["good": device("g1.1801000000.a"), "none": device(nil), "soon": device("g1.1800003600.b"),
+                          "refused": device("g1.1801000000.c")]
+        pusher.state.badGrants = ["g1.1801000000.c"]
+        #expect(Set(pusher.usableDevices(now: now).keys) == ["good"])
+    }
+}
