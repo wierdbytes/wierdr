@@ -112,7 +112,8 @@ APNs держит не больше 10 000 каналов на приложен�
 - **Демон** удаляет каналы через очередь с повторами (`pendingDeletes` в `push-state.json`),
   а не одной попыткой. Новый запасной канал он заводит до удаления старого.
 - **Сверка.** `POST /v1/admin/channels {env, purge}` (с `Authorization: Bearer
-  <ADMIN_TOKEN>`) сверяет список APNs (`all-channels`) с учётом. Каналы, которых в учёте
+  <ADMIN_TOKEN>`; на mentoair токен в `~/.config/wierdr/relay-admin-token`) сверяет список
+  APNs (`all-channels`) с учётом. Каналы, которых в учёте
   нет, при `purge: true` удаляются, по 40 за вызов. Осторожно: каналы, созданные напрямую
   (демон с ключом на Mac, тот же bundle и окружение), для релея тоже неизвестны.
 
@@ -180,7 +181,7 @@ bunx wrangler d1 create wierdr-relay           # один раз; id — в wran
 bun run schema                                 # схема D1 (можно повторять)
 bunx wrangler secret put APNS_KEY < ~/.config/wierdr/AuthKey_N3XU3N4B8V.p8
 openssl rand -base64 32 | tr -d '\n' | bunx wrangler secret put RELAY_SECRET
-openssl rand -base64 32 | tr -d '\n' | bunx wrangler secret put ADMIN_TOKEN   # и сохранить себе
+openssl rand -base64 32 | tr -d '\n' | tee ~/.config/wierdr/relay-admin-token | bunx wrangler secret put ADMIN_TOKEN
 bun run deploy                 # воркер, cron и Custom Domain relay.wierdr.workat.dev
 bunx wrangler tail             # журнал (только наши строки: журналы вызовов с адресами выключены)
 ```
