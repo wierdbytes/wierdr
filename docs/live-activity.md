@@ -14,7 +14,8 @@
 - тап по агенту открывает Wierdr сразу на его панели (`wierdr://agent?t=<адрес>`).
 
 Когда агент начинает ждать тебя, экран загорается, Dynamic Island раскрывается и звучит
-звук: «Needs you — <заголовок> — <спейс>». Когда агент закончил, экран тоже загорается и
+звук; текст alert (его показывают часы) — «Needs you — 1 needs you · 2 working», без имён
+(«Запечатано» ниже). Когда агент закончил, экран тоже загорается и
 остров раскрывается, но без звука. Когда все агенты простаивают, Live Activity остаётся
 ещё на 2 часа и показывает «N idle»: агент, запущенный за это время, приходит обычным
 обновлением, без вибрации. Через 2 часа простоя она закрывается, а следующий запуск
@@ -27,6 +28,7 @@
 ```
 iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)                 APNs
  ActivityKit: push-to-start token ──SSH──▶ документ `wierdr-push` в ядре
+ App Group: ключ печати          ◀──SSH── документ `wierdr-push-seal` (ключ демона)
                                            wierdr-push: зеркало ядра (WorkspaceEngine,
                                            только чтение) → сводка → Planner
                                              start (на токен устройства) ─────────────▶ ─┐
@@ -38,8 +40,11 @@ iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)         
   становится живой (а также при смене токена, настройки Live Activities или появлении и
   исчезновении активности), записывает свою запись в документ `wierdr-push` того
   компьютера, к которому подключено: имя, bundle id, окружение APNs (`aps-environment` из
-  профиля), токен и есть ли сейчас на телефоне активность. Запись идёт через `doc.set` с CAS.
-  Если Live Activities для Wierdr выключены, запись удаляется.
+  профиля), токен, есть ли сейчас на телефоне активность и id ключа печати, который у
+  него есть (`seal_kid`). Запись идёт через `doc.set` с CAS.
+  Если Live Activities для Wierdr выключены, запись удаляется. Перед записью приложение
+  берёт ключ печати из документа `wierdr-push-seal` и кладёт его в App Group (см.
+  «Запечатано»).
 - **`wierdr-push`** на Mac (launchd, `scripts/push-agent.sh`). Это `WorkspaceEngine` в
   режиме только чтения над локальным `hc connect`, то есть тот же разбор, что в приложении.
   Раз в секунду он строит сводку (`ActivitySummary`: `Workspace.inbox`, общий со списком
@@ -78,10 +83,39 @@ iPhone (Wierdr)                          Mac (herdr-core + wierdr-push)         
 - Приложение, если на телефоне оказалось две активности Wierdr (start разминулся с end),
   оставляет последнюю.
 
-Код: `Packages/WierdrKit/Sources/WierdrActivity` (атрибуты, состояние, документ, ссылка;
-общий для приложения, виджета и Mac), `WierdrPush` (`ActivitySummary`, `Planner`,
-`ActivityPayload`, `APNsClient`, `Pusher`), `wierdr-push` (CLI); в приложении
-`App/Sources/Activity/LiveActivities.swift` и виджет `App/Widgets/`.
+Код: `Packages/WierdrKit/Sources/WierdrActivity` (атрибуты, состояние, документ, ссылка,
+печать `Sealed.swift`; общий для приложения, виджета и Mac), `WierdrPush`
+(`ActivitySummary`, `Planner`, `ActivityPayload`, `APNsClient`, `Pusher`), `wierdr-push`
+(CLI); в приложении `App/Sources/Activity/LiveActivities.swift` и виджет `App/Widgets/`.
+
+## Запечатано
+
+APNs (и будущий релей, [research/push-relay.md](research/push-relay.md)) видят в пушах
+только счётчики. Заголовки, спейсы, модели, машины, адреса агентов и имя компьютера
+запечатаны ключом, которого у Apple нет.
+
+- **Ключ** делает `wierdr-push` при первом запуске: 256 бит в `~/.config/wierdr/seal-key`
+  (base64, `0600`), `kid` — первые 8 hex SHA‑256 ключа. Демон кладёт его в документ
+  `wierdr-push-seal` своего ядра (`{"schema": 1, "kid", "key"}`) и раз в минуту проверяет,
+  что он там. Прочитать документ может тот, кто говорит с ядром, то есть тот, кто и так
+  видит агентов.
+- **Телефон** берёт ключ, когда сессия становится живой (по SSH, мимо APNs), и кладёт его
+  файлом `Seal/<kid>.key` в App Group `group.pw.xff.wierdr`: файл доступен только
+  владельцу, читается после первой разблокировки и не попадает в резервную копию. На
+  каждый компьютер свой файл. Связка ключей не подходит: у виджета Live Activity на iPhone
+  её нет, а файл из App Group он читает и на заблокированном телефоне (проверено
+  2026‑11‑19).
+- **Пуш.** `content-state` — `{"blocked", "done", "working", "idle", "at", "sealed", "kid"}`,
+  где `sealed` = `base64(AES-GCM(zlib(JSON агентов)))` (nonce ‖ шифротекст ‖ тег, с
+  назначением и `kid` в AAD). `attributes` запечатаны целиком: `{"sealed", "kid"}`.
+  `ActivityPayload.fitting` меряет уже запечатанный размер (не больше 3000 Б).
+- **Alert** открыт (его читает APNs, показывают часы), поэтому без имён: старт —
+  «Wierdr» и счётчики, update — «Needs you» / «Done» и счётчики.
+- **Виджет** открывает печать в `ContentState.init(from:)` ключом по `kid`. Нет ключа (Wierdr
+  ещё не подключался к этому компьютеру, ключ сменился) → счётчики и «Open Wierdr to see
+  the agents». Когда приложение сообщает новый `seal_kid`, демон сразу шлёт update, и
+  строки появляются.
+- Печать включена всегда; открытых пушей нет.
 
 ## Время
 
@@ -118,6 +152,8 @@ iOS 18.4 на живой активности; через ~43 с / ~21 мин / 
      Sandbox & Production), скачать `AuthKey_XXXXXXXXXX.p8`. Ключ скачивается один раз.
    - **Identifiers → `pw.xff.wierdr`**: включить *Push Notifications* и в нём галку
      **Broadcast Capability**. Без Broadcast каналы не создаются.
+   - App Group `group.pw.xff.wierdr` у `pw.xff.wierdr` и `pw.xff.wierdr.widgets` (ключ
+     печати для виджета). Её Xcode заводит сам, см. следующий пункт.
    - Подписи нужен профиль с push для `pw.xff.wierdr`: прежний wildcard‑профиль
      (`iOS Team Provisioning Profile: *`) push не включает. Виджету хватило бы и его, но
      с 2026‑11‑19 у `pw.xff.wierdr.widgets` свой App ID и профиль. Проще всего войти в
@@ -143,10 +179,15 @@ iOS 18.4 на живой активности; через ~43 с / ~21 мин / 
 Проверка и обслуживание:
 
 ```sh
-scripts/push-agent.sh status   # launchd + конфиг, устройства, канал, идущая активность, сводка сейчас
+scripts/push-agent.sh status   # launchd + конфиг, ключ печати, устройства (есть ли у них ключ), канал, активность, сводка
 scripts/push-agent.sh log      # что и когда отправлено (start/update/end, ошибки APNs)
 wierdr-push reset              # закончить идущую активность, удалить каналы, забыть отвергнутые токены
 ```
+
+Сменить ключ печати: остановить демон, удалить `~/.config/wierdr/seal-key`, запустить
+снова (`scripts/push-agent.sh restart`). Он сделает и опубликует новый. Телефоны покажут
+«Open Wierdr to see the agents», пока Wierdr на них не подключится к этому Mac (проверено
+2026‑11‑19).
 
 Посмотреть активность без APNs в симуляторе (DEBUG):
 `xcrun simctl launch <sim> pw.xff.wierdr -demo YES -live-activity-demo YES`, затем
@@ -178,7 +219,8 @@ wierdr-push reset              # закончить идущую активно�
   `UserDefaults` работают. Тот же бинарник в виджете экрана «Домой» (другой процесс) связку
   видит: закрыта она именно песочницей Live Activity. В симуляторе связка доступна, так что
   проверять нужно на устройстве (проверено 2026‑11‑16 и 2026‑11‑19, iOS 27.2.1;
-  [research/push-relay.md](research/push-relay.md)). Файл в App Group `group.pw.xff.wierdr`
-  Live Activity читает, и на заблокированном телефоне тоже. Группа и App ID
-  `pw.xff.wierdr.widgets` заведены (Xcode, 2026‑11‑19), но пока ими пользуется только
-  lab‑ветка `lab/sealed-live-activity`.
+  [research/push-relay.md](research/push-relay.md)). Поэтому ключ печати лежит файлом в App
+  Group: его Live Activity читает, и на заблокированном телефоне тоже.
+- Пока Wierdr не подключился к компьютеру (после установки, после смены ключа), активность
+  на этом телефоне показывает только счётчики и «Open Wierdr to see the agents».
+- Alert без имён: часы показывают «Needs you» и счётчики, а не заголовок агента.

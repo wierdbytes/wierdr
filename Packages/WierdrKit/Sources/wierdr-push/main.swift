@@ -4,8 +4,10 @@
 //   wierdr-push [--hc PATH] status  config, devices, channels, the running activity, the summary now
 //   wierdr-push [--hc PATH] reset   end the running activity and forget it (and refused tokens)
 //
-// Config: ~/.config/wierdr/push.json (`PushConfig`), state: ~/.config/wierdr/push-state.json.
-// Devices register themselves in the core's `wierdr-push` document when Wierdr connects.
+// Config: ~/.config/wierdr/push.json (`PushConfig`), state: ~/.config/wierdr/push-state.json,
+// the key the pushes are sealed with: ~/.config/wierdr/seal-key (made at the first run).
+// Devices register themselves in the core's `wierdr-push` document when Wierdr connects,
+// and take the seal key from its `wierdr-push-seal` document, which the daemon writes.
 import Foundation
 import HerdrCore
 import WierdrActivity
@@ -52,7 +54,7 @@ func connect() async throws -> CoreConnection {
 func makePusher() throws -> Pusher {
     let config = try PushConfig.load()
     let host = config.host ?? Host.current().localizedName ?? ProcessInfo.processInfo.hostName
-    let pusher = Pusher(apns: APNsClient(signer: try config.signer()), host: host)
+    let pusher = Pusher(apns: APNsClient(signer: try config.signer()), host: host, seal: try ActivitySealKey.loadOrCreate())
     pusher.log = say
     return pusher
 }
@@ -70,12 +72,21 @@ func status() async throws {
     }
     if state.running.isEmpty { print("running: nothing") }
     if !state.badTokens.isEmpty { print("refused tokens: \(state.badTokens.count)") }
+    let seal = (try? Data(contentsOf: ActivitySealKey.defaultURL)).flatMap { ActivitySealKey(base64: String(decoding: $0, as: UTF8.self)) }
     let c = try await connect()
+    let sealDoc = try await c.getDoc(SealDocument.documentName)
+    let published = sealDoc.value == .null ? nil : SealDocument.decode(try JSONEncoder().encode(sealDoc.value))
+    if let seal {
+        print("seal: key \(seal.kid) (\(ActivitySealKey.defaultURL.path)), \(published?.kid == seal.kid ? "published" : "not published yet") in \(SealDocument.documentName)")
+    } else {
+        print("seal: no key yet (the daemon makes \(ActivitySealKey.defaultURL.path) when it starts)")
+    }
     let doc = try await c.getDoc(PushRegistry.documentName)
     let registry = doc.value == .null ? PushRegistry() : PushRegistry.decode(try JSONEncoder().encode(doc.value))
     for (id, d) in registry.devices.sorted(by: { $0.key < $1.key }) {
         let when = Date(timeIntervalSince1970: d.updated)
-        print("device: \(d.name) \(d.bundle) \(d.env) token \(d.startToken.prefix(12))… (\(id), \(when))")
+        let key = d.sealKid == nil ? "no key" : d.sealKid == seal?.kid ? "key" : "old key \(d.sealKid!)"
+        print("device: \(d.name) \(d.bundle) \(d.env) token \(d.startToken.prefix(12))…, \(key) (\(id), \(when))")
     }
     if registry.devices.isEmpty { print("devices: none (open Wierdr on the iPhone, connected to this Mac)") }
     let ws = Workspace()

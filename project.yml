@@ -11,7 +11,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.2.0"
-    CURRENT_PROJECT_VERSION: "82"
+    CURRENT_PROJECT_VERSION: "83"
 packages:
   WierdrKit:
     path: Packages/WierdrKit
@@ -58,9 +58,13 @@ targets:
       path: App/Wierdr.entitlements
       properties:
         aps-environment: development
+        # The Live Activity's seal keys, for the widget extension (its sandbox has no keychain).
+        com.apple.security.application-groups:
+          - group.pw.xff.wierdr
     info:
       path: App/Info.plist
       properties:
+        WierdrAppGroup: group.pw.xff.wierdr
         NSSupportsLiveActivities: true
         NSSupportsLiveActivitiesFrequentUpdates: true
         CFBundleURLTypes:
@@ -95,9 +99,15 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Wierdr
         SKIP_INSTALL: YES
+    entitlements:
+      path: App/Widgets/WierdrWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.pw.xff.wierdr
     info:
       path: App/Widgets/Info.plist
       properties:
+        WierdrAppGroup: group.pw.xff.wierdr
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:

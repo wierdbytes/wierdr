@@ -36,7 +36,7 @@ struct AgentsLiveActivity: Widget {
                             Link(destination: AgentLink.url(address: agent.id)) { AgentLine(agent: agent) }
                         }
                         if s.agents.isEmpty {
-                            Text(context.isStale ? "Not updated lately" : "Nothing running")
+                            Text(s.unreadable ? Self.openToSee : context.isStale ? "Not updated lately" : "Nothing running")
                                 .font(.system(size: 13))
                                 .foregroundStyle(Palette.dim)
                         }
@@ -70,6 +70,10 @@ struct AgentsLiveActivity: Widget {
             .keylineTint(s.top.map(Palette.color) ?? Palette.dim)
         }
     }
+
+    /// The agents came sealed and this iPhone has no key yet: Wierdr takes it when it
+    /// connects to the computer.
+    static let openToSee = "Open Wierdr to see the agents"
 }
 
 // MARK: - Lock Screen
@@ -101,7 +105,7 @@ private struct LockScreenView: View {
                     Link(destination: AgentLink.url(address: agent.id)) { AgentLine(agent: agent) }
                 }
                 if state.agents.isEmpty {
-                    Text(state.idle > 0 ? "\(state.idle) idle" : "No agents")
+                    Text(state.unreadable ? AgentsLiveActivity.openToSee : state.idle > 0 ? "\(state.idle) idle" : "No agents")
                         .font(.system(size: 13))
                         .foregroundStyle(Palette.dim)
                         .frame(maxWidth: .infinity, alignment: .leading)

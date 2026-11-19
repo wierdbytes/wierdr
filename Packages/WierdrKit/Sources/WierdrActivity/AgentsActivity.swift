@@ -10,14 +10,30 @@ import ActivityKit
 /// Push payloads carry these as JSON (`attributes` and `content-state`), decoded by
 /// ActivityKit with a plain `JSONDecoder`: so no `Date`s here (they would be
 /// seconds since 2001), times are UNIX seconds.
+///
+/// The pusher seals them (`ActivitySeal`): the attributes whole, `{"sealed", "kid"}`;
+/// of the state only the agents, next to the open counts and time. They decode here,
+/// in the widget extension (and the app), with the key from the App Group.
 public struct AgentsActivityAttributes: Codable, Hashable, Sendable {
     /// The type name a push-to-start payload names (`attributes-type`).
     public static let typeName = "AgentsActivityAttributes"
 
-    /// The computer the agents run on (its name, e.g. `mentoair`).
+    /// The computer the agents run on (its name, e.g. `mentoair`; empty when sealed
+    /// and this phone has no key).
     public var host: String
 
     public init(host: String) { self.host = host }
+
+    enum CodingKeys: String, CodingKey { case host }
+
+    /// Plain, or sealed whole.
+    public init(from decoder: Decoder) throws {
+        if try ActivitySeal.isSealed(decoder) {
+            self = try ActivitySeal.open(Self.self, in: decoder, .attributes) ?? AgentsActivityAttributes(host: "")
+            return
+        }
+        host = try decoder.container(keyedBy: CodingKeys.self).decode(String.self, forKey: .host)
+    }
 
     public struct ContentState: Codable, Hashable, Sendable {
         /// Agents by status, each sub-agent an agent of its own (as it reads under
@@ -30,11 +46,33 @@ public struct AgentsActivityAttributes: Codable, Hashable, Sendable {
         public var agents: [Agent]
         /// When the pusher built it (UNIX seconds).
         public var at: Double
+        /// The agents came sealed and this phone has no key for them (it gets it when
+        /// Wierdr connects to the computer): the counts show, the rows don't.
+        public var unreadable = false
 
         public init(blocked: Int = 0, done: Int = 0, working: Int = 0, idle: Int = 0,
                     agents: [Agent] = [], at: Double = 0) {
             self.blocked = blocked; self.done = done; self.working = working; self.idle = idle
             self.agents = agents; self.at = at
+        }
+
+        enum CodingKeys: String, CodingKey { case blocked, done, working, idle, agents, at }
+
+        /// Plain, or the counts open and the agents sealed.
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            blocked = try c.decode(Int.self, forKey: .blocked)
+            done = try c.decode(Int.self, forKey: .done)
+            working = try c.decode(Int.self, forKey: .working)
+            idle = try c.decode(Int.self, forKey: .idle)
+            at = try c.decode(Double.self, forKey: .at)
+            if try ActivitySeal.isSealed(decoder) {
+                let opened = try ActivitySeal.open([Agent].self, in: decoder, .agents)
+                agents = opened ?? []
+                unreadable = opened == nil
+            } else {
+                agents = try c.decode([Agent].self, forKey: .agents)
+            }
         }
 
         /// Agents that need you, are done or are working.

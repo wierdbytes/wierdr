@@ -48,5 +48,7 @@
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>WierdrAppGroup</key>
+	<string>group.pw.xff.wierdr</string>
 </dict>
 </plist>

@@ -69,29 +69,59 @@ public struct PushState: Codable, Sendable {
     }
 }
 
+extension ActivitySealKey {
+    /// `~/.config/wierdr/seal-key`: the key the pushes are sealed with (base64, 0600).
+    public static var defaultURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/wierdr/seal-key")
+    }
+
+    /// The key kept at `url`, or a new one written there.
+    public static func loadOrCreate(_ url: URL = defaultURL) throws -> ActivitySealKey {
+        if let data = try? Data(contentsOf: url) {
+            guard let key = ActivitySealKey(base64: String(decoding: data, as: UTF8.self)) else {
+                throw PushError("\(url.path) is not a seal key (base64 of 32 bytes); remove it to make a new one")
+            }
+            return key
+        }
+        let key = ActivitySealKey.generate()
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard FileManager.default.createFile(atPath: url.path, contents: Data(key.base64.utf8),
+                                             attributes: [.posixPermissions: 0o600]) else {
+            throw PushError("can't write \(url.path)")
+        }
+        return key
+    }
+}
+
 /// The Mac side of the agents Live Activity: mirrors the local core's workspace
 /// (read-only `WorkspaceEngine`), reads the devices from the `wierdr-push`
-/// document, and pushes what the `Planner` says through APNs.
+/// document, publishes the seal key in `wierdr-push-seal`, and pushes what the
+/// `Planner` says through APNs, sealed.
 @MainActor
 public final class Pusher {
     public let workspace = Workspace()
     let engine: WorkspaceEngine
     let apns: APNsClient
     let host: String
+    let seal: ActivitySealKey
     let stateURL: URL
     var state: PushState
     var planner: Planner
     var devices: [String: PushRegistry.Device] = [:]
     var registryReadAt = Date.distantPast
+    /// When `wierdr-push-seal` was last found holding the key.
+    var sealCheckedAt = Date.distantPast
     /// After an APNs failure: no pushes until then (5 s, doubling to 5 min).
     var pausedUntil = Date.distantPast
     var backoff: TimeInterval = 0
     var engineEnded: Error?
     public var log: (String) -> Void = { print($0) }
 
-    public init(apns: APNsClient, host: String, stateURL: URL = PushState.defaultURL, settings: Planner.Settings = .init()) {
+    public init(apns: APNsClient, host: String, seal: ActivitySealKey, stateURL: URL = PushState.defaultURL,
+                settings: Planner.Settings = .init()) {
         self.apns = apns
         self.host = host
+        self.seal = seal
         self.stateURL = stateURL
         // A mirror: no writes, no limits; git facts and colors rarely (the activity shows neither).
         engine = WorkspaceEngine(workspace: workspace,
@@ -125,6 +155,9 @@ public final class Pusher {
             let now = Date()
             if liveSince == nil { liveSince = now }
             guard now.timeIntervalSince(liveSince!) >= 2 else { continue }
+            if now.timeIntervalSince(sealCheckedAt) >= 60 {
+                await publishSeal(connection, now: now)
+            }
             if now.timeIntervalSince(registryReadAt) >= 5 {
                 registryReadAt = now
                 await readRegistry(connection)
@@ -138,8 +171,13 @@ public final class Pusher {
             let doc = try await connection.getDoc(PushRegistry.documentName)
             let registry = doc.value == .null ? PushRegistry() : PushRegistry.decode(try JSONEncoder().encode(doc.value))
             if registry.devices != devices {
-                let names = registry.devices.values.map { "\($0.name) (\($0.env))" }.sorted()
+                let names = registry.devices.values
+                    .map { "\($0.name) (\($0.env)\($0.sealKid == seal.kid ? "" : ", no key"))" }.sorted()
                 log("devices: \(names.isEmpty ? "none" : names.joined(separator: ", "))")
+            }
+            // A device that just got the key: show it the agents now, not at the next change.
+            for (id, d) in registry.devices where d.sealKid == seal.kid && devices[id]?.sealKid != seal.kid {
+                if let env = APNsEnvironment(rawValue: d.env) { planner.resend(lane: Lane(bundle: d.bundle, env: env)) }
             }
             devices = registry.devices
         } catch {
@@ -147,12 +185,30 @@ public final class Pusher {
         }
     }
 
+    /// Writes the key into `wierdr-push-seal` unless it's there (compare-and-swap).
+    func publishSeal(_ connection: CoreConnection, now: Date) async {
+        let want = SealDocument(seal)
+        do {
+            let doc = try await connection.getDoc(SealDocument.documentName)
+            let have = doc.value == .null ? nil : SealDocument.decode(try JSONEncoder().encode(doc.value))
+            if have != want {
+                _ = try await connection.setDoc(SealDocument.documentName, value: try JSONValue(data: want.encoded()),
+                                                version: doc.version)
+                log("seal key \(seal.kid) published in \(SealDocument.documentName)")
+            }
+            sealCheckedAt = now
+        } catch {
+            log("can't publish the seal key: \(error)")
+            sealCheckedAt = now.addingTimeInterval(-50)
+        }
+    }
+
     func tick(now: Date) async {
         guard now >= pausedUntil else { return }
         let usable = devices.filter { !state.badTokens.contains($0.value.startToken) }
         await ensureChannels(for: usable)
-        let summary = ActivityPayload.fitting(ActivitySummary.state(of: workspace, now: now))
-        let actions = planner.step(now: now, summary: summary, host: host, devices: usable, channels: state.channels)
+        let summary = ActivityPayload.fitting(ActivitySummary.state(of: workspace, now: now), key: seal)
+        let actions = planner.step(now: now, summary: summary, devices: usable, channels: state.channels)
         var failed = false
         for action in actions {
             if !(await perform(action, now: now)) { failed = true }
@@ -201,7 +257,7 @@ public final class Pusher {
         switch action {
         case let .start(lane, channel, device, token, s, alert):
             let payload = ActivityPayload.start(attributes: AgentsActivityAttributes(host: host), state: s,
-                                                channel: channel, alert: alert, stale: stale, now: now)
+                                                channel: channel, alert: alert, stale: stale, now: now, key: seal)
             do {
                 try await apns.start(token: token, bundle: lane.bundle, env: lane.env, payload: payload)
                 log("start on \(devices[device]?.name ?? device): \(Self.describe(s))")
@@ -217,7 +273,7 @@ public final class Pusher {
                 return false
             }
         case let .update(lane, channel, s, priority, alert):
-            let payload = ActivityPayload.update(state: s, alert: alert, stale: stale, now: now)
+            let payload = ActivityPayload.update(state: s, alert: alert, stale: stale, now: now, key: seal)
             do {
                 try await apns.broadcast(channel: channel, bundle: lane.bundle, env: lane.env, payload: payload,
                                          priority: priority)
@@ -233,7 +289,7 @@ public final class Pusher {
                 return false
             }
         case let .end(lane, channel, s):
-            let payload = ActivityPayload.end(state: s, dismissal: now.addingTimeInterval(-1), now: now)
+            let payload = ActivityPayload.end(state: s, dismissal: now.addingTimeInterval(-1), now: now, key: seal)
             do {
                 try await apns.broadcast(channel: channel, bundle: lane.bundle, env: lane.env, payload: payload,
                                          priority: 10)

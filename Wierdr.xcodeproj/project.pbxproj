@@ -213,6 +213,7 @@
 		DA7419A8C3F9010723F11CA7 /* HostEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostEditor.swift; sourceTree = "<group>"; };
 		DB1AF3AAB71A867022D2F1D6 /* LICENSE-SymbolsNerdFont.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "LICENSE-SymbolsNerdFont.txt"; sourceTree = "<group>"; };
 		DB5688005CEE92F5CBA92848 /* PhoneAgentRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneAgentRow.swift; sourceTree = "<group>"; };
+		DE26974C234B1E0F63F4FB12 /* WierdrWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WierdrWidgets.entitlements; sourceTree = "<group>"; };
 		DEFF448659A8E45E54D69258 /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
 		E003A4137528491C6CAB5B01 /* SpaceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceCard.swift; sourceTree = "<group>"; };
 		E84DDDCE899CB1DEAE132F06 /* PhoneHosting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHosting.swift; sourceTree = "<group>"; };
@@ -454,6 +455,7 @@
 				1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */,
 				F884493E41282F237E5D6C75 /* Assets.xcassets */,
 				FE150153042D0CA31A91D6D1 /* Info.plist */,
+				DE26974C234B1E0F63F4FB12 /* WierdrWidgets.entitlements */,
 				057B9322AE6CCBE3260E5568 /* WierdrWidgets.swift */,
 			);
 			path = Widgets;
@@ -807,7 +809,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 82;
+				CURRENT_PROJECT_VERSION = 83;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -842,6 +844,7 @@
 		317BA150D95D5F52156F695B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = App/Widgets/WierdrWidgets.entitlements;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Widgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Wierdr;
@@ -893,7 +896,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 82;
+				CURRENT_PROJECT_VERSION = 83;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AUL4CCB2XY;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -951,6 +954,7 @@
 		CA69C524E9099640C4C560B6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = App/Widgets/WierdrWidgets.entitlements;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Widgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Wierdr;

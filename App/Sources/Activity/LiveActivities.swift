@@ -10,7 +10,10 @@ import WierdrActivity
 /// into the connected computer's `wierdr-push` document (`PushRegistry`) each time
 /// a session goes live and whenever the token, the person's Live Activities setting
 /// or whether an activity is shown changes (gone after a start: the pusher starts it
-/// again); a second activity (a start that crossed an end) is ended.
+/// again); a second activity (a start that crossed an end) is ended. The pushes come
+/// sealed: when a session goes live, the computer's key (its `wierdr-push-seal`
+/// document) goes into the App Group, where the widget extension reads it, and the
+/// entry says which key this iPhone has.
 @MainActor
 @Observable
 final class LiveActivities {
@@ -32,6 +35,8 @@ final class LiveActivities {
 
     @ObservationIgnored private var core: CoreConnection?
     @ObservationIgnored private var host: String?
+    /// The id of the connected computer's seal key, once kept for the widget.
+    @ObservationIgnored private var sealKid: String?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var publishing: Task<Void, Never>?
     @ObservationIgnored private var owesFresh = false
@@ -83,12 +88,26 @@ final class LiveActivities {
         }
     }
 
-    /// A session went live on `host`: register there.
+    /// A session went live on `host`: take its seal key, register there.
     func connected(_ core: CoreConnection, host: String) {
         guard started else { return }
         self.core = core
         self.host = host
-        publish(fresh: true)
+        sealKid = nil
+        Task { [weak self] in
+            let kid = await Self.keepSealKey(from: core)
+            guard let self, self.core === core else { return }
+            self.sealKid = kid
+            self.publish(fresh: true)
+        }
+    }
+
+    /// Keeps the computer's seal key in the App Group for the widget; its id, or nil
+    /// (no key published there yet: its pusher hasn't run).
+    private static func keepSealKey(from core: CoreConnection) async -> String? {
+        guard let doc = try? await core.getDoc(SealDocument.documentName), doc.value != .null,
+              let key = SealDocument.decode(try? doc.value.data())?.sealKey else { return nil }
+        return ActivitySeal.store(key) ? key.kid : nil
     }
 
     /// Back in the foreground: say again what this iPhone shows (an activity gone
@@ -120,7 +139,7 @@ final class LiveActivities {
         let entry: PushRegistry.Device? = enabled ? token.map {
             PushRegistry.Device(name: UIDevice.current.name, bundle: Bundle.main.bundleIdentifier ?? "pw.xff.wierdr",
                                 env: Self.apnsEnvironment, startToken: $0, updated: Date().timeIntervalSince1970,
-                                hasActivity: hasActivity)
+                                hasActivity: hasActivity, sealKid: sealKid)
         } : nil
         if enabled && entry == nil { registration = .waiting; return }
         publishing?.cancel()

@@ -31,23 +31,28 @@ public struct PushRegistry: Codable, Hashable, Sendable {
         /// `false` after a start means it's gone (dismissed, the app reinstalled): the
         /// pusher starts it there again.
         public var hasActivity: Bool?
+        /// The id of the seal key (`SealDocument`) the app keeps for the widget, if any:
+        /// without it the activity there shows the counts but not the agents.
+        public var sealKid: String?
 
         public init(name: String, bundle: String, env: String, startToken: String, updated: Double,
-                    hasActivity: Bool? = nil) {
+                    hasActivity: Bool? = nil, sealKid: String? = nil) {
             self.name = name; self.bundle = bundle; self.env = env
             self.startToken = startToken; self.updated = updated; self.hasActivity = hasActivity
+            self.sealKid = sealKid
         }
 
         enum CodingKeys: String, CodingKey {
             case name, bundle, env, updated
             case startToken = "start_token"
             case hasActivity = "has_activity"
+            case sealKid = "seal_kid"
         }
 
         /// The same registration, whenever written.
         public func same(as other: Device) -> Bool {
             name == other.name && bundle == other.bundle && env == other.env && startToken == other.startToken
-                && hasActivity == other.hasActivity
+                && hasActivity == other.hasActivity && sealKid == other.sealKid
         }
     }
 

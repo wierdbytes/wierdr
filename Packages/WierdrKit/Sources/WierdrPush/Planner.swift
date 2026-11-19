@@ -87,10 +87,9 @@ public struct Planner: Sendable {
     /// The pushes to send now.
     /// - Parameters:
     ///   - summary: what the activity should show.
-    ///   - host: the computer's name (start alerts).
     ///   - devices: registered devices (bad tokens already left out).
     ///   - channels: each lane's spare channel (by lane key) for the next start; lanes without one wait.
-    public mutating func step(now: Date, summary: State, host: String,
+    public mutating func step(now: Date, summary: State,
                               devices: [String: PushRegistry.Device], channels: [String: String]) -> [Action] {
         let t = now.timeIntervalSince1970
         var actions: [Action] = []
@@ -118,7 +117,7 @@ public struct Planner: Sendable {
                 guard active, let channel = channels[key] else { continue }
                 if doneOnly, t - (doneSince ?? t) < settings.doneStartDelay { continue }
                 actions += start(lane: lane, devices: laneDevices, channel: channel, summary: summary,
-                                 host: host, now: t, sound: summary.blocked > 0)
+                                 now: t, sound: summary.blocked > 0)
                 continue
             }
             if active {
@@ -139,7 +138,7 @@ public struct Planner: Sendable {
                 running[key] = nil
                 if active, let fresh = channels[key] {
                     actions += start(lane: lane, devices: laneDevices, channel: fresh, summary: summary,
-                                     host: host, now: t, sound: false)
+                                     now: t, sound: false)
                 }
                 continue
             }
@@ -151,7 +150,7 @@ public struct Planner: Sendable {
                 let gone = d.hasActivity == false && d.updated > (r.startedOn?[id] ?? r.startedAt) + Self.goneGrace
                 guard r.devices[id] != d.startToken || gone else { continue }
                 actions.append(.start(lane: lane, channel: r.channel, device: id, token: d.startToken,
-                                      state: summary, alert: startAlert(summary, host: host, sound: false)))
+                                      state: summary, alert: startAlert(summary, sound: false)))
                 r.devices[id] = d.startToken
                 r.startedOn = (r.startedOn ?? [:]).merging([id: t]) { $1 }
             }
@@ -189,13 +188,13 @@ public struct Planner: Sendable {
     }
 
     private mutating func start(lane: Lane, devices: [String: PushRegistry.Device], channel: String,
-                                summary: State, host: String, now t: Double, sound: Bool) -> [Action] {
+                                summary: State, now t: Double, sound: Bool) -> [Action] {
         var r = Running(lane: lane, channel: channel, startedAt: t, devices: [:], last: summary, lastSentAt: t)
         var actions: [Action] = []
         for id in devices.keys.sorted() {
             let d = devices[id]!
             actions.append(.start(lane: lane, channel: channel, device: id, token: d.startToken,
-                                  state: summary, alert: startAlert(summary, host: host, sound: sound)))
+                                  state: summary, alert: startAlert(summary, sound: sound)))
             r.devices[id] = d.startToken
             r.startedOn = (r.startedOn ?? [:]).merging([id: t]) { $1 }
         }
@@ -203,21 +202,19 @@ public struct Planner: Sendable {
         return actions
     }
 
-    /// A start's alert (ActivityKit requires one): the computer and the counts.
-    func startAlert(_ s: State, host: String, sound: Bool) -> ActivityPayload.Alert {
-        ActivityPayload.Alert(title: host, body: ActivitySummary.line(s), sound: sound)
+    /// A start's alert (ActivityKit requires one): the counts. Alerts go in the open
+    /// (APNs reads them, the Watch shows them), so they name no agent, space or computer.
+    func startAlert(_ s: State, sound: Bool) -> ActivityPayload.Alert {
+        ActivityPayload.Alert(title: "Wierdr", body: ActivitySummary.line(s), sound: sound)
     }
 
     /// An update's alert: an agent that newly needs you (with a sound), else one
-    /// newly done (silent: it only lights the screen and opens the island).
+    /// newly done (silent: it only lights the screen and opens the island); the counts.
     static func alert(from old: State, to new: State) -> ActivityPayload.Alert? {
         let before = Dictionary(old.agents.map { ($0.id, $0.status) }, uniquingKeysWith: { a, _ in a })
         for (status, title, sound) in [(AgentStatusWord.blocked, "Needs you", true), (.done, "Done", false)] {
-            let fresh = new.agents.filter { $0.status == status && before[$0.id] != status }
-            guard let first = fresh.first else { continue }
-            var body = "\(first.title) — \(first.space)"
-            if fresh.count > 1 { body += " and \(fresh.count - 1) more" }
-            return ActivityPayload.Alert(title: title, body: body, sound: sound)
+            guard new.agents.contains(where: { $0.status == status && before[$0.id] != status }) else { continue }
+            return ActivityPayload.Alert(title: title, body: ActivitySummary.line(new), sound: sound)
         }
         return nil
     }
