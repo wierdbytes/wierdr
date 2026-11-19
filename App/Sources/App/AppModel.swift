@@ -20,6 +20,8 @@ final class AppModel {
     /// Last connection error, shown with a Retry button.
     var connectionError: String?
     private(set) var failedHost: Host?
+    /// The host list opens its editor for a new host (the tour's Add My Mac).
+    var addHostRequested = false
 
     let hosts = HostStore()
     @ObservationIgnored var services: AppServices

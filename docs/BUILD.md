@@ -167,12 +167,17 @@ WebDriverAgent на порту 8200 (iPad‑овский остаётся на 8
 make sim-iphone                         # сборка + симулятор + демо
 scripts/iphone-sim.sh start             # WebDriverAgent в симуляторе (один раз за сессию)
 scripts/iphone-sim.sh launch -demo YES  # (-open pane|banner|switcher|settings — сразу туда)
+scripts/iphone-sim.sh launch -tour YES  # тур с начала; -tour message — с шага (id в TutorialSteps.swift, демо откроется само)
 scripts/iphone-sim.sh tap "Agents"      # по accessibility label; tap-xy в точках (428×926)
 scripts/iphone-sim.sh swipe 2 500 300 500   # свайп назад от края
 scripts/iphone-sim.sh type "echo hi"
 scripts/iphone-sim.sh shot /tmp/iphone.png
 scripts/iphone-sim.sh orient landscape; scripts/iphone-sim.sh appearance dark
 ```
+
+Тур сам начинается при первом запуске без хостов (не с `-demo YES`); чтобы увидеть это снова —
+`xcrun simctl uninstall` и чистая установка (метка `tour.seen` в UserDefaults уходит вместе с данными). Жесты
+WDA доходят сквозь окно тура так же, как палец: только в вырез шага.
 
 Живое подключение из симулятора — как в `docs/architecture.md` (тестовый sshd на
 127.0.0.1:2222, `SIMCTL_CHILD_WIERDR_AUTOCONNECT=…`), с `SIM` = «Wierdr iPhone 13 Pro Max».

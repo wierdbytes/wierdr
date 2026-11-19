@@ -242,6 +242,11 @@ public final class Workspace {
     /// background): raise their shared `herdr.seen` to their current turn
     /// (clears "done" on every Herdr client).
     public func markSeen(_ addresses: [String]) {
+        // The demo: what's on screen is seen at once, done turning idle as live.
+        if isLocal {
+            for a in addresses where terminals[a]?.status == .done { changeHere(a) { $0.status = .idle } }
+            return
+        }
         backend?.markSeen(addresses)
     }
 
@@ -267,6 +272,14 @@ public final class Workspace {
 
     /// No herdr-core behind it (the demo): pin, unread, idle and moving a space change it here only.
     var isLocal = false
+
+    /// The demo's agents at work (the app's `DemoAgents`: a message answered, a question
+    /// allowed): `change` applied to a terminal here. Nothing without a demo (live, a change
+    /// comes from herdr-core).
+    public func changeLocally(_ address: String, _ change: (inout TerminalInfo) -> Void) {
+        guard isLocal else { return }
+        changeHere(address, change)
+    }
 
     /// The demo's `space.move`: reorders `spaces`, the space among its machine's.
     private func moveHere(_ spaceID: String, before: String?) throws {

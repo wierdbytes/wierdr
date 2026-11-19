@@ -10,6 +10,8 @@ final class WorkspaceController {
     let workspace: Workspace
     let screen: ScreenState
     let isDemo: Bool
+    /// The demo's agents answering messages and keys (nil when live).
+    let demo: DemoAgents?
 
     // MARK: Navigation chrome
     var columnVisibility: NavigationSplitViewVisibility = .all
@@ -90,6 +92,7 @@ final class WorkspaceController {
         self.workspace = workspace
         self.screen = screen
         self.isDemo = isDemo
+        demo = isDemo ? DemoAgents(workspace: workspace) : nil
         // The demo always starts unfolded and doesn't touch the saved state.
         foldedMachines = isDemo ? [] : Self.load("sidebar.foldedMachines")
         closedSpaces = isDemo ? [] : Self.load("sidebar.closedSpaces")

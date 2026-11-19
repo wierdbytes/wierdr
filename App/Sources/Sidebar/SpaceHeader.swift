@@ -48,6 +48,7 @@ struct SpaceHeader: View {
                 // Not in the lifted card's picture (`ImageRenderer` draws a UIKit view as a placeholder).
                 if let drag { SpaceMarker(space: space.id, role: .header, markers: drag.markers) }
             }
+            .tutorialAnchor(.spaceHeader(space.id))
             // Lifted by its menu: the menu's picture stands in for it.
             .opacity(drag?.menuLifted == "space:\(space.id)" ? 0 : 1)
             .accessibilityElement(children: .combine)

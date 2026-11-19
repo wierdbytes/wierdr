@@ -74,7 +74,12 @@ struct ComposerBar: View {
             zone.ignoresSafeArea(edges: [.bottom, .horizontal])
                 .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { inset in
                     // Only while the keyboard is down: up, the safe area is the keyboard's.
-                    if placement == .screen, controller.composing != address, inset > 0, inset < 60 { homeInset = inset }
+                    guard placement == .screen, controller.composing != address, inset > 0, inset < 60 else { return }
+                    // The home indicator's is the window's: what's measured here moves with the bar
+                    // (its bottom padding is made of it), and caught while the keyboard went down it
+                    // fed back on itself for good (31.666…63 ↔ 31.666…74, every frame).
+                    let home = Self.windowBottomInset ?? inset
+                    if abs(home - homeInset) > 0.5 { homeInset = home }
                 }
         }
         .sensoryFeedback(.impact(weight: .light), trigger: sent)
@@ -90,6 +95,12 @@ struct ComposerBar: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item]) { result in
             Task { await attachFile(result) }
         }
+    }
+
+    /// The window's bottom safe area: the home indicator's (0: none), the keyboard aside.
+    private static var windowBottomInset: CGFloat? {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        return scene?.keyWindow?.safeAreaInsets.bottom
     }
 
     /// What the bar stands on: the terminal's background (the glass floats on it, as on Telegram's
@@ -139,6 +150,7 @@ struct ComposerBar: View {
         // out of, the field's interactive glass took the first tap on the menu's
         // items over it (they worked only beside it, or with a double tap; iOS 26).
         .composerGlass(RoundedRectangle(cornerRadius: 20), theme: theme, interactive: false)
+        .tutorialAnchor(.composer)
     }
 
     /// Telegram's cap on the text's height: what is left above it but 120 pt,
@@ -183,10 +195,15 @@ struct ComposerBar: View {
 
     /// Text (or, from a hardware keyboard's Return in an empty field, just Return) to the program.
     private func submit(pressReturn: Bool) {
-        guard let session = live() else { return }
         let prose = controller.workspace.terminal(address)?.isAgent ?? true
         let message = Self.plain((controller.drafts[address] ?? "").trimmingCharacters(in: .newlines), prose: prose)
-        session.send(text: message, submit: pressReturn)
+        if let demo = controller.demo {
+            // The demo's agent answers it (`DemoAgents`).
+            demo.send(message, to: address)
+        } else {
+            guard let session = live() else { return }
+            session.send(text: message, submit: pressReturn)
+        }
         sent += 1
         guard !message.isEmpty else { return }
         // Cleared at once; the send button goes and the field shrinks with Telegram's 0.4 s.

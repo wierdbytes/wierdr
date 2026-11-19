@@ -51,6 +51,7 @@ struct PhonePaneScreen: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(theme.background)
+                    .tutorialAnchor(.terminal)
                     .keyPanel(address: address, covered: covered, state: $keys)
                     .overlay(alignment: .bottom) {
                         // Above the panel, and beside it while it is out.
@@ -82,7 +83,14 @@ struct PhonePaneScreen: View {
             menuOpen = false
         }
         .onChange(of: covered) { if covered { menuOpen = false } }
-        .onDisappear { controller.composing = nil }
+        // The tour waits for these.
+        .onChange(of: menuOpen) { _, open in Tutorial.shared.report(\.paneMenu, open: open) }
+        .onChange(of: keys.open) { _, open in Tutorial.shared.report(\.keys, open: open) }
+        .onDisappear {
+            controller.composing = nil
+            Tutorial.shared.report(\.paneMenu, open: false)
+            Tutorial.shared.report(\.keys, open: false)
+        }
         // One ground for the bar, the terminal and the field: the glass floats on the terminal's background.
         .background(theme.background.ignoresSafeArea())
         // Under the list, its own banner shows.
@@ -224,6 +232,7 @@ private struct PhonePaneTopBar: View {
                             .allowsHitTesting(false)
                     }
                     .composerGlass(shape, theme: theme)
+                    .tutorialAnchor(.paneTitle)
                 }
             }
             if menuOpen {
@@ -316,6 +325,7 @@ private struct PhoneListButton: View {
         .buttonStyle(AttachPressStyle())
         // A capsule as wide as it is tall is the circle: one shape, it stretches when the count comes.
         .composerGlass(Capsule(), theme: theme)
+        .tutorialAnchor(.paneBack)
         .animation(.snappy(duration: 0.3), value: waiting?.status)
         .animation(.snappy(duration: 0.3), value: waiting?.count)
         .accessibilityLabel("Back")

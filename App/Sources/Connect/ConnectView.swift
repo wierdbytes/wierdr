@@ -58,7 +58,11 @@ struct ConnectView: View {
                         editing = Host()
                     } label: {
                         Label("Add Host", systemImage: "plus")
+                            // The row's width: what the tour points at.
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
+                    .tutorialAnchor(.addHost)
                 } header: {
                     Text("Hosts")
                 }
@@ -68,10 +72,23 @@ struct ConnectView: View {
                         app.startDemo()
                     } label: {
                         Label("Try the Demo", systemImage: "play.rectangle")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                     .disabled(app.connecting != nil)
+                    .tutorialAnchor(.tryDemo)
+                    if Tutorial.isAvailable {
+                        Button {
+                            Tutorial.shared.start()
+                        } label: {
+                            Label("Take the Tour", systemImage: "hand.point.up.left")
+                        }
+                        .disabled(app.connecting != nil || Tutorial.shared.isActive)
+                    }
                 } footer: {
-                    Text("Explore Wierdr with sample spaces and agents, no computer needed.")
+                    Text(Tutorial.isAvailable
+                         ? "Explore Wierdr with sample spaces and agents, no computer needed. The tour shows you around on them."
+                         : "Explore Wierdr with sample spaces and agents, no computer needed.")
                 }
             }
             .listStyle(.insetGrouped)
@@ -91,6 +108,11 @@ struct ConnectView: View {
                 HostEditor(host: host, isNew: !app.hosts.hosts.contains { $0.id == host.id }) { saved, password in
                     app.save(saved, password: password)
                 }
+            }
+            .onChange(of: app.addHostRequested, initial: true) { _, requested in
+                guard requested else { return }
+                app.addHostRequested = false
+                editing = Host()
             }
             .confirmationDialog("Delete \u{201C}\(deleting?.displayName ?? "")\u{201D}?", isPresented: deleteShown, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) { if let h = deleting { app.delete(h) } }

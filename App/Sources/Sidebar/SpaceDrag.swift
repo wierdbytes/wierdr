@@ -30,7 +30,11 @@ final class SpaceDrag {
     /// What the list's menu has lifted (its identifier: `space:` or `row:` and the id):
     /// hidden in the list meanwhile, as UIKit hides a view it lifts itself; else the row
     /// showed through its picture, scaled, as a doubled text.
-    var menuLifted: String?
+    var menuLifted: String? {
+        didSet {
+            if (menuLifted != nil) != (oldValue != nil) { Tutorial.shared.report(\.listMenu, open: menuLifted != nil) }
+        }
+    }
     /// What the list's press is holding (as `menuLifted`): it shrinks, Telegram's way.
     var pressing: String?
     /// Its machine's spaces as the list shows them meanwhile, it at its slot. After
@@ -643,7 +647,7 @@ final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
     }
 
     private func render(_ content: some View, in window: UIWindow) -> UIImage? {
-        let renderer = ImageRenderer(content: content)
+        let renderer = ImageRenderer(content: content.environment(\.tutorialAnchorsOff, true))
         renderer.scale = window.traitCollection.displayScale
         return renderer.uiImage
     }
@@ -756,6 +760,7 @@ final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
                 .environment(\.theme, drag.theme)
                 .environment(\.isCompactLayout, drag.compact)
                 .environment(\.homeFolder, controller.workspace.home)
+                .environment(\.tutorialAnchorsOff, true)
             let renderer = ImageRenderer(content: content)
             renderer.scale = list.traitCollection.displayScale
             return renderer.uiImage

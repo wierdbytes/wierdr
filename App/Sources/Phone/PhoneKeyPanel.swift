@@ -155,6 +155,7 @@ struct PhoneKeyPanel: View {
                 key("esc", .escape, a11y: "Escape")
                 key("␣", .text(" "), symbol: "space", a11y: "Space")
                 key("⏎", .enter, symbol: "return", prominent: true, a11y: "Return")
+                    .tutorialAnchor(.keyEnter)
             }
             .padding(.bottom, Self.bottomMargin)
         }
@@ -241,6 +242,12 @@ struct PhoneKeyPanel: View {
     }
 
     private func send(_ key: TerminalSession.Key) {
+        if let demo = controller.demo {
+            // The demo's agent takes it as an answer when it asks (`DemoAgents`).
+            demo.press(key, on: address)
+            pressed += 1
+            return
+        }
         guard let session = live(services.terminalSession(address)) else { return }
         session.send(key: key)
         pressed += 1
@@ -386,6 +393,9 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
     var isOpen: Bool
     /// A keyboard is up (the terminal's or the message field's): a double tap on the terminal hides it.
     var keyboardUp = false
+    /// The terminal is drawn (the demo's `DemoTerminalView`): no terminal view under the
+    /// finger, the swipe starts anywhere in the area.
+    var drawn = false
     /// The finger's travel (leftward is negative) and where it is, in the terminal's area.
     var onDrag: (CGFloat, CGPoint) -> Void
     /// Where the panel would come to rest at the finger's speed (translation), and where the finger left.
@@ -506,7 +516,7 @@ struct PhoneKeyPanelGestures: UIViewRepresentable {
                 guard parent.isOpen else { return true }
                 return p.x < area.maxX - PhoneKeyPanel.width
             }
-            if parent.isOpen {
+            if parent.isOpen || parent.drawn {
                 claims = true
             } else if WierdrTerminalView.swipeable(touch) {
                 // Anywhere on a terminal.

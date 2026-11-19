@@ -46,6 +46,7 @@ struct SpaceCard: View {
             .background {
                 if let drag { SpaceMarker(space: space.id, role: .card, markers: drag.markers) }
             }
+            .tutorialAnchor(.card(space.id))
     }
 }
 
@@ -149,6 +150,7 @@ struct SpaceCardLine: View {
                                      showsSpace: false, tree: item.row.tree,
                                      hasKids: !controller.shownTree(of: item.row).isEmpty)
             }
+            .tutorialAnchor(.agentRow(t.address))
         }
     }
 

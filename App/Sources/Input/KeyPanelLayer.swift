@@ -55,6 +55,7 @@ struct KeyPanelLayer: ViewModifier {
                     enabled: enabled,
                     isOpen: state.open,
                     keyboardUp: keyboardUp,
+                    drawn: controller.isDemo,
                     onDrag: { x, p in moved(x, at: p) },
                     onEnd: { projected, _ in finishDrag(projected: projected) },
                     // The keyboard (and the message field), at once; the panel stays.
@@ -115,6 +116,7 @@ struct KeyPanelLayer: ViewModifier {
     private func panel(_ address: String) -> some View {
         let progress = progress
         return PhoneKeyPanel(address: address, shown: progress > 0, restY: swipeY ?? area.midY)
+            .tutorialAnchor(.keys)
             .id(address)
             .offset(x: (1 - progress) * PhoneKeyPanel.width)
             .allowsHitTesting(progress > 0)

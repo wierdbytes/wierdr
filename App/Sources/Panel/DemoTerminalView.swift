@@ -7,6 +7,8 @@ import WierdrModel
 struct DemoTerminalView: View {
     var context: TerminalViewContext
     @Environment(\.homeFolder) private var home
+    /// The demo's: what was sent here and the answers (`DemoAgents`).
+    @Environment(WorkspaceController.self) private var controller: WorkspaceController?
 
     private var palette: TerminalPalette { context.palette }
     private var size: CGFloat { context.fontSize }
@@ -17,7 +19,8 @@ struct DemoTerminalView: View {
                 DemoLazygit(palette: palette, fontSize: size, cwd: Format.tilde(context.terminal?.cwd, home: home))
                     .padding(context.padding)
             } else {
-                let script = DemoScript(terminal: context.terminal, home: home)
+                let script = DemoScript(terminal: context.terminal, home: home,
+                                        exchanges: controller?.demo?.exchanges[context.address] ?? [])
                 // Lines never size the view: they hang from the top (shell) or the bottom (TUI) and clip.
                 Color.clear
                     .overlay(alignment: script.anchorBottom ? .bottomLeading : .topLeading) {
@@ -107,15 +110,42 @@ private func s(_ text: String, _ role: TRole = .fg) -> TSeg { TSeg(text: text, r
 struct DemoScript {
     var lines: [TLine] = []
     var anchorBottom = false
+    /// Sent in the demo (`DemoAgents`): drawn after the screen's last turn, before its prompt.
+    private var exchanges: [DemoAgents.Exchange] = []
 
-    init(terminal t: TerminalInfo?, home: String?) {
+    init(terminal t: TerminalInfo?, home: String?, exchanges: [DemoAgents.Exchange] = []) {
         let cwd = Format.tilde(t?.cwd, home: home)
+        self.exchanges = exchanges
         switch t?.program.key {
         case "pi": pi(t!, cwd: cwd)
         case "claude": claude(t!, cwd: cwd)
         case "codex": codex(t!, cwd: cwd)
         default: shell(t, cwd: cwd)
         }
+    }
+
+    /// The exchanges, as `program`'s TUI draws a prompt and its answer, at `index` (from the end when negative).
+    private mutating func insertExchanges(at index: Int, prompt: (String) -> TLine, working: TLine,
+                                          answer: (String) -> [TLine]) {
+        guard !exchanges.isEmpty else { return }
+        var out: [TLine] = []
+        for e in exchanges {
+            out += [TLine(), prompt(e.prompt), TLine()]
+            out += e.reply.map(answer) ?? [working]
+        }
+        let at = index < 0 ? max(0, lines.count + index) : min(index, lines.count)
+        lines.insert(contentsOf: out, at: at)
+    }
+
+    /// A reply cut into lines of about `width` characters (the drawn terminal doesn't wrap).
+    private static func wrapped(_ text: String, width: Int = 52) -> [String] {
+        var out: [String] = [], line = ""
+        for word in text.split(separator: " ") {
+            if !line.isEmpty, line.count + 1 + word.count > width { out.append(line); line = "" }
+            line += line.isEmpty ? String(word) : " " + word
+        }
+        if !line.isEmpty { out.append(line) }
+        return out
     }
 
     // A pi session (working / idle / done), shaped like the desktop screenshot.
@@ -162,7 +192,8 @@ struct DemoScript {
                    s(String(repeating: "─", count: 160), .ansi(2))]),
             TLine(),
         ]
-        switch t.status {
+        // With messages sent in the demo, the drawn turn is an earlier one, finished.
+        switch exchanges.isEmpty ? t.status : .done {
         case .working:
             lines += [
                 TLine([s(" Reading the pane layout and the tab strip next.")]),
@@ -181,6 +212,10 @@ struct DemoScript {
                 TLine([s(" All set. Nothing else is pending in this session.")]),
             ]
         }
+        insertExchanges(at: lines.count,
+                        prompt: { TLine([s(" > ", .ansi(4)), s($0, .bold)]) },
+                        working: TLine([s(" ● ", .ansi(4)), s("Working...", .dim)]),
+                        answer: { Self.wrapped($0).map { TLine([s(" " + $0)]) } })
         lines.append(TLine())
         lines.append(statusline(t, cwd: cwd))
         lines.append(TLine([s(" ")], cursor: true))
@@ -246,14 +281,25 @@ struct DemoScript {
                 lines.append(TLine([s("● ", .ansi(2)), s(r.kind == .shell ? "Bash" : "Task", .bold), s("(\(r.title))"),
                                     s(" — running in background", .dim)]))
             }
+            insertExchanges(at: lines.count,
+                            prompt: { TLine([s("> ", .dim), s($0)]) },
+                            working: TLine([s("✻ ", .hex("#d77757")), s("Thinking…", .hex("#d77757"))]),
+                            answer: { text in
+                                Self.wrapped(text).enumerated().map { i, l in TLine([s(i == 0 ? "● " : "  "), s(l)]) }
+                            })
+            if t.status == .working, exchanges.last?.reply != nil || exchanges.isEmpty {
+                lines += [
+                    TLine(),
+                    TLine([s("✻ ", .hex("#d77757")), s("Queueing… ", .hex("#d77757")), s("(3m · ↓ 4.1k tokens · esc to interrupt)", .dim)]),
+                ]
+            }
             lines += [
-                TLine(),
-                TLine([s("✻ ", .hex("#d77757")), s("Queueing… ", .hex("#d77757")), s("(3m · ↓ 4.1k tokens · esc to interrupt)", .dim)]),
                 TLine(),
                 TLine([s(String(repeating: "─", count: w), .dim)]),
                 TLine([s("> ", .dim)], cursor: true),
                 TLine([s(String(repeating: "─", count: w), .dim)]),
-                TLine([s("  \(tasks.count) background task\(tasks.count == 1 ? "" : "s") · ? for shortcuts", .dim)]),
+                TLine([s(tasks.isEmpty ? "  ? for shortcuts"
+                         : "  \(tasks.count) background task\(tasks.count == 1 ? "" : "s") · ? for shortcuts", .dim)]),
             ]
             return
         }
@@ -319,6 +365,13 @@ struct DemoScript {
             TLine(),
             TLine([s("  \(model) \(effort) · \(left)% left · \(cwd)", .dim)]),
         ]
+        // Before its prompt, the blank line over it too.
+        insertExchanges(at: -4,
+                        prompt: { TLine([s("› ", .bold), s($0)]) },
+                        working: TLine([s("• ", .dim), s("Working", .bold), s(" (esc to interrupt)", .dim)]),
+                        answer: { text in
+                            Self.wrapped(text).enumerated().map { i, l in TLine([s(i == 0 ? "• " : "  ", .dim), s(l)]) }
+                        })
     }
 
     // A zsh with a few commands.
@@ -366,6 +419,14 @@ struct DemoScript {
                 prompt("", cursor: true),
             ]
         }
+        // Commands typed in the demo: each echoed at a prompt, its answer under it, before the last prompt.
+        guard !exchanges.isEmpty else { return }
+        let last = lines.removeLast()
+        for e in exchanges {
+            lines.append(prompt(e.prompt))
+            lines += Self.wrapped(e.reply ?? "").map { TLine([s($0, .dim)]) }
+        }
+        lines.append(last)
     }
 }
 

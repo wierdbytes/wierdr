@@ -22,6 +22,14 @@ struct SidebarView: View {
         let headerHeight = SidebarHeader.height + bottomGap
         ZStack(alignment: .bottom) {
             SpacesList(topInset: safeTop, bottomInset: headerHeight)
+                .overlay {
+                    // The tour's pull to Go to: the list between the status bar and the header.
+                    Color.clear
+                        .padding(.top, safeTop)
+                        .padding(.bottom, headerHeight)
+                        .tutorialAnchor(.list)
+                        .allowsHitTesting(false)
+                }
             PhoneEdgeFade(edge: .top, height: PhoneEdgeFade.statusBar(safeTop))
                 .frame(maxHeight: .infinity, alignment: .top)
             PhoneEdgeFade(edge: .bottom, height: headerHeight)

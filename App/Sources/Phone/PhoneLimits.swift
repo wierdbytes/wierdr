@@ -76,6 +76,7 @@ private struct PhoneLimitAccount: View {
                 .presentationCompactAdaptation(.popover)
                 .presentationBackground(theme.chrome)
         }
+        .onChange(of: showsLimits) { _, open in Tutorial.shared.report(\.limits, open: open) }
         .accessibilityLabel(spoken(windows))
         .accessibilityHint("Shows when they reset")
     }

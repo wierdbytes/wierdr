@@ -13,7 +13,9 @@ struct WierdrApp: App {
         LiveActivities.shared.start()
         let connector = LiveConnector()
         _connector = State(initialValue: connector)
-        _app = State(initialValue: AppModel(services: connector.services))
+        let app = AppModel(services: connector.services)
+        _app = State(initialValue: app)
+        Tutorial.shared.attach(app)
     }
 
     var body: some Scene {
@@ -45,6 +47,14 @@ struct WierdrApp: App {
                 await DebugAutoConnect.run(app)
                 #endif
                 if !UserDefaults.standard.bool(forKey: "demo") { await app.reconnectLastHost() }
+                #if DEBUG
+                // `-tour YES` starts the tour, `-tour <step id>` at that step (a demo step opens the demo).
+                if let tour = UserDefaults.standard.string(forKey: "tour") {
+                    Tutorial.shared.start(at: ["YES", "1", "true"].contains(tour) ? nil : tour)
+                }
+                #endif
+                // The first launch: the tour, on the host list.
+                Tutorial.shared.startIfFirstLaunch()
                 #if DEBUG
                 // `-open switcher|settings|space:<id>|agent:<address>` (screenshots).
                 if let open = UserDefaults.standard.string(forKey: "open"), let s = app.session {

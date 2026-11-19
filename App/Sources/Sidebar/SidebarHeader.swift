@@ -22,13 +22,16 @@ struct SidebarHeader: View {
     var body: some View {
         SidebarHeaderRow {
             SidebarLimits()
+                .tutorialAnchor(.limits)
             SidebarTitle()
+                .tutorialAnchor(.statusRing)
             HStack(spacing: 0) {
                 // Go to is a pull of the list; VoiceOver's is here.
                 GoToAccessibilityButton(hint: "Or pull the list up.")
                 ComposerGlassGroup {
                     SidebarMenu()
                         .composerGlass(Circle(), theme: theme)
+                        .tutorialAnchor(.plus)
                 }
             }
         }

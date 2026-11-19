@@ -64,6 +64,18 @@ struct SettingsView: View {
                 if Device.isPhone && !isDemo {
                     LiveActivitySection()
                 }
+                if Tutorial.isAvailable {
+                    Section {
+                        Button("Take the Tour") {
+                            dismiss()
+                            Tutorial.shared.restart()
+                        }
+                    } footer: {
+                        Text(isDemo
+                             ? "From the host list, on the demo: you try each thing yourself."
+                             : "From the host list, on the demo: you try each thing yourself. It disconnects you from \(hostName ?? "this computer") for the time.")
+                    }
+                }
                 Section("About") {
                     LabeledContent("Version", value: Self.version)
                     NavigationLink("Acknowledgements") { LicensesView() }
