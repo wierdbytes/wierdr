@@ -21,6 +21,9 @@ export interface Secrets {
 }
 
 export const CHALLENGE_TTL = 5 * 60;
+/** An attestation may be sent again later with its challenge (it's idempotent by key id):
+ *  the app keeps what Apple attested when the relay couldn't be reached. */
+export const ATTEST_CHALLENGE_TTL = 24 * 3600;
 export const GRANT_TTL = 30 * 24 * 3600;
 
 async function mac(secret: string, ...parts: string[]): Promise<Bytes> {
@@ -41,11 +44,12 @@ export async function makeChallenge(secrets: Secrets, now: number): Promise<stri
   return `c1.${t}.${nonce}.${b64url((await mac(secrets.current, "challenge", t, nonce)).slice(0, 16))}`;
 }
 
-export async function checkChallenge(secrets: Secrets, challenge: string, now: number): Promise<boolean> {
+export async function checkChallenge(secrets: Secrets, challenge: string, now: number,
+                                     ttl = CHALLENGE_TTL): Promise<boolean> {
   const [v, t, nonce, sig, ...rest] = challenge.split(".");
   if (v !== "c1" || rest.length || !t || !nonce || !sig || !/^\d+$/.test(t)) return false;
   const age = now - Number(t);
-  if (age < -30 || age > CHALLENGE_TTL) return false;
+  if (age < -30 || age > ttl) return false;
   const got = b64decode(sig);
   if (!got) return false;
   for (const secret of secretsOf(secrets)) {

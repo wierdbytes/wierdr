@@ -87,14 +87,12 @@ func status() async throws {
     }
     let doc = try await c.getDoc(PushRegistry.documentName)
     let registry = doc.value == .null ? PushRegistry() : PushRegistry.decode(try JSONEncoder().encode(doc.value))
+    let now = Date()
     for (id, d) in registry.devices.sorted(by: { $0.key < $1.key }) {
         let when = Date(timeIntervalSince1970: d.updated)
         let key = d.sealKid == nil ? "no key" : d.sealKid == seal?.kid ? "key" : "old key \(d.sealKid!)"
-        let until = d.relayGrantExpiry.map { " until \(ISO8601DateFormatter().string(from: $0).prefix(10))" } ?? ""
-        let grant = d.relayGrant == nil ? "no relay grant"
-            : state.badGrants.contains(d.relayGrant!) ? "relay grant refused\(until) (waiting for Wierdr to bring a new one)"
-            : "relay grant\(until)"
-        print("device: \(d.name) \(d.bundle) \(d.env) token \(d.startToken.prefix(12))…, \(key), \(grant) (\(id), \(when))")
+        print("device: \(d.name) \(d.bundle) \(d.env) token \(d.startToken.prefix(12))…, \(key), "
+            + "\(state.grantSummary(for: d, now: now)) (\(id), \(when))")
     }
     if registry.devices.isEmpty { print("devices: none (open Wierdr on the iPhone, connected to this Mac)") }
     let ws = Workspace()

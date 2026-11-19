@@ -8,6 +8,7 @@
   "compatibility_date": "2026-11-01",
   // Only the custom domain: one host, under the zone's rules.
   "workers_dev": false,
+  "preview_urls": false,
   "routes": [{ "pattern": "relay.wierdr.workat.dev", "custom_domain": true }],
   // Our own console lines only: invocation logs would keep every caller's address.
   "observability": { "enabled": true, "logs": { "invocation_logs": false } },
@@ -22,6 +23,8 @@
     { "binding": "DB", "database_name": "wierdr-relay", "database_id": "6e70f0b2-942d-4487-9129-76732dd3cfe4" }
   ],
   "ratelimits": [
+    // Every call, per client address, before its body is read (the Free plan has 100,000 requests a day).
+    { "name": "LIMIT_IP", "namespace_id": "7104", "simple": { "limit": 120, "period": 60 } },
     // The app's calls: per client address (an IPv6 one by its /64) and per App Attest key.
     { "name": "LIMIT_APP", "namespace_id": "7101", "simple": { "limit": 20, "period": 60 } },
     // Attestations (a certificate chain each): per client address.

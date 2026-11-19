@@ -34,7 +34,7 @@ public struct PushRegistry: Codable, Hashable, Sendable {
         /// The id of the seal key (`SealDocument`) the app keeps for the widget, if any:
         /// without it the activity there shows the counts but not the agents.
         public var sealKid: String?
-        /// The push relay's grant for `startToken` (`g1.<expiry>.<mac>`, from the app's App
+        /// The push relay's grant for `startToken` (`g2.<expiry>.<owner>.<mac>`, from the app's App
         /// Attest registration): a pusher going through the relay starts the activity here
         /// and makes channels with it.
         public var relayGrant: String?

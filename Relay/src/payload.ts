@@ -14,9 +14,18 @@ const STATE_KEYS = ["blocked", "done", "working", "idle", "at", "sealed", "kid"]
 const KID = /^[0-9a-f]{8}$/;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const CHANNEL = /^[A-Za-z0-9+/]{16,64}={0,2}$/;
-/** `ActivitySummary.line`: `1 needs you · 2 done · 3 working`, `4 idle` or `No agents`. */
-const COUNTS = /^(?:\d{1,5} (?:needs you|done|working)(?: · \d{1,5} (?:needs you|done|working)){0,2}|\d{1,5} idle|No agents)$/;
 const TITLES = ["Wierdr", "Needs you", "Done"];
+
+/** `ActivitySummary.line` (WierdrPush/Summary.swift): `1 needs you · 2 done · 3 working`,
+ *  else `4 idle` or `No agents`. An alert's text must be the line of the counts it goes with. */
+export function countsLine(s: { blocked: number; done: number; working: number; idle: number }): string {
+  const parts: string[] = [];
+  if (s.blocked > 0) parts.push(`${s.blocked} needs you`);
+  if (s.done > 0) parts.push(`${s.done} done`);
+  if (s.working > 0) parts.push(`${s.working} working`);
+  if (!parts.length) parts.push(s.idle > 0 ? `${s.idle} idle` : "No agents");
+  return parts.join(" · ");
+}
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -46,12 +55,12 @@ function state(s: unknown): string | null {
   return e2 ? `content-state: ${e2}` : null;
 }
 
-function alert(a: unknown): string | null {
+function alert(a: unknown, counts: Obj): string | null {
   if (!isObj(a)) return "alert: not an object";
   const extra = Object.keys(a).filter((k) => !["title", "body", "sound"].includes(k));
   if (extra.length) return `alert: unexpected ${extra.join(", ")}`;
   if (typeof a.title !== "string" || !TITLES.includes(a.title)) return "alert: bad title";
-  if (typeof a.body !== "string" || !COUNTS.test(a.body)) return "alert: bad body";
+  if (a.body !== countsLine(counts as Parameters<typeof countsLine>[0])) return "alert: not the counts' line";
   if (a.sound !== undefined && a.sound !== "default") return "alert: bad sound";
   return null;
 }
@@ -95,7 +104,7 @@ function check(p: unknown, kind: PushKind): string | null {
   if (se) return se;
   for (const k of ["stale-date", "dismissal-date"]) if (k in aps && !isTime(aps[k])) return `aps: bad ${k}`;
   if ("alert" in aps) {
-    const ae = alert(aps.alert);
+    const ae = alert(aps.alert, aps["content-state"] as Obj);
     if (ae) return ae;
   }
   if (kind === "start") {

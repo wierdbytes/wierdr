@@ -21,6 +21,10 @@ function database(): { db: Database; sql: SQLite } {
         run: async () => ({ meta: { changes: sql.query(q).run(...(values as never[])).changes } }),
       }),
     }),
+    batch: async (statements) => {
+      for (const st of statements) await st.run();
+      return [];
+    },
   };
   return { db, sql };
 }
@@ -70,7 +74,7 @@ beforeEach(async () => {
   now = 1_800_000_000;
   resetTokenCache();
   env = {
-    DB: d.db, LIMIT_APP: recording(), LIMIT_ATTEST: recording(), LIMIT_PUSH: recording(), APNS_KEY: await p8(),
+    DB: d.db, LIMIT_IP: recording(), LIMIT_APP: recording(), LIMIT_ATTEST: recording(), LIMIT_PUSH: recording(), APNS_KEY: await p8(),
     APNS_KEY_ID: "KEY1234567", TEAM_ID: "AUL4CCB2XY", BUNDLE: "pw.xff.wierdr", RELAY_SECRET: "test secret",
     ADMIN_TOKEN: "admin token",
   };
@@ -134,9 +138,13 @@ async function attestedKey(keyEnv = "development", category: number | null = 3) 
 const token = "80777b53e4b407886b965da507d10e3d1052b1fe3d6e9b38f6a95fe42116941cf75e59ff663b93cea18a46b6e5c85d986d36df9b79b900a7b2db76cb88d4680b4";
 const tokenN = (n: number) => n.toString(16).padStart(2, "0").repeat(40);
 
+/** What the app signs for /v1/devices. */
+const devicesBody = (challenge: string, keyId: string, t = token, apnsEnv = "development") =>
+  JSON.stringify({ challenge, env: apnsEnv, key_id: keyId, op: "devices", token: t });
+
 async function registerWith(key: Awaited<ReturnType<typeof attestedKey>>, t = token, apnsEnv = "development") {
   const { json: c } = await call("/v1/challenge", {});
-  const body = JSON.stringify({ challenge: c.challenge, key_id: key.keyId, token: t, env: apnsEnv });
+  const body = devicesBody(c.challenge, key.keyId, t, apnsEnv);
   return call("/v1/devices", body, { "x-wierdr-assertion": await key.assert(body) });
 }
 
@@ -190,7 +198,7 @@ describe("the app's registration", () => {
   test("the same assertion twice is refused (the counter)", async () => {
     const key = await attestedKey();
     const { json: c } = await call("/v1/challenge", {});
-    const body = JSON.stringify({ challenge: c.challenge, key_id: key.keyId, token, env: "development" });
+    const body = devicesBody(c.challenge, key.keyId);
     const assertion = await key.assert(body);
     expect((await call("/v1/devices", body, { "x-wierdr-assertion": assertion })).status).toBe(200);
     const again = await call("/v1/devices", body, { "x-wierdr-assertion": assertion });
@@ -201,17 +209,17 @@ describe("the app's registration", () => {
   test("an assertion over other bytes is refused", async () => {
     const key = await attestedKey();
     const { json: c } = await call("/v1/challenge", {});
-    const body = JSON.stringify({ challenge: c.challenge, key_id: key.keyId, token, env: "development" });
+    const body = devicesBody(c.challenge, key.keyId);
     const r = await call("/v1/devices", body + " ", { "x-wierdr-assertion": await key.assert(body) });
     expect(r.json.error).toBe("bad_assertion");
   });
 
   test("a key the relay never saw attested must attest first", async () => {
     const { json: c } = await call("/v1/challenge", {});
-    const body = JSON.stringify({ challenge: c.challenge, key_id: b64encode(new Uint8Array(32)), token, env: "development" });
+    const body = devicesBody(c.challenge, b64encode(new Uint8Array(32)));
     const r = await call("/v1/devices", body, { "x-wierdr-assertion": "AA==" });
     expect(r.status).toBe(401);
-    expect(r.json.error).toBe("unknown_key");
+    expect(r.json.error).toBe("key_unknown");
   });
 
   test("environments: development keys no production token; TestFlight and App Store builds only production", async () => {
@@ -246,7 +254,7 @@ describe("the app's registration", () => {
     const key = await attestedKey();
     const { json: c } = await call("/v1/challenge", {});
     now += 600;
-    const body = JSON.stringify({ challenge: c.challenge, key_id: key.keyId, token, env: "development" });
+    const body = devicesBody(c.challenge, key.keyId);
     expect((await call("/v1/devices", body, { "x-wierdr-assertion": await key.assert(body) })).json.error).toBe("bad_challenge");
   });
 
@@ -265,7 +273,7 @@ describe("the app's registration", () => {
     const key = await attestedKey();
     const { json: c } = await call("/v1/challenge", {}, { "cf-connecting-ip": "2001:db8:0:1:aaaa::1" });
     const urlSafe = b64url(b64decode(key.keyId)!);
-    const body = JSON.stringify({ challenge: c.challenge, key_id: urlSafe, token, env: "development" });
+    const body = devicesBody(c.challenge, urlSafe);
     await call("/v1/devices", body, { "x-wierdr-assertion": await key.assert(body), "cf-connecting-ip": "2001:db8:0:1:bbbb::2" });
     expect(limited).toContain(`key:${key.keyId}`);
     expect(limited.filter((k) => k.startsWith("ip:"))).toEqual(["ip:2001:db8:0:1::/64", "ip:2001:db8:0:1::/64"]);
@@ -390,16 +398,13 @@ describe("the daemon's pushes", () => {
     expect((await call("/v1/broadcast", { ...ch, grant: r.json.grant, payload: payload("update") })).json.error).toBe("bad_grant");
   });
 
-  test("channels a key may make: 30 a day, 20 alive, 8000 for the app; a failed one costs nothing", async () => {
+  test("channels a key may make: 30 a day, 8000 for the app; a failed one costs nothing", async () => {
     const { key, json } = await register();
     reply = () => new Response(JSON.stringify({ reason: "InternalServerError" }), { status: 500 });
     expect((await channelFor(json.grant)).status).toBe(502);
     expect(sql.query("SELECT COUNT(*) AS n FROM channels").get()).toEqual({ n: 0 });
     reply = (s) => new Response(null, { status: 200, headers: { "apns-channel-id": `CHANNEL${String(++channelCount).padStart(10, "0")}ab==` } });
     const add = sql.query("INSERT INTO channels (id, env, owner, created, deleted) VALUES (?, 'development', ?, ?, ?)");
-    for (let i = 0; i < 20; i++) add.run(`X${i}`, key.owner, now - 2 * 86400, null);
-    expect((await channelFor(json.grant)).json.error).toBe("channel_limit");
-    sql.query("UPDATE channels SET deleted = ?").run(now);
     for (let i = 0; i < 30; i++) add.run(`Y${i}`, key.owner, now - 100, now - 50);
     expect((await channelFor(json.grant)).json.error).toBe("channel_quota");
     sql.query("DELETE FROM channels").run();
@@ -432,6 +437,7 @@ describe("the daemon's pushes", () => {
 
 describe("upkeep", () => {
   test("the cron deletes channels past their grant and forgets old rows", async () => {
+    sql.query("INSERT INTO attest_keys (key_id, owner, public_key, env, counter, created, used) VALUES ('k', 'o', 'p', 'development', 0, ?, ?)").run(now, now);
     const add = sql.query("INSERT INTO channels (id, env, owner, created, deleted) VALUES (?, 'development', 'o', ?, ?)");
     add.run("OLD", now - 32 * 86400, null);
     add.run("NEW", now - 86400, null);
@@ -444,7 +450,7 @@ describe("upkeep", () => {
   });
 
   test("admin: APNs' channels against the ledger, unknown ones purged; no token, no route", async () => {
-    sql.query("INSERT INTO channels (id, env, owner, created) VALUES ('KNOWN', 'development', 'o', ?), ('LOST', 'development', 'o', ?)").run(now, now);
+    sql.query("INSERT INTO channels (id, env, owner, created) VALUES ('KNOWN', 'development', 'o', ?), ('LOST', 'development', 'o', ?)").run(now - 10, now - 10);
     reply = (s) => s.url.endsWith("/all-channels")
       ? new Response(JSON.stringify({ channels: ["KNOWN", "STRAY1", "STRAY2"] }))
       : new Response(null, { status: 200 });
@@ -498,7 +504,7 @@ describe("payloads", () => {
     expect(checkPayload(payload("start"), "start").error).toBeNull();
     expect(checkPayload(payload("update"), "broadcast").error).toBeNull();
     expect(checkPayload(payload("update", { alert: { title: "Needs you", body: "1 needs you · 2 working", sound: "default" } }), "broadcast").error).toBeNull();
-    expect(checkPayload(payload("update", { alert: { title: "Done", body: "1 done" } }), "broadcast").error).toBeNull();
+    expect(checkPayload(payload("update", { alert: { title: "Done", body: "1 needs you · 2 working" } }), "broadcast").error).toBeNull();
     expect(checkPayload(payload("end"), "broadcast").error).toBeNull();
   });
 
@@ -531,6 +537,147 @@ describe("payloads", () => {
 test("a refused grant says whose: a start carries two", async () => {
   const { start } = await ready();
   const bad = await call("/v1/start", { ...start, channel_grant: start.grant });
-  expect(bad.json).toEqual({ error: "bad_grant", message: "channel grant" });
-  expect((await call("/v1/start", { ...start, grant: start.channel_grant })).json.message).toBe("device grant");
+  expect(bad.json).toEqual({ error: "bad_grant", message: "channel grant", grant: "channel" });
+  expect((await call("/v1/start", { ...start, grant: start.channel_grant })).json.grant).toBe("device");
+});
+
+describe("after the second review", () => {
+  test("an assertion's body says what it's for (op)", async () => {
+    const key = await attestedKey();
+    const { json: c } = await call("/v1/challenge", {});
+    const body = JSON.stringify({ challenge: c.challenge, env: "development", key_id: key.keyId, token });
+    expect((await call("/v1/devices", body, { "x-wierdr-assertion": await key.assert(body) })).json.error).toBe("bad_op");
+  });
+
+  test("the same assertion twice at once: one grant", async () => {
+    const key = await attestedKey();
+    const { json: c } = await call("/v1/challenge", {});
+    const body = devicesBody(c.challenge, key.keyId);
+    const assertion = await key.assert(body);
+    const both = await Promise.all([1, 2].map(() => call("/v1/devices", body, { "x-wierdr-assertion": assertion })));
+    expect(both.filter((r) => r.status === 200)).toHaveLength(1);
+    expect([403, 409]).toContain(both.find((r) => r.status !== 200)!.status);
+  });
+
+  test("a grant in use near its end comes back renewed: start, channels, broadcast", async () => {
+    const { start, grant, channel, channelGrant } = await ready();
+    expect((await call("/v1/start", start)).json.renewed).toBeUndefined();
+    now += 25 * 86400;
+    const r = await call("/v1/start", start);
+    expect(r.json.renewed).toStartWith(`g2.${now + 30 * 86400}.`);
+    expect((await channelFor(grant)).json.renewed).toStartWith("g2.");
+    const b = await call("/v1/broadcast", { bundle: "pw.xff.wierdr", env: "development", channel, grant: channelGrant, payload: payload("update") });
+    const renewed = await checkGrant({ current: "test secret" }, b.json.renewed, { appId: APP_ID, kind: "channel", env: "development", id: channel }, now);
+    expect(renewed.status).toBe("ok");
+  });
+
+  test("a key keeps 2 channels until APNs took a start to its token, then 6; past that its oldest goes", async () => {
+    const { json } = await register();
+    const ids: string[] = [];
+    for (let i = 0; i < 2; i++) ids.push((await channelFor(json.grant)).json.channel);
+    // Within 8 hours none goes: they may carry activities.
+    expect((await channelFor(json.grant)).json.error).toBe("channel_limit");
+    now += 9 * 3600;
+    sent = [];
+    ids.push((await channelFor(json.grant)).json.channel);
+    expect(sent.filter((x) => x.method === "DELETE").map((x) => x.headers["apns-channel-id"])).toEqual([ids[0]]);
+    expect(sql.query("SELECT COUNT(*) AS n FROM channels WHERE deleted IS NULL").get()).toEqual({ n: 2 });
+    // APNs took a start to the token: a real device's (the start's own test shows the marking).
+    sql.query("UPDATE device_tokens SET verified = 1").run();
+    sent = [];
+    for (let i = 0; i < 4; i++) await channelFor(json.grant);
+    expect(sent.filter((x) => x.method === "DELETE")).toHaveLength(0);
+    expect(sql.query("SELECT COUNT(*) AS n FROM channels WHERE deleted IS NULL").get()).toEqual({ n: 6 });
+  });
+
+  test("APNs taking a start marks the token real", async () => {
+    const { start } = await ready();
+    expect(sql.query("SELECT verified FROM device_tokens").get()).toEqual({ verified: 0 });
+    await call("/v1/start", start);
+    expect(sql.query("SELECT verified FROM device_tokens").get()).toEqual({ verified: 1 });
+  });
+
+  test("a token gets 12 starts an hour", async () => {
+    const { start } = await ready();
+    for (let i = 0; i < 12; i++) expect((await call("/v1/start", start)).status).toBe(200);
+    expect((await call("/v1/start", start)).json.error).toBe("start_quota");
+    now += 3600;
+    expect((await call("/v1/start", start)).status).toBe(200);
+  });
+
+  test("an alert's text is the line of the counts it goes with", () => {
+    const lie = payload("update", { alert: { title: "Needs you", body: "99999 needs you" } });
+    expect(checkPayload(lie, "broadcast").error).toBe("alert: not the counts' line");
+  });
+
+  test("the sweep: a revoked key's channels first, a failing deletion waits longer, given up after 10", async () => {
+    const add = sql.query("INSERT INTO channels (id, env, owner, created) VALUES (?, 'development', ?, ?)");
+    sql.query("INSERT INTO attest_keys (key_id, owner, public_key, env, counter, created, used) VALUES ('k', 'someone', 'p', 'development', 0, ?, ?)").run(now, now);
+    const { key } = await register();
+    add.run("FRESH-OF-REVOKED", key.owner, now);
+    add.run("OLD", "someone", now - 32 * 86400);
+    add.run("FRESH", "someone", now);
+    sql.query("UPDATE attest_keys SET revoked = 1 WHERE owner = ?").run(key.owner);
+    await sweep(env, { now: () => now, fetcher });
+    expect(sent.map((x) => x.headers["apns-channel-id"])).toEqual(["FRESH-OF-REVOKED", "OLD"]);
+    // A deletion APNs keeps refusing.
+    sql.query("DELETE FROM channels").run();
+    add.run("STUCK", "someone", now - 40 * 86400);
+    reply = () => new Response(JSON.stringify({ reason: "Forbidden" }), { status: 403 });
+    sent = [];
+    await sweep(env, { now: () => now, fetcher });
+    await sweep(env, { now: () => now + 60, fetcher }); // not due again yet
+    expect(sent).toHaveLength(1);
+    expect(sql.query("SELECT tries, deleted FROM channels").get()).toEqual({ tries: 1, deleted: null });
+    for (let i = 0; i < 12; i++) {
+      now += 200 * 3600;
+      await sweep(env, { now: () => now, fetcher });
+    }
+    const row = sql.query("SELECT tries, deleted FROM channels").get() as { tries: number; deleted: number | null };
+    expect(row.tries).toBe(10);
+    expect(row.deleted).not.toBeNull();
+  });
+
+  test("admin: a channel made after APNs' list was taken isn't marked gone", async () => {
+    sql.query("INSERT INTO channels (id, env, owner, created) VALUES ('NEWER', 'development', 'o', ?)").run(now + 5);
+    reply = () => new Response(JSON.stringify({ channels: [] }));
+    await call("/v1/admin/channels", { env: "development" }, { authorization: "Bearer admin token" });
+    expect(sql.query("SELECT deleted FROM channels").get()).toEqual({ deleted: null });
+  });
+
+  test("a body without its length is refused once 20 KB came", async () => {
+    const big = new ReadableStream({ start(c) { c.enqueue(utf8("x".repeat(25_000))); c.close(); } });
+    const r = await handle(new Request("https://relay.test/v1/challenge", { method: "POST", body: big, duplex: "half" } as RequestInit),
+                           env, { now: () => now, fetcher });
+    expect(r.status).toBe(413);
+  });
+
+  test("an IPv4-mapped address counts as its IPv4 one", async () => {
+    await call("/v1/challenge", {}, { "cf-connecting-ip": "::ffff:203.0.113.7" });
+    expect(limited).toContain("ip:203.0.113.7");
+    expect(limited).toContain("any:203.0.113.7");
+  });
+
+  test("a grant whose key the relay doesn't know: key_unknown", async () => {
+    const { start } = await ready();
+    sql.query("DELETE FROM attest_keys").run();
+    const r = await call("/v1/start", start);
+    expect(r.json.error).toBe("key_unknown");
+    expect(r.json.grant).toBe("device");
+  });
+
+  test("the provider token is dropped only if it's the one kept", async () => {
+    const kept = { t: { kid: "K", iat: 1, token: "newer" } as StoredToken | null };
+    const store: TokenStore = { get: async () => kept.t, offer: async (t) => t, clear: async (tok) => void (kept.t?.token === tok && (kept.t = null)) };
+    await store.clear("older");
+    expect(kept.t?.token).toBe("newer");
+  });
+});
+
+test("a start on a channel the relay deleted is refused as the channel's grant", async () => {
+  const { start } = await ready();
+  sql.query("UPDATE channels SET deleted = ?").run(now);
+  const r = await call("/v1/start", start);
+  expect(r.json).toEqual({ error: "bad_grant", message: "channel deleted", grant: "channel" });
+  expect(sent).toHaveLength(0);
 });

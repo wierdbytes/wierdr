@@ -127,3 +127,13 @@ describe("the chain's shape", () => {
       .rejects.toBeInstanceOf(AttestError);
   });
 });
+
+test("Apple's own sample (its validation guide): extensions without the ED flag still read", () => {
+  // authData ‖ "example_server_challenge", as the guide prints it.
+  const all = b64decode("9EZtaPketsEGIMt+Y8coMkRoXuHWRntUFg51MXIFfwNAAAAAAGFwcGF0dGVzdAAAAAAAAAAAIM4EmPWEg/u02g17LGOlpTj1UtSty5pPqRYZXElhPmVdpQECAyYgASFYIEMyVErPMj23dEQ8qvM59W5+lcck+sLBQlnzZeJEVlCyIlggtfsoW89Um8tgWUQS52gqJCfuran7Ut/tCxqxftCfqb2id2FwcGxlX2J1bmRsZV92ZXJzaW9uXzAxYTF4HGFwcGxlX3ZhbGlkYXRpb25fY2F0ZWdvcnlfMDFEAQAAAGV4YW1wbGVfc2VydmVyX2NoYWxsZW5nZQ==")!;
+  const authData = all.slice(0, all.length - "example_server_challenge".length);
+  expect(authData[32] & 0x80).toBe(0);
+  const a = parseAuthData(authData, true);
+  expect(a.category).toBe(1);
+  expect(a.bundleVersion).toBe("1");
+});

@@ -19,7 +19,8 @@ export interface APNsConfig {
 export interface TokenStore {
   get(): Promise<StoredToken | null>;
   offer(t: StoredToken): Promise<StoredToken | null>;
-  clear(): Promise<void>;
+  /** Drops `token` if it's the one kept (another isolate may have kept a newer one). */
+  clear(token: string): Promise<void>;
 }
 
 export interface StoredToken {
@@ -84,9 +85,10 @@ export class APNs {
 
   private async send(url: string, init: { method?: string; headers: Record<string, string>; body?: string }): Promise<Response> {
     const send = this.fetcher; // not as a method: Workers' fetch wants no `this`
+    const token = await this.token();
     const r = await send(url, {
       method: init.method ?? "POST",
-      headers: { authorization: `bearer ${await this.token()}`, ...init.headers },
+      headers: { authorization: `bearer ${token}`, ...init.headers },
       body: init.body,
     });
     if (r.status >= 200 && r.status < 300) return r;
@@ -96,9 +98,9 @@ export class APNs {
       reason = (JSON.parse(text) as { reason?: string }).reason ?? reason;
     } catch {}
     if (reason === "InvalidProviderToken" || reason === "ExpiredProviderToken") {
-      // A token APNs won't take: the next call signs a new one.
+      // The token APNs won't take: the next call signs a new one.
       cached = null;
-      await this.store.clear();
+      await this.store.clear(token);
     }
     throw new APNsFailure(r.status, reason);
   }
@@ -112,7 +114,7 @@ export class APNs {
         "apns-expiration": String(Math.floor(this.now()) + START_EXPIRATION),
       },
       body: payload,
-    });
+    }).then(done);
   }
 
   /** An update or end on a channel that stores nothing (`apns-expiration: 0`). */
@@ -125,7 +127,7 @@ export class APNs {
         "apns-expiration": "0",
       },
       body: payload,
-    });
+    }).then(done);
   }
 
   async createChannel(env: APNsEnv): Promise<string> {
@@ -134,6 +136,7 @@ export class APNs {
       body: JSON.stringify({ "message-storage-policy": 0, "push-type": "LiveActivity" }),
     });
     const id = r.headers.get("apns-channel-id");
+    await done(r);
     if (!id) throw new APNsFailure(r.status, "NoChannelId");
     return id;
   }
@@ -152,8 +155,13 @@ export class APNs {
     await this.send(`${this.manage(env)}/1/apps/${this.config.bundle}/channels`, {
       method: "DELETE",
       headers: { "apns-channel-id": channel },
-    });
+    }).then(done);
   }
+}
+
+/** Lets a reply go (an unread body holds its connection: a sweep makes many calls). */
+async function done(r: Response): Promise<void> {
+  await r.body?.cancel();
 }
 
 /** Forget the isolate's token (tests). */

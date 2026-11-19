@@ -20,12 +20,14 @@ CREATE TABLE IF NOT EXISTS attest_keys (
 );
 
 -- Tokens each key got grants for (hashed): a key gets grants for a few tokens, not any.
+-- `verified`: APNs took a start to it (a real device's: a key with one keeps more channels).
 CREATE TABLE IF NOT EXISTS device_tokens (
   owner TEXT NOT NULL,
   token TEXT NOT NULL,          -- base64url SHA-256 of the token
   env TEXT NOT NULL,
   first_seen INTEGER NOT NULL,
   last_seen INTEGER NOT NULL,
+  verified INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (owner, token, env)
 );
 
@@ -38,10 +40,26 @@ CREATE TABLE IF NOT EXISTS channels (
   owner TEXT NOT NULL,
   created INTEGER NOT NULL,
   deleted INTEGER,              -- when, or NULL while it lives
+  tries INTEGER NOT NULL DEFAULT 0,  -- failed deletions (given up after 10)
+  next_try INTEGER,             -- not tried again before
   PRIMARY KEY (id, env)
 );
 CREATE INDEX IF NOT EXISTS channels_owner ON channels (owner, created);
 CREATE INDEX IF NOT EXISTS channels_live ON channels (env, deleted, created);
+
+-- Push-to-starts per token an hour (hashed token): a leaked grant can't buzz a phone all day.
+CREATE TABLE IF NOT EXISTS starts (
+  token TEXT NOT NULL,
+  hour INTEGER NOT NULL,        -- unix hours
+  n INTEGER NOT NULL,
+  PRIMARY KEY (token, hour)
+);
+
+-- Counts per day for everyone: new App Attest keys (there's a daily budget).
+CREATE TABLE IF NOT EXISTS daily (
+  day INTEGER PRIMARY KEY,      -- unix days
+  attests INTEGER NOT NULL DEFAULT 0
+);
 
 -- The APNs provider token of the current 30-minute window and key, shared by every
 -- isolate (APNs refuses one renewed more often than every 20 minutes).

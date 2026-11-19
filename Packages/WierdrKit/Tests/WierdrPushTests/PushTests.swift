@@ -612,3 +612,21 @@ private let channels = [lane.key: "CHAN=="]
         }
     }
 }
+
+@Suite struct HostNameTests {
+    @Test func theHostIsCutAt100BytesOnWholeCharacters() throws {
+        let key = ActivitySealKey.generate()
+        let long = String(repeating: "e\u{301}\u{302}\u{303}", count: 100) // a character of 7 bytes, 100 times
+        let data = ActivityPayload.start(attributes: .init(host: long), state: state([agent("t1", .working)]), channel: "CHAN==",
+                                         alert: .init(title: "Wierdr", body: "1 working", sound: false), stale: Date(), now: Date(),
+                                         key: key)
+        let aps = try #require((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["aps"] as? [String: Any])
+        let attrs = try #require(aps["attributes"] as? [String: Any])
+        let host = try ActivitySeal.$lookup.withValue({ [key] kid in kid == key.kid ? key : nil }) {
+            try JSONDecoder().decode(AgentsActivityAttributes.self, from: JSONSerialization.data(withJSONObject: attrs)).host
+        }
+        #expect(host.utf8.count <= 100 && host.utf8.count > 90)
+        #expect(long.hasPrefix(host))
+        #expect((attrs["sealed"] as? String ?? "").count < 1400)
+    }
+}

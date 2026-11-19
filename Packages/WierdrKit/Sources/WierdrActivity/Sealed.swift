@@ -174,6 +174,17 @@ public enum ActivitySeal {
         return lookup(kid)?.open(type, text, purpose, context: context)
     }
 
+    /// Whether plain (unsealed) agents and attributes are taken: on the Mac (the pusher's
+    /// state file keeps them plain), in tests and debug builds (the local demo activity); not
+    /// in an iPhone's release build, where every push is sealed.
+    public static var takesPlain: Bool {
+        #if os(iOS) && !DEBUG
+        return false
+        #else
+        return true
+        #endif
+    }
+
     /// Whether a payload is sealed.
     static func isSealed(_ decoder: Decoder) throws -> Bool {
         try decoder.container(keyedBy: Keys.self).contains(.sealed)

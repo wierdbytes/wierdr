@@ -62,7 +62,8 @@ public struct PushError: Error, CustomStringConvertible {
     public init(_ d: String) { description = d }
 }
 
-/// What the pusher keeps between runs: channels, the running activities, tokens APNs refused.
+/// What the pusher keeps between runs: channels, the running activities, tokens APNs refused,
+/// grants. Written as the owner's only file (0600): it holds grants.
 public struct PushState: Codable, Sendable, Equatable {
     /// Each lane's spare channel (for the next activity), by lane key.
     public var channels: [String: String] = [:]
@@ -70,9 +71,13 @@ public struct PushState: Codable, Sendable, Equatable {
     public var badTokens: Set<String> = []
     /// Through the relay: each channel's grant (spare and running ones).
     public var channelGrants: [String: String] = [:]
-    /// Device grants the relay refused, while the registry still has them (until the app
-    /// brings a new one).
+    /// Device grants the relay refused, while the registry (or `renewedGrants`) still has them
+    /// (until the app brings a new one).
     public var badGrants: Set<String> = []
+    /// Through the relay: device grants it renewed on use (`renewed` in a start's or a new
+    /// channel's reply), by push-to-start token, while the registry has the token. A device's
+    /// grant is the freshest of its entry's and this one (`relayGrant(for:)`).
+    public var renewedGrants: [String: String] = [:]
     /// Channels done with, still to delete (APNs keeps a channel until it's deleted, and an
     /// app may have 10,000): tried again with a growing wait, given up in the end.
     public var pendingDeletes: [PendingDelete] = []
@@ -100,7 +105,9 @@ public struct PushState: Codable, Sendable, Equatable {
 
     public init() {}
 
-    enum CodingKeys: String, CodingKey { case channels, running, badTokens, channelGrants, badGrants, pendingDeletes }
+    enum CodingKeys: String, CodingKey {
+        case channels, running, badTokens, channelGrants, badGrants, renewedGrants, pendingDeletes
+    }
 
     /// Fields a newer pusher added may be missing.
     public init(from decoder: Decoder) throws {
@@ -110,6 +117,7 @@ public struct PushState: Codable, Sendable, Equatable {
         badTokens = try c.decodeIfPresent(Set<String>.self, forKey: .badTokens) ?? []
         channelGrants = try c.decodeIfPresent([String: String].self, forKey: .channelGrants) ?? [:]
         badGrants = try c.decodeIfPresent(Set<String>.self, forKey: .badGrants) ?? []
+        renewedGrants = try c.decodeIfPresent([String: String].self, forKey: .renewedGrants) ?? [:]
         pendingDeletes = try c.decodeIfPresent([PendingDelete].self, forKey: .pendingDeletes) ?? []
     }
 
@@ -129,7 +137,74 @@ public struct PushState: Codable, Sendable, Equatable {
         e.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? e.encode(self) else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: url, options: .atomic)
+        try? Self.writePrivately(data, to: url)
+    }
+
+    /// Writes `data` to `url` atomically as the owner's only file: a temporary file beside it,
+    /// made 0600 from the start, renamed over it (whatever mode the old file had).
+    static func writePrivately(_ data: Data, to url: URL) throws {
+        let tmp = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString)")
+        let fd = open(tmp.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
+        guard fd >= 0 else { throw PushError("can't write \(tmp.path): \(String(cString: strerror(errno)))") }
+        var written = 0
+        let ok = data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) -> Bool in
+            guard let base = buf.baseAddress else { return true }
+            while written < buf.count {
+                let n = write(fd, base + written, buf.count - written)
+                if n < 0 && errno == EINTR { continue }
+                guard n > 0 else { return false }
+                written += n
+            }
+            return true
+        }
+        let synced = ok && fchmod(fd, 0o600) == 0 && fsync(fd) == 0
+        close(fd)
+        guard synced, rename(tmp.path, url.path) == 0 else {
+            let why = String(cString: strerror(errno))
+            unlink(tmp.path)
+            throw PushError("can't write \(url.path): \(why)")
+        }
+    }
+
+    /// Makes a state file kept from before the owner's only (0600); nothing without one.
+    public static func makePrivate(_ url: URL = defaultURL) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        chmod(url.path, 0o600)
+    }
+
+    /// A device's grants: its entry's and the one the relay renewed.
+    func grants(of d: PushRegistry.Device) -> [String] {
+        [d.relayGrant, renewedGrants[d.startToken]].compactMap { $0 }
+    }
+
+    /// The grant a device is pushed with through the relay: the freshest of its entry's and the
+    /// renewed one that the relay didn't refuse (the entry's on a tie); nil when there's none.
+    public func relayGrant(for d: PushRegistry.Device) -> String? {
+        grants(of: d).filter { !badGrants.contains($0) }
+            .max { (RelayGrant.expiry($0) ?? .distantPast) < (RelayGrant.expiry($1) ?? .distantPast) }
+    }
+
+    /// Whether the relay refused every grant the device has (it waits for Wierdr to bring a new one).
+    public func grantRefused(for d: PushRegistry.Device) -> Bool {
+        let all = grants(of: d)
+        return !all.isEmpty && all.allSatisfy(badGrants.contains)
+    }
+
+    /// A device's relay grant as `wierdr-push status` says it: until when and how many days are
+    /// left, whether it's one the relay renewed, or that it was refused.
+    public func grantSummary(for d: PushRegistry.Device, now: Date) -> String {
+        func day(_ date: Date) -> String { String(ISO8601DateFormatter().string(from: date).prefix(10)) }
+        let renewed = renewedGrants[d.startToken]
+        guard let grant = relayGrant(for: d) else {
+            guard grantRefused(for: d) else { return "no relay grant" }
+            let until = grants(of: d).compactMap(RelayGrant.expiry).max().map { " until \(day($0))" } ?? ""
+            return "relay grant refused\(until) (waiting for Wierdr to bring a new one)"
+        }
+        let source = grant == renewed ? ", renewed by the relay" : renewed != nil ? ", a renewed one kept too" : ""
+        guard let expires = RelayGrant.expiry(grant) else { return "relay grant (unreadable)\(source)" }
+        let days = Int((expires.timeIntervalSince(now) / 86400).rounded(.down))
+        let left = expires <= now ? "run out" : days == 1 ? "1 day left" : "\(days) days left"
+        return "relay grant until \(day(expires)) (\(left)\(source))"
     }
 }
 
@@ -149,10 +224,8 @@ extension ActivitySealKey {
         }
         let key = ActivitySealKey.generate()
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        guard FileManager.default.createFile(atPath: url.path, contents: Data(key.base64.utf8),
-                                             attributes: [.posixPermissions: 0o600]) else {
-            throw PushError("can't write \(url.path)")
-        }
+        // 0600 from the start (`createFile` with attributes writes first, then sets them).
+        try PushState.writePrivately(Data(key.base64.utf8), to: url)
         return key
     }
 }
@@ -183,6 +256,13 @@ public final class Pusher {
     var laneRetryAt: [String: Date] = [:]
     /// Channels without a relay grant already forgotten (said once in the log).
     var forgotten: Set<String> = []
+    /// After a refusal asking again won't change (`RelayRefusal.isPermanent`): a device's
+    /// starts (by device id) or a lane's updates (by lane key) wait `holdTime`, without a
+    /// pause for every push.
+    var deviceHolds: [String: Hold] = [:]
+    var laneHolds: [String: Hold] = [:]
+    /// By device id: why its starts wait, as last said in the log (said once).
+    var startsWaiting: [String: String] = [:]
     var engineEnded: Error?
     public var log: (String) -> Void = { print($0) }
 
@@ -200,6 +280,20 @@ public final class Pusher {
     static let deleteTries = 10
     static let deleteGiveUp: TimeInterval = 7 * 86400
 
+    /// How long a device's starts or a lane's updates wait after a refusal that won't change.
+    static let holdTime: TimeInterval = 600
+
+    /// A device's starts or a lane's updates held back after a refusal that won't change.
+    struct Hold: Equatable {
+        var until: Date
+        /// The refusal (said once in the log: the same one again isn't).
+        var why: String
+        /// A lane's: the state was sent again once after `until`.
+        var retried = false
+
+        func holds(_ now: Date) -> Bool { now < until }
+    }
+
     /// The wait after a deletion's `attempts`-th failed try: 1 min, 3, 9 …, at most 12 hours.
     static func deleteBackoff(_ attempts: Int) -> TimeInterval {
         min(60 * pow(3, Double(max(attempts - 1, 0))), 12 * 3600)
@@ -214,6 +308,7 @@ public final class Pusher {
         // A mirror: no writes, no limits; git facts and colors rarely (the activity shows neither).
         engine = WorkspaceEngine(workspace: workspace,
                                  options: EngineOptions(allowWrites: false, refreshInterval: 3600, limitsDocument: nil))
+        PushState.makePrivate(stateURL)
         state = PushState.load(stateURL)
         planner = Planner(settings: settings, running: state.running)
     }
@@ -268,20 +363,59 @@ public final class Pusher {
                 if let env = APNsEnvironment(rawValue: d.env) { planner.resend(lane: Lane(bundle: d.bundle, env: env)) }
             }
             devices = registry.devices
-            if pruneBadGrants() { state.save(stateURL) }
+            startsWaiting = startsWaiting.filter { devices[$0.key] != nil }
+            deviceHolds = deviceHolds.filter { devices[$0.key] != nil }
+            let renewed = pruneRenewedGrants(now: Date())
+            if pruneBadGrants() || renewed { state.save(stateURL) }
         } catch {
             log("can't read \(PushRegistry.documentName): \(error)")
         }
     }
 
-    /// Forgets refused grants the registry no longer has (the app brought new ones); whether
-    /// any went. Only after the registry was read: an empty one before that would forget them all.
+    /// Forgets refused grants neither the registry nor `renewedGrants` has any more (the app
+    /// brought new ones); whether any went. Only after the registry was read: an empty one
+    /// before that would forget them all.
     @discardableResult
     func pruneBadGrants() -> Bool {
-        let kept = state.badGrants.intersection(devices.values.compactMap(\.relayGrant))
+        let named = Set(devices.values.compactMap(\.relayGrant)).union(state.renewedGrants.values)
+        let kept = state.badGrants.intersection(named)
         guard kept != state.badGrants else { return false }
         state.badGrants = kept
         return true
+    }
+
+    /// Forgets renewed grants that are no longer needed: their token gone from the registry,
+    /// run out, or the entry's own grant (not refused) lasting as long (the app brought a new
+    /// one); whether any went. Only after the registry was read, as `pruneBadGrants`.
+    @discardableResult
+    func pruneRenewedGrants(now: Date) -> Bool {
+        let byToken = Dictionary(devices.values.map { ($0.startToken, $0) }, uniquingKeysWith: { a, _ in a })
+        let kept = state.renewedGrants.filter { token, grant in
+            guard let d = byToken[token], let expires = RelayGrant.expiry(grant), expires > now else { return false }
+            if let own = d.relayGrant, !state.badGrants.contains(own),
+               (RelayGrant.expiry(own) ?? .distantPast) >= expires { return false }
+            return true
+        }
+        guard kept != state.renewedGrants else { return false }
+        state.renewedGrants = kept
+        return true
+    }
+
+    /// Keeps a device grant the relay renewed, when it lasts longer than the one the device has.
+    func keepRenewed(_ grant: String?, token: String, name: String) {
+        guard let grant, let expires = RelayGrant.expiry(grant) else { return }
+        let device = devices.values.first { $0.startToken == token }
+        let current = device.flatMap(state.relayGrant(for:)) ?? state.renewedGrants[token]
+        guard expires > (current.flatMap(RelayGrant.expiry) ?? .distantPast) else { return }
+        state.renewedGrants[token] = grant
+        log("the relay renewed \(name)'s grant, until \(ISO8601DateFormatter().string(from: expires).prefix(10))")
+    }
+
+    /// Keeps a channel grant the relay renewed on a broadcast.
+    func keepRenewedChannel(_ grant: String?, channel: String) {
+        guard let grant, let expires = RelayGrant.expiry(grant),
+              expires > (state.channelGrants[channel].flatMap(RelayGrant.expiry) ?? .distantPast) else { return }
+        state.channelGrants[channel] = grant
     }
 
     /// Keeps the grants of channels something still names: the spares, the running activities'
@@ -313,10 +447,11 @@ public final class Pusher {
     func tick(now: Date) async {
         guard now >= pausedUntil else { return }
         let before = state
-        let usable = usableDevices(now: now)
-        await ensureChannels(for: usable, now: now)
+        releaseLaneHolds(now: now)
+        await ensureChannels(for: usableDevices(now: now), now: now)
         let summary = ActivityPayload.fitting(ActivitySummary.state(of: workspace, now: now), key: seal)
-        let actions = planner.step(now: now, summary: summary, devices: usable, channels: startableSpares(now: now))
+        let actions = planner.step(now: now, summary: summary, devices: plannerDevices(now: now),
+                                   channels: startableSpares(now: now))
         var failed = false
         for action in actions {
             if !(await perform(action, now: now)) { failed = true }
@@ -337,23 +472,59 @@ public final class Pusher {
             backoff = 0
         }
         state.running = planner.running
+        // A lane's hold goes with its activity: the next one is on a channel of its own.
+        laneHolds = laneHolds.filter { planner.running[$0.key] != nil }
         pruneChannelGrants()
         if state != before { state.save(stateURL) }
     }
 
-    /// The devices of the lanes the planner sees: a token APNs didn't refuse and, through the
-    /// relay, a grant it didn't refuse. Not by when the grant runs out: an activity going on
-    /// there needs no device grant (broadcasts take the channel's), so it isn't ended for it;
-    /// a start with a grant run out is refused, and the grant goes to `badGrants` until the
-    /// app brings a new one (it asks 10 days before the end).
+    /// A lane held back after a refusal that won't change gets its state sent again once
+    /// when the hold is over (the updates skipped meanwhile didn't go out).
+    func releaseLaneHolds(now: Date) {
+        for (key, hold) in laneHolds where !hold.holds(now) && !hold.retried {
+            laneHolds[key]?.retried = true
+            if let lane = planner.running[key]?.lane { planner.resend(lane: lane) }
+        }
+    }
+
+    /// The devices that can be started: a token APNs didn't refuse and, through the relay, a
+    /// grant it didn't refuse (`PushState.relayGrant(for:)`: the entry's or one the relay
+    /// renewed). Not by when the grant runs out: a start with a grant run out is refused, and
+    /// the grant goes to `badGrants` until the app brings a new one (it asks 10 days before
+    /// the end) or the relay renews it on use. Channels are made with these devices' grants.
     func usableDevices(now: Date) -> [String: PushRegistry.Device] {
         devices.filter { _, d in
             guard !state.badTokens.contains(d.startToken) else { return false }
             guard transport.needsGrants else { return true }
-            guard let grant = d.relayGrant, !state.badGrants.contains(grant) else { return false }
-            return true
+            return state.relayGrant(for: d) != nil
         }
     }
+
+    /// What the planner sees. On a lane with an activity going on: every device registered
+    /// there (but for a token APNs refused), whatever its grant: the activity goes on, as
+    /// broadcasts need only the channel's grant, and a start on a device that can't be started
+    /// isn't sent (`perform`). Elsewhere only the devices a start can go to now (usable and not
+    /// held back), so no activity is begun on a lane where none could show it.
+    func plannerDevices(now: Date) -> [String: PushRegistry.Device] {
+        let usable = usableDevices(now: now)
+        return devices.filter { id, d in
+            if usable[id] != nil, !(deviceHolds[id]?.holds(now) ?? false) { return true }
+            guard !state.badTokens.contains(d.startToken), let env = APNsEnvironment(rawValue: d.env) else { return false }
+            return planner.running[Lane(bundle: d.bundle, env: env).key] != nil
+        }
+    }
+
+    /// Why a start on `device` can't go now, or nil: held back after a refusal that won't
+    /// change, or (through the relay) no grant that the relay didn't refuse.
+    func startWaits(_ device: String, now: Date) -> String? {
+        if let hold = deviceHolds[device], hold.holds(now) { return "held back: \(hold.why)" }
+        guard transport.needsGrants, let d = devices[device] else { return nil }
+        if state.relayGrant(for: d) != nil { return nil }
+        return state.grantRefused(for: d) ? Self.refusedGrant : Self.noGrant
+    }
+
+    static let refusedGrant = "its relay grant was refused; waiting for Wierdr to bring a new one"
+    static let noGrant = "no relay grant; waiting for Wierdr to bring one"
 
     /// The spares the planner may start on: through the relay, those whose grant is good for
     /// a while more (a start on a channel the relay refuses would read as the device's grant
@@ -365,11 +536,12 @@ public final class Pusher {
         }
     }
 
-    /// The lane's device to make a channel with, through the relay: the one whose grant lasts longest.
+    /// The lane's device to make a channel with, through the relay: the one whose grant (its
+    /// entry's or the renewed one, not refused) lasts longest.
     func channelMaker(_ devices: [String: PushRegistry.Device]) -> (id: String, device: PushRegistry.Device, grant: String)? {
-        devices.compactMap { id, d in d.relayGrant.map { (id: id, device: d, grant: $0) } }
+        devices.compactMap { id, d in state.relayGrant(for: d).map { (id: id, device: d, grant: $0) } }
             .max { a, b in
-                let ea = a.device.relayGrantExpiry ?? .distantPast, eb = b.device.relayGrantExpiry ?? .distantPast
+                let ea = RelayGrant.expiry(a.grant) ?? .distantPast, eb = RelayGrant.expiry(b.grant) ?? .distantPast
                 return ea != eb ? ea < eb : a.id > b.id
             }
     }
@@ -378,8 +550,9 @@ public final class Pusher {
     /// it's made with the grant of the lane's device whose grant lasts longest, and a spare whose
     /// own grant runs out within two days is replaced: the new one first, then the old one to
     /// `pendingDeletes` (so a failure keeps the old one). A failure holds back only its lane:
-    /// a refused device grant goes to `badGrants` (another device of the lane next tick), the
-    /// relay's channel limits wait 5–15 minutes, anything else a minute.
+    /// a refused device grant goes to `badGrants` (another device of the lane next tick; an
+    /// activity going on there goes on), the relay's channel limits wait 5–15 minutes, a refusal
+    /// that won't change 10, anything else a minute.
     func ensureChannels(for devices: [String: PushRegistry.Device], now: Date) async {
         var lanes: [String: (lane: Lane, devices: [String: PushRegistry.Device])] = [:]
         for (id, d) in devices {
@@ -410,6 +583,7 @@ public final class Pusher {
                 laneRetryAt[key] = nil
                 state.channels[key] = made.id
                 if let grant = made.grant { state.channelGrants[made.id] = grant }
+                if let maker { keepRenewed(made.renewed, token: maker.device.startToken, name: maker.device.name) }
                 if let replacing { retire(replacing, lane: lane, now: now, why: "replaced, its grant running out") }
                 state.save(stateURL)
                 log("new channel for \(key): \(made.id)\(transport.needsGrants ? " (through the relay, for \(maker?.device.name ?? "?"))" : "")")
@@ -420,6 +594,9 @@ public final class Pusher {
                 let wait = TimeInterval.random(in: Self.channelLimitWait)
                 laneRetryAt[key] = now.addingTimeInterval(wait)
                 log("can't create a channel for \(key): \(r); trying again in \(Int(wait / 60)) min")
+            } catch let r as RelayRefusal where r.isPermanent {
+                laneRetryAt[key] = now.addingTimeInterval(Self.holdTime)
+                log("can't create a channel for \(key): \(r); trying again in \(Int(Self.holdTime / 60)) min")
             } catch {
                 laneRetryAt[key] = now.addingTimeInterval(Self.channelFailureWait)
                 let hint = error is APNsError ? " (is Broadcast on for the App ID's Push Notifications?)" : ""
@@ -497,6 +674,16 @@ public final class Pusher {
         switch action {
         case let .start(lane, channel, device, token, s, alert):
             let name = devices[device]?.name ?? device
+            // A device that can't be started now: no request, a word in the log once; the planner
+            // asks again (and the activity going on elsewhere on the lane goes on).
+            if let why = startWaits(device, now: now) {
+                planner.drop(device: device, lane: lane)
+                if startsWaiting[device] != why {
+                    startsWaiting[device] = why
+                    log("start on \(name) waits: \(why)")
+                }
+                return true
+            }
             let channelGrant = state.channelGrants[channel]
             if transport.needsGrants && channelGrant == nil {
                 // The activity's channel was made straight with the key: the relay won't start on it.
@@ -507,21 +694,39 @@ public final class Pusher {
             }
             let payload = ActivityPayload.start(attributes: AgentsActivityAttributes(host: host), state: s,
                                                 channel: channel, alert: alert, stale: stale, now: now, key: seal)
+            let grant = transport.needsGrants ? devices[device].flatMap(state.relayGrant(for:)) : nil
             do {
-                try await transport.start(token: token, grant: devices[device]?.relayGrant, channel: channel,
-                                          channelGrant: channelGrant, bundle: lane.bundle, env: lane.env,
-                                          payload: payload, priority: 10)
+                let renewed = try await transport.start(token: token, grant: grant, channel: channel,
+                                                        channelGrant: channelGrant, bundle: lane.bundle, env: lane.env,
+                                                        payload: payload, priority: 10)
+                deviceHolds[device] = nil
+                startsWaiting[device] = nil
                 log("start on \(name): \(Self.describe(s))")
+                keepRenewed(renewed, token: token, name: name)
                 return true
-            } catch let r as RelayRefusal where r.isBadGrant && r.message.localizedCaseInsensitiveContains("channel") {
+            } catch let r as RelayRefusal where r.isBadGrant && r.grant == .channel {
                 // The channel's grant, not the device's: a new activity on a new channel.
                 log("start on \(name): \(r); a new activity on a new channel")
                 planner.drop(lane: lane)
                 retire(channel, lane: lane, now: now, why: "its grant refused")
                 return true
             } catch let r as RelayRefusal where r.isBadGrant {
+                // The device's (also when the relay didn't say whose: a channel's would show on
+                // the activity's next broadcast, and a wrong guess doesn't end the activity).
                 log("start on \(name): \(r); waiting for Wierdr to bring a new grant")
-                if let grant = devices[device]?.relayGrant { state.badGrants.insert(grant) }
+                if let grant { state.badGrants.insert(grant) }
+                if let d = devices[device], state.relayGrant(for: d) == nil {
+                    startsWaiting[device] = state.grantRefused(for: d) ? Self.refusedGrant : Self.noGrant
+                }
+                planner.drop(device: device, lane: lane)
+                return true
+            } catch let r as RelayRefusal where r.isPermanent || r.status == 429 {
+                // Asking again won't change it, or this token's starts are over the relay's limit
+                // (`start_quota`, `rate_limited`: counted by token): this device waits, not every push.
+                if hold(&deviceHolds, device, why: "\(r)", now: now) {
+                    log("start on \(name): \(r); not again for \(Int(Self.holdTime / 60)) min")
+                }
+                startsWaiting[device] = "held back: \(r)"
                 planner.drop(device: device, lane: lane)
                 return true
             } catch let e as APNsError where e.isBadToken {
@@ -535,16 +740,28 @@ public final class Pusher {
                 return false
             }
         case let .update(lane, channel, s, priority, alert):
+            // Held back after a refusal that won't change: skipped, sent again once it's over.
+            if let hold = laneHolds[lane.key], hold.holds(now) { return true }
             let payload = ActivityPayload.update(state: s, alert: alert, stale: stale, now: now, key: seal)
             do {
-                try await transport.broadcast(channel: channel, grant: state.channelGrants[channel], bundle: lane.bundle,
-                                              env: lane.env, payload: payload, priority: priority)
+                let renewed = try await transport.broadcast(channel: channel, grant: state.channelGrants[channel],
+                                                            bundle: lane.bundle, env: lane.env, payload: payload,
+                                                            priority: priority)
+                laneHolds[lane.key] = nil
+                keepRenewedChannel(renewed, channel: channel)
                 log("update p\(priority): \(Self.describe(s))\(alert.map { " — alert \($0.title): \($0.body)" } ?? "")")
                 return true
             } catch let e as APNsError where e.isBadChannel {
                 log("update: \(e); a new activity on a new channel")
                 planner.drop(lane: lane)
                 retire(channel, lane: lane, now: now, why: "refused")
+                return true
+            } catch let r as RelayRefusal where r.isPermanent {
+                // Asking again won't change it: this lane's updates wait, not every push, and
+                // the state isn't sent again every tick (once when the wait is over).
+                if hold(&laneHolds, lane.key, why: "\(r)", now: now) {
+                    log("update: \(r); \(lane.key)'s updates wait \(Int(Self.holdTime / 60)) min")
+                }
                 return true
             } catch {
                 log("update failed: \(error)")
@@ -556,12 +773,21 @@ public final class Pusher {
             do {
                 try await transport.broadcast(channel: channel, grant: state.channelGrants[channel], bundle: lane.bundle,
                                               env: lane.env, payload: payload, priority: 10)
+                laneHolds[lane.key] = nil
                 log("end")
             } catch {
                 log("end failed: \(error)")
             }
             return true
         }
+    }
+
+    /// Holds `key` back for `holdTime`; whether to say so in the log (not when it's the same
+    /// refusal as the hold before).
+    func hold(_ holds: inout [String: Hold], _ key: String, why: String, now: Date) -> Bool {
+        let before = holds[key]
+        holds[key] = Hold(until: now.addingTimeInterval(Self.holdTime), why: why)
+        return before?.why != why
     }
 
     /// `1 done · 1 working [done t9h "Title", working t5w "Title"]` for the log.

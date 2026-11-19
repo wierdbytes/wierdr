@@ -24,8 +24,14 @@ public enum ActivityPayload {
         var aps = base(event: "start", state: state, now: now, key: key)
         aps["input-push-channel"] = channel
         aps["attributes-type"] = AgentsActivityAttributes.typeName
-        // The name is the Mac's to choose: kept short, so the sealed attributes stay small.
-        let attributes = AgentsActivityAttributes(host: String(attributes.host.prefix(100)))
+        // The name is the Mac's to choose: kept to 100 bytes (whole characters), so the
+        // sealed attributes stay small.
+        var host = ""
+        for ch in attributes.host {
+            guard host.utf8.count + String(ch).utf8.count <= 100 else { break }
+            host.append(ch)
+        }
+        let attributes = AgentsActivityAttributes(host: host)
         aps["attributes"] = key.map { sealed(attributes, .attributes, $0, open: [:]) } ?? json(attributes)
         aps["alert"] = alertJSON(alert)
         aps["stale-date"] = Int(stale.timeIntervalSince1970)

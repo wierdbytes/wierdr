@@ -26,13 +26,14 @@ public struct AgentsActivityAttributes: Codable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey { case host }
 
-    /// Plain, or sealed whole.
+    /// Plain, or sealed whole. On an iPhone's release build only sealed: what comes in the
+    /// open (someone with the APNs key, not the Mac) shows nothing.
     public init(from decoder: Decoder) throws {
         if try ActivitySeal.isSealed(decoder) {
             self = try ActivitySeal.open(Self.self, in: decoder, .attributes) ?? AgentsActivityAttributes(host: "")
             return
         }
-        host = try decoder.container(keyedBy: CodingKeys.self).decode(String.self, forKey: .host)
+        host = ActivitySeal.takesPlain ? try decoder.container(keyedBy: CodingKeys.self).decode(String.self, forKey: .host) : ""
     }
 
     public struct ContentState: Codable, Hashable, Sendable {
@@ -71,8 +72,11 @@ public struct AgentsActivityAttributes: Codable, Hashable, Sendable {
                 let opened = try ActivitySeal.open([Agent].self, in: decoder, .agents, context: context)
                 agents = opened ?? []
                 unreadable = opened == nil
-            } else {
+            } else if ActivitySeal.takesPlain {
                 agents = try c.decode([Agent].self, forKey: .agents)
+            } else {
+                agents = [] // the open counts show; rows only from a seal
+                unreadable = true
             }
         }
 

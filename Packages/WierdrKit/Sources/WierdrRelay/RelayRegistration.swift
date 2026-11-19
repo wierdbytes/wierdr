@@ -12,9 +12,11 @@ import Foundation
 /// says so or within 10 days of its end; a new token gets one at once.
 ///
 /// What goes wrong is bounded: two rounds at most per call; a key Apple or the relay
-/// refused isn't attested again for a day (Apple limits attestations, and many of them
-/// read as fraud); a key the Secure Enclave lost (`invalidKey`) or the relay doesn't know
-/// is replaced by a new one; while Apple's service is down the key is kept.
+/// refused, or the relay revoked, isn't replaced for a day (Apple limits attestations, and
+/// many of them read as fraud); a key the Secure Enclave lost (`invalidKey`) or the relay
+/// doesn't know (`key_unknown`) is replaced at once. An attestation Apple made is kept
+/// until the relay took it (sent again later, with its challenge, if the relay couldn't be
+/// reached); while Apple's service is down the key and its challenge are kept and asked again.
 @MainActor
 public final class RelayRegistration {
     public enum Failure: Error, Equatable {
@@ -91,8 +93,16 @@ public final class RelayRegistration {
         guard let r = try? await http.post("v1/grants/check", body: body, headers: [:]) else { return .unknown }
         if r.status == 200 { return r.json["renew"] as? Bool == true ? .renew : .holds }
         let code = r.json["error"] as? String ?? ""
-        if code == "key_revoked" { dropKey() }
-        return ["bad_grant", "grant_expired", "key_revoked"].contains(code) ? .void : .unknown
+        switch code {
+        case "key_revoked":
+            dropKey()
+            store.attestRefusedAt = now() // as on registering: not a new key for a day
+        case "key_unknown":
+            dropKey()
+        default:
+            break
+        }
+        return ["bad_grant", "grant_expired", "key_revoked", "key_unknown"].contains(code) ? .void : .unknown
     }
 
     // MARK: Registering
@@ -102,8 +112,9 @@ public final class RelayRegistration {
         for _ in 0..<2 {
             let key = try await attestedKey()
             let challenge = try await self.challenge()
+            // `op`: what the assertion is for, signed with it.
             let body = try JSONSerialization.data(withJSONObject: ["challenge": challenge, "key_id": key, "token": token,
-                                                                   "env": env], options: [.sortedKeys])
+                                                                   "env": env, "op": "devices"], options: [.sortedKeys])
             let assertion: Data
             do {
                 assertion = try await attest.generateAssertion(key, clientDataHash: Data(SHA256.hash(data: body)))
@@ -117,7 +128,7 @@ public final class RelayRegistration {
             }
             let code = r.json["error"] as? String ?? "status \(r.status)"
             switch code {
-            case "unknown_key":
+            case "key_unknown":
                 dropKey() // the relay forgot it (its database was reset): a new key, attested
                 continue
             case "key_revoked":
@@ -142,30 +153,44 @@ public final class RelayRegistration {
             key = try await attest.generateKey()
             store.keyId = key
             store.attested = false
+            store.pending = nil
         }
-        let challenge = try await self.challenge()
-        let attestation: Data
-        do {
-            attestation = try await attest.attestKey(key, clientDataHash: Data(SHA256.hash(data: Data(challenge.utf8))))
-        } catch AppAttestFailure.serverUnavailable {
-            throw AppAttestFailure.serverUnavailable // Apple's service is down: the key stays, later
-        } catch {
-            // Apple: a key whose attestation failed otherwise is no good; the next call makes another.
-            dropKey()
-            throw error
+        // A challenge kept for this key (Apple was down) or attested already (the relay was
+        // out of reach) is used again within a day; else a new one.
+        var pending = store.pending.flatMap { $0.key == key && now().timeIntervalSince($0.at) < 23 * 3600 ? $0 : nil }
+        if pending == nil {
+            pending = PendingAttestation(key: key, challenge: try await self.challenge(), attestation: nil, at: now())
+            store.pending = pending
         }
-        let body = try JSONSerialization.data(withJSONObject: ["challenge": challenge, "key_id": key,
-                                                               "attestation": attestation.base64EncodedString()])
-        let r = try await http.post("v1/attest", body: body, headers: [:])
+        var p = pending!
+        if p.attestation == nil {
+            do {
+                p.attestation = try await attest.attestKey(key, clientDataHash: Data(SHA256.hash(data: Data(p.challenge.utf8))))
+                store.pending = p
+            } catch AppAttestFailure.serverUnavailable {
+                throw AppAttestFailure.serverUnavailable // Apple's service is down: the key and challenge stay, later
+            } catch {
+                // Apple: a key whose attestation failed otherwise is no good; the next call makes another.
+                dropKey()
+                throw error
+            }
+        }
+        let body = try JSONSerialization.data(withJSONObject: ["challenge": p.challenge, "key_id": key,
+                                                               "attestation": p.attestation!.base64EncodedString()])
+        let r: (status: Int, json: [String: Any])
+        r = try await http.post("v1/attest", body: body, headers: [:]) // no reply: the attestation stays for next time
         guard r.status == 200 else {
             let code = r.json["error"] as? String ?? "status \(r.status)"
             if r.status == 403 || r.status == 409 {
                 dropKey()
                 store.attestRefusedAt = now()
+            } else if code == "bad_challenge" {
+                dropKey() // kept too long: a new key (attesting one key twice isn't Apple's way)
             }
             throw Failure.refused(status: r.status, code: code)
         }
         store.attested = true
+        store.pending = nil
         store.attestRefusedAt = nil
         return key
     }
@@ -173,6 +198,7 @@ public final class RelayRegistration {
     private func dropKey() {
         store.keyId = nil
         store.attested = false
+        store.pending = nil
     }
 
     private func challenge() async throws -> String {
@@ -214,6 +240,19 @@ public protocol RegistrationStore: AnyObject {
     var keyId: String? { get set }
     var attested: Bool { get set }
     var attestRefusedAt: Date? { get set }
+    /// An attestation under way: its challenge, and what Apple attested once it did.
+    var pending: PendingAttestation? { get set }
+}
+
+public struct PendingAttestation: Codable, Equatable, Sendable {
+    public var key: String
+    public var challenge: String
+    public var attestation: Data?
+    public var at: Date
+
+    public init(key: String, challenge: String, attestation: Data?, at: Date) {
+        self.key = key; self.challenge = challenge; self.attestation = attestation; self.at = at
+    }
 }
 
 public struct KeptGrant: Codable, Equatable, Sendable {
@@ -266,5 +305,9 @@ public final class DefaultsRegistrationStore: RegistrationStore {
     public var attestRefusedAt: Date? {
         get { defaults.object(forKey: "relay.attestRefusedAt") as? Date }
         set { defaults.set(newValue, forKey: "relay.attestRefusedAt") }
+    }
+    public var pending: PendingAttestation? {
+        get { defaults.data(forKey: "relay.pendingAttestation").flatMap { try? JSONDecoder().decode(PendingAttestation.self, from: $0) } }
+        set { defaults.set(newValue.flatMap { try? JSONEncoder().encode($0) }, forKey: "relay.pendingAttestation") }
     }
 }

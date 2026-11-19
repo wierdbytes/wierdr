@@ -44,7 +44,9 @@ export function parseAuthData(data: Uint8Array, attested: boolean): AuthData {
     out.credentialId = data.slice(55, 55 + n) as Bytes;
     at = decodeCBORAt(data, 55 + n).end; // the COSE key: the certificate's key is the one used
   }
-  if (out.flags & 0x80) {
+  // Extensions: with the ED flag, or (Apple's own sample in its validation guide, early
+  // iOS 27) a CBOR map after the fixed part without it.
+  if (out.flags & 0x80 || (at < data.length && data[at] >> 5 === 5)) {
     const { value, end } = decodeCBORAt(data, at);
     at = end;
     const category = field(value, "apple_validation_category_01");
@@ -132,8 +134,10 @@ async function attestation(opts: {
   const nonce = await sha256(concat(authData, await sha256(opts.challenge)));
   const ext = cred.extensions.get(NONCE_OID);
   if (!ext) throw new AttestError("no nonce extension");
-  const [tagged] = children(readTLV(ext));
-  const [octets] = tagged ? children(tagged) : [];
+  // SEQUENCE { [1] EXPLICIT OCTET STRING nonce }
+  const seq = readTLV(ext);
+  const [tagged] = seq.tag === 0x30 ? children(seq) : [];
+  const [octets] = tagged?.tag === 0xa1 ? children(tagged) : [];
   if (!octets || octets.tag !== 0x04 || !equal(octets.value, nonce)) throw new AttestError("nonce mismatch");
 
   // 5. The key identifier is the hash of the certificate's key.
