@@ -165,7 +165,9 @@ codex plugin marketplace add wierdbytes/wierdr
 codex plugin add codex@wierdr
 ```
 
-(или в TUI `/plugins`). Маркетплейс — [`.agents/plugins/marketplace.json`](../.agents/plugins/marketplace.json)
+(или в TUI `/plugins`). Это же делает Wierdr, когда находит на компьютере Codex ≥ 0.167.0 и
+python3 без плагина ([host-setup.md](host-setup.md)); доверить хуки остаётся человеку.
+Маркетплейс — [`.agents/plugins/marketplace.json`](../.agents/plugins/marketplace.json)
 в корне (`wierdr`, плагин `codex` из `./Integrations/codex`). Codex ищет маркетплейс в
 `.agents/plugins/marketplace.json` раньше `.claude-plugin/marketplace.json` (первый найденный
 выигрывает), поэтому Claude Code и Codex берут из одного репозитория разные маркетплейсы.

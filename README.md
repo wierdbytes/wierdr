@@ -70,7 +70,9 @@ Wierdr is not on the App Store yet; a release is being prepared. Until then,
 ### 4. Optional: more about each agent
 
 Herdr already knows each agent's status. To also see the model, reasoning effort, context,
-sub-agents and subscription limits, install the integration for your agent on the computer:
+sub-agents and subscription limits, install the integration for your agent on the computer.
+After Wierdr first connects, it finds pi, Claude Code and Codex there and offers to install
+their integrations for you (later: **Settings › Agent Integrations**). By hand:
 
 | Agent | Install | Details |
 |---|---|---|
@@ -134,7 +136,8 @@ Most of the detailed docs are in Russian for now (RU); the rest are in English (
 - [SSH](docs/ssh.md): sign-in, keys, host keys, setting up the Mac (EN).
 - [Live Activity](docs/live-activity.md): how it works and how to set it up (RU);
   the [push relay](docs/relay.md) (RU); [wierdrd](docs/wierdrd.md), the daemon behind it:
-  installing, how the app sets it up, releases (RU).
+  installing, how the app sets it up, releases (RU); [setting up a host from the app](docs/host-setup.md):
+  the daemon and the agent integrations (RU).
 - Agent integrations: [pi](Integrations/pi/README.md), [Claude Code](Integrations/claude-code/README.md),
   [Codex](Integrations/codex/README.md) (EN); how they work inside: [pi](docs/pi.md),
   [Claude Code](docs/claude-code.md), [Codex](docs/codex.md) (RU).

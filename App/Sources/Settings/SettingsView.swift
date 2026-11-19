@@ -62,8 +62,9 @@ struct SettingsView: View {
                         onDisconnect()
                     }
                 }
-                if !isDemo, let daemon = connector.active?.daemon {
-                    DaemonSection(daemon: daemon, host: hostName ?? "this computer")
+                if !isDemo, let session = connector.active {
+                    DaemonSection(daemon: session.daemon, host: hostName ?? "this computer")
+                    IntegrationsSection(integrations: session.integrations, host: hostName ?? "this computer")
                 }
                 if Tutorial.isAvailable {
                     Section {
@@ -136,6 +137,28 @@ private struct DaemonSection: View {
             }
         }
         .onAppear { if daemon.phase == .checked && !daemon.isWorking { daemon.check() } }
+    }
+}
+
+/// Settings → Agent Integrations: the harnesses on the connected computer (pi, Claude Code,
+/// Codex) and Wierdr's integration in each, with Install (`IntegrationRows`).
+private struct IntegrationsSection: View {
+    var integrations: IntegrationsState
+    var host: String
+
+    var body: some View {
+        let rows = IntegrationRows(integrations: integrations, host: host)
+        Section {
+            rows
+        } header: {
+            Text("Agent Integrations")
+        } footer: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("They show each agent's model, effort, context, sub-agents and subscription limits in Wierdr.")
+                rows.commandsFooter
+            }
+        }
+        .onAppear { if integrations.working == nil && !integrations.checking { integrations.check() } }
     }
 }
 

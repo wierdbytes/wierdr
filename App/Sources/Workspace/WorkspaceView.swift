@@ -46,8 +46,8 @@ struct WorkspaceView: View {
         .sheet(isPresented: $controller.showSettings) {
             SettingsView(hostName: hostName, isDemo: controller.isDemo, onDisconnect: onDisconnect)
         }
-        // A host's first connection: wierdrd set up there, if it wants it.
-        .daemonOffer()
+        // A host's first connection: wierdrd and the agent integrations set up there, if they want it.
+        .setupOffer()
         .alert(controller.rename?.title ?? "Rename", isPresented: renameShown, presenting: controller.rename) { request in
             TextField("Name", text: renameText)
             Button("Cancel", role: .cancel) {}

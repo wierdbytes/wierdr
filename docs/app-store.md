@@ -45,7 +45,7 @@ Apple Developer, Cloudflare или юридическое решение.
   флаг и анкета (п. 4).
 - **Отладочное в release.** Пройти по местам `#if DEBUG` (9 файлов: автоподключение, демо
   Live Activity, lab‑экраны): в release ничего отладочного.
-- **Тексты для людей.** Сделано: Settings → Daemon и лист «Set Up wierdrd» объясняют
+- **Тексты для людей.** Сделано: Settings → Daemon и лист «Set Up <хост>» объясняют
   демон своими словами и не ссылаются на документы репозитория.
 - **Демо для ревью.** «Try the Demo» есть. Показывать в демо и Live Activity (сейчас
   `LiveActivityDemo` только в DEBUG): ревьюер должен увидеть главную фичу.
@@ -64,8 +64,8 @@ Apple Developer, Cloudflare или юридическое решение.
   ([relay.md](relay.md)).
 - **Сделано:** формула Homebrew с готовым бинарём (arm64 + x86_64) в тапе `wierdbytes/apps`,
   выпуск — CI при поднятой версии (`.github/workflows/release-wierdrd.yml`). Приложение
-  после первого подключения само ставит и запускает его (лист «Set Up wierdrd»,
-  Settings → Daemon).
+  после первого подключения само ставит и запускает его, а заодно интеграции агентов
+  (лист «Set Up <хост>», Settings; [host-setup.md](host-setup.md)).
 - **Аккаунт:** подпись Developer ID и нотаризация. Workflow их уже умеет, нужны секреты
   (`APPLE_CERTIFICATE` и др., [wierdrd.md](wierdrd.md#выпуск)). Без них бинарь подписан
   ad‑hoc и из Homebrew работает.

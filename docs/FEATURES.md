@@ -23,14 +23,21 @@ Wierdr (`pw.xff.wierdr`) — нативное приложение для iPad �
   `~/.ssh/authorized_keys` на Mac и переключит хост на вход по ключу.
 - **Проверка ключа хоста (TOFU)**: при первом подключении — алерт с отпечатком SHA256;
   при смене ключа — громкое предупреждение.
-- **wierdrd на Mac** ([wierdrd.md](wierdrd.md)): после первого подключения к хосту
-  приложение проверяет демон Wierdr (через `machine.exec` ядра: Homebrew, wierdrd, версия,
-  работает ли). Если он не установлен, остановлен или устарел, появляется лист «Set Up
-  wierdrd» с одной кнопкой: **Install with Homebrew** (`brew tap wierdbytes/apps`,
-  `brew install`, `brew services start`), **Start** или **Update**; под ней — команды, которые
-  она выполнит. Без Homebrew лист объясняет, что его нужно поставить. Лист показывается один
-  раз на хост, на iPad и на iPhone. Потом то же — в **Settings → Daemon**: состояние
-  («Running · 0.1.0»), кнопка, на iPhone — регистрация Live Activity.
+- **Настройка хоста** ([host-setup.md](host-setup.md)): после первого подключения к хосту
+  приложение проверяет через `machine.exec` ядра демон Wierdr и харнессы агентов. Если
+  что‑то просит человека, появляется лист «Set Up <хост>», один раз на хост, на iPad и на
+  iPhone. Под каждой секцией — команды, которые выполнят её кнопки.
+  - **Daemon** — `wierdrd` ([wierdrd.md](wierdrd.md)): **Install with Homebrew**
+    (`brew tap wierdbytes/apps`, `brew install`, `brew services start`), **Start** или
+    **Update**. Без Homebrew лист объясняет, что его нужно поставить.
+  - **Agent Integrations** — строка на каждый найденный харнесс (pi, Claude Code, Codex;
+    ищется в `PATH` логин‑оболочки): версия, есть ли интеграция (pi-wierdr, `cc@wierdr`,
+    `codex@wierdr`), кнопка **Install …** или **Enable …**; слишком старый харнесс или Codex
+    без python3 — объяснение. После установки — как она начнёт работать (новые сессии,
+    `/reload-plugins`, доверить хуки Codex).
+
+  Потом то же — в **Settings → Daemon** (состояние «Running · 0.1.0», кнопка, на iPhone —
+  регистрация Live Activity) и **Settings → Agent Integrations**.
 - **Переподключение**: при обрыве — автоматический реконнект с backoff; при возвращении
   приложения на передний план линия проверяется пингом и при необходимости поднимается заново.
   Баннер «Reconnecting…» в панели. Терминалы переаттачиваются сами (ядро присылает экран +

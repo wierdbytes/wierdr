@@ -6,14 +6,15 @@
 
 Код: `Packages/WierdrKit/Sources/wierdrd` (CLI, версия в `Version.swift`), логика —
 `WierdrPush`; проверка и установка из приложения — `WierdrModel/Daemon.swift` и
-`App/Sources/Daemon/`.
+`App/Sources/Setup/` ([host-setup.md](host-setup.md)).
 
 ## Установка
 
 **Из приложения.** После первого подключения к хосту Wierdr проверяет wierdrd. Если он не
-установлен, остановлен или устарел, приложение показывает лист «Set Up wierdrd» с кнопкой:
-*Install with Homebrew*, *Start wierdrd* или *Update wierdrd*. Под кнопкой — команды,
-которые она выполнит. То же есть в **Settings → Daemon**, на iPad и на iPhone.
+установлен, остановлен или устарел, лист «Set Up <хост>» ([host-setup.md](host-setup.md))
+предлагает кнопку: *Install with Homebrew*, *Start wierdrd* или *Update wierdrd*. Под
+кнопкой — команды, которые она выполнит. То же есть в **Settings → Daemon**, на iPad и на
+iPhone.
 
 **Руками:**
 
@@ -86,10 +87,9 @@ brew services start wierdrd
 После действия приложение проверяет ещё раз, до 5 с, пока служба не поднимется. Не
 поднялась — показывает код выхода и строку журнала.
 
-**Лист** — один раз на хост: после первой пробы первого подключения. Флаг —
-`daemon.checked.<id хоста>` в UserDefaults, удаляется вместе с хостом. Лист не
-показывается, если демон работает, если хост не Mac, если стоит сборка из исходников и
-во время тура. В DEBUG `-daemon-offer always` показывает лист при каждом подключении.
+Когда показывается лист и что ещё в нём (интеграции агентов) — [host-setup.md](host-setup.md).
+Ради демона лист не показывается, если тот работает, если хост не Mac и если стоит сборка
+из исходников.
 
 **Settings → Daemon** (`DaemonSection`): состояние и та же кнопка, на iPhone — строка
 Live Activity (зарегистрирован ли телефон в ядре). Проба повторяется при каждом

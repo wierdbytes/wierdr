@@ -15,6 +15,9 @@ pi в терминале herdr-core показывается в Wierdr со вс
 Wierdr читает метки и документ тем же кодом, что у Claude Code ([claude-code.md](claude-code.md))
 и Codex ([codex.md](codex.md)): `AgentLabels.meta` в `TerminalFacts.swift`, `Limits.swift`.
 
+Ставится `pi install npm:@wierdbytes/pi-wierdr`; Wierdr предлагает это сам, когда находит pi
+≥ 1.5.0 на компьютере, и заодно убирает `pi-herdr` и `pi-agents` ([host-setup.md](host-setup.md)).
+
 ## Что откуда
 
 | Что | Откуда | Где в herdr-core |

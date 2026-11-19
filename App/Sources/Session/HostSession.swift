@@ -38,8 +38,10 @@ final class HostSession {
     private(set) var hostKeyQuestion: HostKeyQuestion?
     /// Name of the core we talk to (from `hello`), e.g. `mentoair`.
     private(set) var coreName: String?
-    /// wierdrd there: checked each time a connection goes live.
+    /// wierdrd there, and the agent harnesses with Wierdr's integrations: checked each time a
+    /// connection goes live.
     let daemon = DaemonState()
+    let integrations = IntegrationsState()
 
     @ObservationIgnored let engine: WorkspaceEngine
     @ObservationIgnored private var loop: Task<Void, Never>?
@@ -95,6 +97,7 @@ final class HostSession {
         loop = nil
         liveWatch?.cancel()
         daemon.disconnected()
+        integrations.disconnected()
         wake()
         let c = current
         current = nil
@@ -210,6 +213,7 @@ final class HostSession {
                 if self.workspace.phase == .live {
                     self.state = .live
                     self.daemon.connected(core)
+                    self.integrations.connected(core)
                     self.onLive?(core, self.coreName ?? self.endpoint.address)
                     return
                 }

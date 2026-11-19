@@ -125,7 +125,7 @@ final class AppModel {
         hosts.delete(host.id)
         services.deletePassword(host.id)
         UserDefaults.standard.removeObject(forKey: Self.screenKey(host.id))
-        UserDefaults.standard.removeObject(forKey: DaemonOffer.key(host.id))
+        UserDefaults.standard.removeObject(forKey: SetupOffer.key(host.id))
     }
 
     // MARK: Per-host screen state

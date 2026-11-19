@@ -9,6 +9,7 @@
   [`live-activity.md`](docs/live-activity.md) — Live Activity и APNs, проверенные ловушки;
   [`relay.md`](docs/relay.md) — релей пушей (Cloudflare Worker в `Relay/`, App Attest, права), развёртывание;
   [`wierdrd.md`](docs/wierdrd.md) — демон на Mac: формула Homebrew (тап `wierdbytes/apps`), установка из приложения, выпуск;
+  [`host-setup.md`](docs/host-setup.md) — лист «Set Up <хост>»: демон и интеграции агентов (pi, Claude Code, Codex) из приложения;
   [`app-store.md`](docs/app-store.md) — план публикации в App Store;
   [`claude-code.md`](docs/claude-code.md) — мод `cc` для Claude Code (метки `agent.*`, лимиты), проверенные ловушки;
   [`codex.md`](docs/codex.md) — плагин `codex` для Codex CLI (метки `agent.*`, лимиты, `--no-daemon`), проверенные ловушки;

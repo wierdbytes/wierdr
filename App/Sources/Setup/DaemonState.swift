@@ -6,7 +6,7 @@ import WierdrModel
 /// wierdrd on the connected computer, as this session knows it (`Daemon` in WierdrModel:
 /// the probe and the Homebrew actions, through herdr-core's `machine.exec`). Checked each
 /// time the connection goes live; set up from the sheet after the first connection to a
-/// host (`DaemonOffer`) or from Settings → Daemon. See docs/wierdrd.md.
+/// host (`SetupOffer`, `HostSetupSheet`) or from Settings → Daemon. See docs/wierdrd.md.
 @MainActor
 @Observable
 final class DaemonState {

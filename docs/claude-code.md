@@ -134,6 +134,10 @@ Claude Code спрашивал бы при включении плагина).
 /plugin install cc@wierdr
 ```
 
+Из оболочки — `claude plugin marketplace add wierdbytes/wierdr && claude plugin install cc@wierdr`.
+Это же делает Wierdr, когда находит на компьютере Claude Code ≥ 2.1.304 без мода (выключенный
+включает: `claude plugin enable cc@wierdr`; [host-setup.md](host-setup.md)).
+
 Маркетплейс — [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) в
 корне репозитория (`wierdr`, плагин `cc` из `./Integrations/claude-code`). Имя `cc`:
 `claude`, `claude-*` и `claude-code` зарезервированы (`claude plugin validate` их не

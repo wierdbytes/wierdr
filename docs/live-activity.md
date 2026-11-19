@@ -171,7 +171,7 @@ iOS 18.4 на живой активности; через ~43 с / ~21 мин / 
      Если ASC API пишет `REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`, сначала нужно принять
      соглашение в developer account.
 2. На Mac — `wierdrd` ([wierdrd.md](wierdrd.md)). Его ставит само приложение при первом
-   подключении (лист «Set Up wierdrd», Homebrew) или:
+   подключении (лист «Set Up <хост>», Homebrew) или:
    ```sh
    brew install wierdbytes/apps/wierdrd && brew services start wierdrd
    ```
