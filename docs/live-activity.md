@@ -119,9 +119,12 @@ iOS 18.4 на живой активности; через ~43 с / ~21 мин / 
    - **Identifiers → `pw.xff.wierdr`**: включить *Push Notifications* и в нём галку
      **Broadcast Capability**. Без Broadcast каналы не создаются.
    - Подписи нужен профиль с push для `pw.xff.wierdr`: прежний wildcard‑профиль
-     (`iOS Team Provisioning Profile: *`) push не включает, а виджету `pw.xff.wierdr.widgets`
-     хватает и его. Проще всего войти в Xcode (Settings → Accounts) этой командой:
-     `make ipa` / `make device` с `-allowProvisioningUpdates` сами заведут App ID и профиль.
+     (`iOS Team Provisioning Profile: *`) push не включает. Виджету хватило бы и его, но
+     с 2026‑11‑19 у `pw.xff.wierdr.widgets` свой App ID и профиль. Проще всего войти в
+     Xcode (Settings → Accounts) этой командой: `make ipa` / `make device` с
+     `-allowProvisioningUpdates` сами заведут App ID, App Group и профили. Ключ App
+     Store Connect API вместо входа не годится: `xcodebuild -authenticationKeyPath` отвечает
+     «Authentication failed», а App Group через API не завести.
      Если ASC API пишет `REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`, сначала нужно принять
      соглашение в developer account.
 2. На Mac:
@@ -175,4 +178,7 @@ wierdr-push reset              # закончить идущую активно�
   `UserDefaults` работают. Тот же бинарник в виджете экрана «Домой» (другой процесс) связку
   видит: закрыта она именно песочницей Live Activity. В симуляторе связка доступна, так что
   проверять нужно на устройстве (проверено 2026‑11‑16 и 2026‑11‑19, iOS 27.2.1;
-  [research/push-relay.md](research/push-relay.md)).
+  [research/push-relay.md](research/push-relay.md)). Файл в App Group `group.pw.xff.wierdr`
+  Live Activity читает, и на заблокированном телефоне тоже. Группа и App ID
+  `pw.xff.wierdr.widgets` заведены (Xcode, 2026‑11‑19), но пока ими пользуется только
+  lab‑ветка `lab/sealed-live-activity`.
