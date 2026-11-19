@@ -4,7 +4,7 @@
 
 1. **Mac доступен по SSH.** Remote Login включён (на этом Mac уже включён; sshd предлагает
    `publickey,password,keyboard-interactive`). iPad видит Mac в одной сети
-   (`mentoair.local` / `192.168.x.y`) или через Tailscale (`mentoair-1` / `100.x.y.z`;
+   (`mentoair.local`) или через Tailscale (`mentoair-1`;
    iPad `ipad165` и iPhone `iphone-13-pro-max` уже в tailnet). Вне дома iPhone ходит к Mac
    только через Tailscale.
 2. **herdr-core на Mac** установлен (`~/.local/bin/hc`, 0.1.20). Протокол — generation 1;
@@ -138,8 +138,8 @@
   экран подключения, быстрый переключатель, настройки, автоподключение при запуске. Раскладка
   iPad (широкое окно) — без изменений (скриншот в симуляторе iPad Pro 13"); на физическом iPad
   не перепроверено — он был заблокирован.
-- `dist/Wierdr.ipa` 0.2.0 (2): профиль «iOS Team Provisioning Profile: *» с UDID iPhone
-  `<UDID>`. OTA‑страница, manifest и ipa отдаются по HTTPS с tailnet‑имени
+- `dist/Wierdr.ipa` 0.2.0 (2): профиль «iOS Team Provisioning Profile: *» с UDID iPhone.
+  OTA‑страница, manifest и ipa отдаются по HTTPS с tailnet‑имени
   (проверено curl, файл совпадает побайтно).
 
 - iPad, шайба (сборка 14): в симуляторе iPad Pro 13" (демо, портрет) — тап, колонка с ⏎ на высоте

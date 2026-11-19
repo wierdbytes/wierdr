@@ -12,8 +12,8 @@ Telegram, шапка внизу — под большой палец ([FEATURES 
 
 <img src="docs/screenshots/iphone-agents-dark.png" width="260"> <img src="docs/screenshots/iphone-pane-dark.png" width="260"> <img src="docs/screenshots/iphone-compose-live.png" width="260">
 
-**iPhone:** `make ipa && scripts/ota.sh`, затем на iPhone открыть
-https://<mac>.<tailnet>.ts.net/wierdr/ → «Установить» (или `make install-iphone` по кабелю).
+**iPhone:** `make ipa && scripts/ota.sh`, затем на iPhone открыть ссылку, которую он напечатает
+(`https://<mac>.<tailnet>.ts.net/wierdr/`) → «Установить» (или `make install-iphone` по кабелю).
 Подробно: [docs/BUILD.md](docs/BUILD.md#установка-на-iphone).
 
 ## Быстрый старт
@@ -26,8 +26,8 @@ https://<mac>.<tailnet>.ts.net/wierdr/ → «Установить» (или `mak
    ```
    (или открыть `Wierdr.xcodeproj` в Xcode → выбрать iPad → Run; либо поставить готовый
    `dist/Wierdr.ipa` через Xcode › Devices and Simulators / Apple Configurator).
-3. В Wierdr: **Add Host** → адрес `mentoair.local` (или `192.168.x.y`, или по Tailscale
-   `100.x.y.z`), пользователь `mentor`, вход **Password** → Connect. Подтверди отпечаток ключа
+3. В Wierdr: **Add Host** → адрес `mentoair.local` (или IP Mac в LAN, или его адрес
+   в Tailscale), пользователь `mentor`, вход **Password** → Connect. Подтверди отпечаток ключа
    Mac: `SHA256:YKysidsqfwHmxS7eFJTAbqVwmY2mQ33PdJtS4S4XXFs`.
 4. В **Settings → Install This iPad’s Key on …** — дальше без пароля.
 

@@ -2,8 +2,7 @@
 
 Требования: Xcode 27 (проект генерируется XcodeGen и уже лежит в репозитории как
 `Wierdr.xcodeproj`), сертификат Apple Development команды `AUL4CCB2XY` —
-есть в связке ключей этого Mac. iPad Pro 13" M4 и
-iPhone 13 Pro Max уже зарегистрированы в
+есть в связке ключей этого Mac. iPad Pro 13" M4 и iPhone 13 Pro Max уже зарегистрированы в
 команде и входят в профиль, которым подписывается сборка (один `.ipa` для обоих).
 
 ## Установка на iPhone
@@ -19,7 +18,8 @@ iPhone 13 Pro Max уже зарегистрированы в
    ```sh
    make ipa && scripts/ota.sh   # dist/Wierdr.ipa + страница установки
    ```
-   На iPhone открой в Safari **https://<mac>.<tailnet>.ts.net/wierdr/** → «Установить» →
+   На iPhone открой в Safari ссылку, которую напечатает `ota.sh`
+   (`https://<mac>.<tailnet>.ts.net/wierdr/`) → «Установить» →
    приложение появится на экране «Домой». Страницу раздаёт `tailscale serve` (путь `/wierdr`,
    только tailnet) через локальный `python3 http.server` на 127.0.0.1:8791.
    Выключить: `scripts/ota.sh off`.
@@ -31,10 +31,10 @@ iPhone 13 Pro Max уже зарегистрированы в
 3. Xcode: открыть `Wierdr.xcodeproj`, выбрать iPhone, Run.
 
 Если iOS пишет, что разработчик не доверенный: **Настройки › Основные › VPN и управление
-устройством › Apple Development: … › Доверять**.
+устройством** → профиль Apple Development разработчика → **Доверять**.
 
 Дальше в Wierdr на iPhone: **Add Host** → дома `mentoair.local`, вне дома по Tailscale
-`mentoair-1` (или `100.x.y.z`), пользователь `mentor`, вход **Password** → Connect,
+`mentoair-1` (или его адрес в tailnet, `100.x.y.z`), пользователь `mentor`, вход **Password** → Connect,
 подтвердить отпечаток (см. «Подготовка Mac»), потом **Settings → Install This iPhone’s Key on …**.
 iOS спросит доступ к локальной сети — разреши (для `mentoair.local`).
 
@@ -54,7 +54,7 @@ iOS спросит доступ к локальной сети — разреш�
      Xcode › Window › Devices and Simulators, или
      `xcrun devicectl device install app --device <UDID> dist/Wierdr.ipa`.
 4. Если iOS пишет, что разработчик не доверенный: **Настройки › Основные › VPN и управление
-   устройством › Apple Development: … › Доверять**.
+   устройством** → профиль Apple Development разработчика → **Доверять**.
 
 После первой установки по кабелю можно включить **Connect via network** для iPad в
 Xcode › Devices and Simulators — дальше `make install` работает по Wi‑Fi.
@@ -67,8 +67,8 @@ Debug‑сборка: `make install CONFIG=Debug` (парсинг вывода �
    (на этом Mac уже включено).
 2. herdr-core установлен (`~/.local/bin/hc`, ставится вместе с Herdr).
 3. В Wierdr добавь хост:
-   - адрес: `mentoair.local` (та же Wi‑Fi), `192.168.x.y` или через Tailscale
-     `mentoair-1` / `100.x.y.z`;
+   - адрес: `mentoair.local` (та же Wi‑Fi), IP Mac в LAN или через Tailscale
+     `mentoair-1` / его адрес `100.x.y.z`;
    - пользователь: `mentor`, порт 22;
    - вход: **Password** для первого раза. Потом в Settings нажми
      **Install This iPad’s Key on …** — Wierdr допишет свой ключ в `~/.ssh/authorized_keys`

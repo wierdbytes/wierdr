@@ -96,7 +96,7 @@ cat > "$DIR/index.html" <<HTML
   <a class="btn" href="itms-services://?action=download-manifest&amp;url=$BASE/manifest.plist">Установить</a>
   <ol>
     <li>Нажми «Установить» и подтверди. Иконка появится на экране «Домой».</li>
-    <li>Если iOS пишет «Ненадёжный разработчик»: Настройки › Основные › VPN и управление устройством › Apple Development: … › Доверять.</li>
+    <li>Если iOS пишет «Ненадёжный разработчик»: Настройки › Основные › VPN и управление устройством › профиль Apple Development разработчика › Доверять.</li>
     <li>В Wierdr: Add Host → <code>mentoair.local</code> или по Tailscale <code>$HOST</code>, пользователь <code>$(id -un)</code>, вход Password → Connect.</li>
     <li>Потом Settings → Install This iPhone’s Key — дальше без пароля.</li>
   </ol>
