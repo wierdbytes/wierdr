@@ -8,6 +8,7 @@
   [`BUILD.md`](docs/BUILD.md) — сборка, установка, устройства, симуляторы, WDA;
   [`live-activity.md`](docs/live-activity.md) — Live Activity и APNs, проверенные ловушки;
   [`relay.md`](docs/relay.md) — релей пушей (Cloudflare Worker в `Relay/`, App Attest, права), развёртывание;
+  [`app-store.md`](docs/app-store.md) — план публикации в App Store;
   [`claude-code.md`](docs/claude-code.md) — мод `cc` для Claude Code (метки `agent.*`, лимиты), проверенные ловушки;
   [`codex.md`](docs/codex.md) — плагин `codex` для Codex CLI (метки `agent.*`, лимиты, `--no-daemon`), проверенные ловушки;
   [`pi.md`](docs/pi.md) — расширение pi `@wierdbytes/pi-wierdr` (`Integrations/pi`: метки `agent.*`, лимиты, bash, сабагенты), выпуск в npm;
