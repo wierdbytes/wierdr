@@ -8,6 +8,7 @@
   [`BUILD.md`](docs/BUILD.md) — сборка, установка, устройства, симуляторы, WDA;
   [`live-activity.md`](docs/live-activity.md) — Live Activity и APNs, проверенные ловушки;
   [`relay.md`](docs/relay.md) — релей пушей (Cloudflare Worker в `Relay/`, App Attest, права), развёртывание;
+  [`site.md`](docs/site.md) — лендинг `wierdr.workat.dev` (`Site/`, Workers со статикой): картинки, выкладка;
   [`wierdrd.md`](docs/wierdrd.md) — демон на Mac: формула Homebrew (тап `wierdbytes/apps`), установка из приложения, выпуск;
   [`host-setup.md`](docs/host-setup.md) — лист «Set Up <хост>»: демон и интеграции агентов (pi, Claude Code, Codex) из приложения;
   [`app-store.md`](docs/app-store.md) — план публикации в App Store;

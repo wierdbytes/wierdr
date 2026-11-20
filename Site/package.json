@@ -1,0 +1,14 @@
+{
+  "name": "wierdr-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "images": "sh images.sh"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1",
+    "wrangler": "^4.165.0"
+  }
+}

@@ -3,7 +3,8 @@
 **Answer your coding agents from your iPhone or iPad.** Wierdr is a native app for
 [Herdr](https://herdr.dev). It shows every agent running on your computer and which ones
 need you, and it opens their live terminals so you can reply. It connects straight to your
-computer over SSH: no account, no cloud service in between.
+computer over SSH: no account, no cloud service in between. Website:
+[wierdr.workat.dev](https://wierdr.workat.dev).
 
 <img src="docs/screenshots/iphone-agents-dark.png" width="260" alt="Agents list on iPhone"> <img src="docs/screenshots/iphone-pane-dark.png" width="260" alt="An agent's terminal with the key panel"> <img src="docs/screenshots/iphone-live-activity.jpg" width="260" alt="Live Activity on the Lock Screen">
 

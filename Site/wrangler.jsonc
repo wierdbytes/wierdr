@@ -1,0 +1,15 @@
+// Wierdr's landing page: docs/site.md. Static files only (public/), served by Workers' assets.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wierdr-site",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  // Only the custom domain.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "wierdr.workat.dev", "custom_domain": true }]
+}

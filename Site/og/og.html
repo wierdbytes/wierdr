@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- The social card (public/og.jpg): rendered by Site/og/render.mjs against the dev server. -->
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="/styles.css">
+<style>
+  html, body { width: 1200px; height: 630px; margin: 0; overflow: hidden; background: #0b0c0f; }
+  .og { position: relative; width: 1200px; height: 630px; overflow: hidden; }
+  .og::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 56px 56px; -webkit-mask-image: radial-gradient(ellipse 80% 80% at 30% 40%, #000 20%, transparent 75%); }
+  .g1 { position: absolute; width: 700px; height: 700px; right: -160px; top: -300px; border-radius: 50%; background: radial-gradient(circle, rgba(124,106,245,.5), transparent 65%); filter: blur(60px); }
+  .g2 { position: absolute; width: 600px; height: 600px; left: -280px; bottom: -320px; border-radius: 50%; background: radial-gradient(circle, rgba(239,111,120,.28), transparent 65%); filter: blur(60px); }
+  .copy { position: absolute; left: 72px; top: 78px; width: 640px; }
+  .brand { display: flex; align-items: center; gap: 16px; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+  .brand img { width: 60px; height: 60px; border-radius: 14px; }
+  h1 { font-size: 84px; line-height: 1.0; letter-spacing: -0.045em; margin: 44px 0 0; }
+  p { color: #a1a5ad; font-size: 28px; line-height: 1.4; margin-top: 28px; }
+  .chips { display: flex; gap: 12px; margin-top: 34px; }
+  .chip { display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05); font-size: 20px; font-weight: 600; }
+  .phone-og { position: absolute; width: 340px; right: 70px; top: 70px; transform: rotate(-4deg); }
+</style></head>
+<body><div class="og">
+  <div class="g1"></div><div class="g2"></div>
+  <div class="copy">
+    <div class="brand"><img src="/img/icon-256.webp" alt="">Wierdr</div>
+    <h1>Never keep your agents <span class="grad">waiting.</span></h1>
+    <p>Your coding agents in Herdr, on your iPhone and iPad.</p>
+    <div class="chips">
+      <span class="chip"><span class="dot dot-red"></span>Needs you</span>
+      <span class="chip"><span class="dot dot-green"></span>Done</span>
+      <span class="chip"><span class="dot dot-yellow"></span>Working</span>
+    </div>
+  </div>
+  <div class="device phone phone-og"><div class="frame"><div class="screen di"><img src="/img/iphone-list.webp" alt=""></div></div></div>
+</div></body></html>

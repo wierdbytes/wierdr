@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://wierdr.workat.dev/sitemap.xml
