@@ -14,7 +14,10 @@
   [`claude-code.md`](docs/claude-code.md) — мод `cc` для Claude Code (метки `agent.*`, лимиты), проверенные ловушки;
   [`codex.md`](docs/codex.md) — плагин `codex` для Codex CLI (метки `agent.*`, лимиты, `--no-daemon`), проверенные ловушки;
   [`pi.md`](docs/pi.md) — расширение pi `@wierdbytes/pi-wierdr` (`Integrations/pi`: метки `agent.*`, лимиты, bash, сабагенты), выпуск в npm;
-  [`ssh.md`](docs/ssh.md), [`hc-protocol-client.md`](docs/hc-protocol-client.md) — связь с herdr-core.
+  [`ssh.md`](docs/ssh.md), [`hc-protocol-client.md`](docs/hc-protocol-client.md) — связь с herdr-core;
+  [`Integrations/herdr-app`](Integrations/herdr-app/README.md) — раскладка `wierdr` и моды `wierdr-sidebar`, `wierdr-tabs`, `wierdr-pane`
+  для Herdr на Mac (сайдбар Wierdr на десктопе): правка здесь, затем `sh Integrations/herdr-app/install.sh`;
+  копии в `~/.config/herdr-app` руками не править, в chezmoi их нет.
   Меняя поведение или решение, обнови соответствующий документ в том же коммите.
 - Перед тем как назвать UI-изменение готовым, проверь его на физическом iPad:
   [`scripts/ipad.sh`](scripts/ipad.sh); изменения раскладки iPhone (`App/Sources/Phone`) — на
