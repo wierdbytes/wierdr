@@ -1,6 +1,6 @@
 {
   "name": "@wierdbytes/pi-wierdr",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "pi for herdr and Wierdr: model, effort, context and cache as agent.* labels on pi's herdr-core terminal, Claude / Codex subscription limits as herdr-core's limits document, pi's bash commands in herdr-core terminals, and sub-agents as their own pi in herdr-core terminals nested under the agent that started them. Replaces @wierdbytes/pi-herdr and @wierdbytes/pi-agents.",
   "type": "module",
   "files": [
@@ -53,7 +53,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@wierdbytes/pi-common": "^0.5.1"
+    "@wierdbytes/pi-common": "^0.5.2"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=1.5.0",

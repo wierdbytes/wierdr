@@ -5,7 +5,7 @@
     "": {
       "name": "@wierdbytes/pi-wierdr",
       "dependencies": {
-        "@wierdbytes/pi-common": "^0.5.1",
+        "@wierdbytes/pi-common": "^0.5.2",
       },
       "devDependencies": {
         "@earendil-works/pi-ai": "^1.5.0",
@@ -218,7 +218,7 @@
 
     "@vitest/utils": ["@vitest/utils@4.1.12", "", { "dependencies": { "@vitest/pretty-format": "4.1.12", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-Q3awXrwOfEV+qc3WmO5ONyE0yO7Q1gQ9/oyHxGLZ/pl7N3NO/ZztqQwKLuwMkV+CA1JYSIeO3gkHnRDIo4AVaA=="],
 
-    "@wierdbytes/pi-common": ["@wierdbytes/pi-common@0.5.1", "", { "dependencies": { "@shikijs/cli": "^4.0.2", "diff": "^8.0.2" }, "peerDependencies": { "@earendil-works/pi-ai": ">=0.74.0", "@earendil-works/pi-coding-agent": ">=0.74.0", "@earendil-works/pi-tui": ">=0.74.0" } }, "sha512-NfImhR3b5/Hupl/q7HrUdRl/E+l0T42tR+rqeihdfC3yO7BjfLikrvtRDaCv+HI0ahtzQrg5O3glq8o0uGzFMA=="],
+    "@wierdbytes/pi-common": ["@wierdbytes/pi-common@0.5.2", "", { "dependencies": { "@shikijs/cli": "^4.0.2", "diff": "^8.0.2" }, "peerDependencies": { "@earendil-works/pi-ai": ">=0.74.0", "@earendil-works/pi-coding-agent": ">=0.74.0", "@earendil-works/pi-tui": ">=0.74.0" } }, "sha512-11s5swbNzalDfbJ71SI1AyGi0N1+Yt0hOQmWr4OaKuhFpudHcKiheEvH2KpG+sW9oJtM+4Yh6yEHA+lt0V1IXQ=="],
 
     "agent-base": ["agent-base@9.0.0", "", {}, "sha512-TQf59BsZnytt8GdJKLPfUZ54g/iaUL2OWDSFCCvMOhsHduDQxO8xC4PNeyIkVcA5KwL2phPSv0douC0fgWzmnA=="],
 
