@@ -76,6 +76,7 @@ code, .mono { font-family: var(--mono); }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 700; font-size: 1.12rem; letter-spacing: -0.02em; }
 .brand img { border-radius: 8px; }
 .nav-links { display: flex; gap: 26px; margin-left: auto; font-size: 0.94rem; }
+.nav .btn-primary { box-shadow: none; }
 .nav-links a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
 .nav-links a:hover { color: var(--text); }
 
@@ -91,12 +92,8 @@ code, .mono { font-family: var(--mono); }
 .btn-ghost:hover { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 255, 255, 0.22); transform: translateY(-1px); }
 .btn-primary { background: var(--ivory); color: #15161a; box-shadow: 0 10px 40px -12px rgba(244, 241, 232, 0.4); }
 .btn-primary:hover { background: #fff; transform: translateY(-1px); box-shadow: 0 14px 44px -12px rgba(244, 241, 232, 0.5); }
-/* Not a button: what Apple's badge will be, black with a hairline, until there's a link. */
-.badge-store {
-  display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 20px 0 14px;
-  border-radius: 14px; background: #000; color: var(--text); border: 1px solid rgba(255, 255, 255, 0.28);
-  white-space: nowrap; cursor: default;
-}
+.btn-beta { padding: 0 22px 0 16px; }
+.cta-note { margin-top: 16px; color: var(--dim); font-size: 0.9rem; }
 .btn-stack { display: flex; flex-direction: column; line-height: 1.1; text-align: left; }
 .btn-stack small { font-size: 0.7rem; font-weight: 500; opacity: 0.7; letter-spacing: 0.01em; }
 .btn-stack strong { font-size: 1.12rem; font-weight: 700; letter-spacing: -0.01em; }
@@ -147,8 +144,8 @@ code, .mono { font-family: var(--mono); }
 
 .hero-visual { position: relative; height: clamp(580px, 54vw, 720px); animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s both; }
 @keyframes rise { from { opacity: 0; transform: translateY(28px); } }
-.phone-front { position: absolute; width: clamp(260px, 25vw, 330px); left: 8%; top: 0; z-index: 2; }
-.phone-back { position: absolute; width: clamp(224px, 21.5vw, 286px); right: 3%; top: 9%; z-index: 1; transform: rotate(6deg); opacity: 0.9; }
+.phone-front { position: absolute; width: clamp(260px, 25vw, 330px); left: 0; top: 0; z-index: 2; }
+.phone-back { position: absolute; width: clamp(224px, 21.5vw, 286px); right: 3%; top: 9%; z-index: 1; transform: rotate(6deg); opacity: 0.75; }
 .phone-back .frame { filter: saturate(1.05); }
 
 /* Devices: the screenshots in a frame, sized by width (container units). */
@@ -196,20 +193,42 @@ code, .mono { font-family: var(--mono); }
 @keyframes fade-out { to { opacity: 0; } }
 @keyframes fade-in { to { opacity: 1; } }
 
-/* Floating status chips */
+/* Status chips beside the rows they are about, the rows lit on the screen. Sizes and places are
+   in the phone's width (cqw): the screen is 93.6 wide from 3.2, 202.5 tall from 3.2; a row at
+   y% of the screenshot is at 3.2 + y × 2.025. */
+.row-hl {
+  position: absolute; border-radius: 1.4cqw; pointer-events: none; opacity: 0;
+  animation: fade-in 0.5s ease 2.6s forwards;
+}
+.hl-done {
+  left: 2.2%; width: 95.6%; top: 36.5%; height: 6.1%;
+  background: rgba(159, 208, 127, 0.08); box-shadow: inset 0 0 0 0.4cqw rgba(159, 208, 127, 0.8), 0 0 5cqw rgba(159, 208, 127, 0.25);
+}
+.hl-working {
+  left: 9.6%; width: 87.6%; top: 71.1%; height: 4.95%; animation-delay: 2.9s;
+  background: rgba(235, 197, 124, 0.08); box-shadow: inset 0 0 0 0.4cqw rgba(235, 197, 124, 0.8), 0 0 5cqw rgba(235, 197, 124, 0.25);
+}
 .float {
-  position: absolute; z-index: 4; display: flex; align-items: center; gap: 10px;
-  padding: 12px 16px; border-radius: 16px; font-size: 0.88rem; white-space: nowrap;
-  background: rgba(28, 30, 36, 0.95); border: 1px solid var(--line-2);
+  position: absolute; z-index: 4; left: calc(100% + 2.6cqw); translate: 0 -50%;
+  display: flex; align-items: center; gap: 2.8cqw; white-space: nowrap;
+  padding: 2.8cqw 4cqw 2.8cqw 3.6cqw; border-radius: 4.2cqw; font-size: max(12px, 4.3cqw); line-height: 1.3;
+  background: rgb(28, 30, 36); border: 1px solid var(--line-2); text-align: left;
   box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.8);
   animation: pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) 2.6s both;
 }
+/* The pointer at the row. */
+.float::before {
+  content: ""; position: absolute; left: -1.5cqw; top: 50%; width: 2.8cqw; height: 2.8cqw;
+  background: inherit; border: inherit; border-width: 0 0 1px 1px; translate: 0 -50%; rotate: 45deg;
+}
+.float-text { display: flex; flex-direction: column; min-width: 0; }
 .float b { font-weight: 650; }
-.float span:last-child { color: var(--muted); }
-.float code { color: var(--text); font-size: 0.85em; }
-.float-1 { left: -6%; top: 46%; }
-.float-2 { right: 2%; bottom: 4%; animation-delay: 2.9s; }
-@keyframes pop { from { opacity: 0; transform: translateY(10px) scale(0.94); } }
+.float-done b { color: var(--green); }
+.float-working b { color: var(--yellow); }
+.float-text span { color: var(--muted); }
+.float-done { top: 83.2cqw; }
+.float-working { top: 152.2cqw; animation-delay: 2.9s; }
+@keyframes pop { from { opacity: 0; transform: translateX(-8px) scale(0.94); } }
 
 /* Sections */
 .section { position: relative; padding: clamp(72px, 10vw, 140px) 0; }
@@ -328,9 +347,8 @@ kbd {
   .lead { margin-inline: auto; }
   .cta, .works { justify-content: center; }
   .hero-visual { width: min(560px, 100%); margin: 30px auto 0; height: clamp(520px, 92vw, 640px); }
-  .phone-front { left: 6%; width: clamp(240px, 46vw, 300px); }
+  .phone-front { left: 4%; width: clamp(240px, 46vw, 300px); }
   .phone-back { width: clamp(210px, 40vw, 262px); }
-  .float-1 { left: -2%; }
   .feature, .feature.flip { grid-template-columns: 1fr; text-align: center; }
   .feature.flip .feature-copy { order: 0; justify-self: auto; }
   .feature-copy { margin: 0 auto; }
@@ -346,6 +364,7 @@ kbd {
   .nav-inner { gap: 18px; }
   .nav-links { gap: 0; }
   .nav-links a:not(.keep) { display: none; }
+  .nav .btn-sm { padding: 0 12px; }
   /* The hero in one column, the phone before the logos: it shows on the first screen. */
   .hero { padding-top: 28px; }
   .hero-grid { display: flex; flex-direction: column; align-items: center; gap: 0; }
@@ -353,20 +372,21 @@ kbd {
   .pill { order: 1; }
   .hero h1 { order: 2; font-size: clamp(2.4rem, 11.5vw, 3.4rem); margin-top: 20px; }
   .lead { order: 3; margin: 18px 0 26px; }
-  .cta { order: 4; }
+  .cta, .cta-note { order: 4; }
+  .cta-note { font-size: 0.85rem; }
   .hero-visual { order: 5; }
   .works { order: 6; margin-top: 30px; gap: 10px 16px; }
   .works > span:first-child { flex-basis: 100%; text-align: center; }
   .cta { flex-wrap: nowrap; gap: 10px; }
-  .badge-store { min-height: 50px; padding: 0 14px 0 10px; gap: 8px; }
-  .badge-store .i-lg { width: 22px; height: 22px; }
   .btn { min-height: 50px; padding: 0 18px; }
+  .btn-beta { padding: 0 16px 0 12px; gap: 8px; }
+  .btn-beta .i-lg { width: 22px; height: 22px; }
   .hero-visual { width: 100%; height: auto; margin: 34px auto 0; display: flex; justify-content: center; }
   .phone-back { display: none; }
-  .phone-front { position: relative; left: auto; width: min(64vw, 280px); }
-  .float { font-size: 0.8rem; padding: 10px 12px; gap: 8px; }
-  .float-1 { left: 0; top: 40%; }
-  .float-2 { right: 0; bottom: 9%; }
+  /* The phone a little left of centre, so the chips fit beside it with their status only. */
+  .phone-front { position: relative; left: auto; width: min(58vw, 260px); margin-right: 84px; }
+  .float { gap: 6px; padding: 6px 10px 6px 9px; font-size: 12px; left: calc(100% + 2.4cqw); }
+  .float-text span { display: none; }
   .status-row, .grid, .steps { grid-template-columns: 1fr; }
   .card { display: grid; grid-template-columns: 46px 1fr; column-gap: 16px; padding: 22px 20px; }
   .card-icon { grid-row: span 2; }
@@ -386,6 +406,10 @@ kbd {
 }
 @media (max-width: 420px) {
   .long { display: none; }
+}
+@media (max-width: 400px) {
+  .nav-links { display: none; }
+  .nav .btn-sm { margin-left: auto; }
 }
 @media (max-width: 360px) {
   .nav-links { display: none; }

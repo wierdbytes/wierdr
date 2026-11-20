@@ -55,7 +55,8 @@ Requires iOS or iPadOS 18 or later.
 
 ### 2. Install Wierdr
 
-Wierdr is not on the App Store yet; a release is being prepared. Until then,
+Wierdr is not on the App Store yet; a release is being prepared. Until then, join the public
+beta on [TestFlight](https://testflight.apple.com/join/AKcvwn1c) or
 [build it from source](#building-from-source).
 
 ### 3. Connect

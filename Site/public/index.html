@@ -30,7 +30,7 @@
 <body>
   <svg class="sprite" width="0" height="0" aria-hidden="true">
     <symbol id="i-gh" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></symbol>
-    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 5h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v8m-3-3 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   </svg>
   <a class="skip" href="#main">Skip to content</a>
 
@@ -44,11 +44,9 @@
         <a class="keep" href="#features">Features</a>
         <a href="#privacy">Privacy</a>
         <a href="#how">How it works</a>
+        <a href="https://github.com/wierdbytes/wierdr">GitHub</a>
       </nav>
-      <a class="btn btn-ghost btn-sm" href="https://github.com/wierdbytes/wierdr">
-        <svg class="i" aria-hidden="true"><use href="#i-gh"/></svg>
-        <span>GitHub</span>
-      </a>
+      <a class="btn btn-primary btn-sm" href="https://testflight.apple.com/join/AKcvwn1c">Join the beta</a>
     </div>
   </header>
 
@@ -63,15 +61,16 @@
           <h1>Never keep your agents <span class="grad">waiting.</span></h1>
           <p class="lead">Every coding agent running in Herdr on your Mac, in your pocket. See which one needs you, jump into its live terminal and keep the work moving&nbsp;— from anywhere.</p>
           <div class="cta">
-            <span class="badge-store" role="note" aria-label="Coming soon to the App Store">
+            <a class="btn btn-primary btn-beta" href="https://testflight.apple.com/join/AKcvwn1c">
               <svg class="i i-lg" aria-hidden="true"><use href="#i-phone"/></svg>
-              <span class="btn-stack"><small>Coming soon to the</small><strong>App Store</strong></span>
-            </span>
-            <a class="btn btn-primary" href="https://github.com/wierdbytes/wierdr">
+              <span class="btn-stack"><small>Join the beta on</small><strong>TestFlight</strong></span>
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/wierdbytes/wierdr">
               <svg class="i" aria-hidden="true"><use href="#i-gh"/></svg>
               <span><span class="long">View on </span>GitHub</span>
             </a>
           </div>
+          <p class="cta-note">Free public beta. Coming soon to the App&nbsp;Store.</p>
           <div class="works">
             <span>Works with</span>
             <span class="logo" title="Claude Code"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#D97757" fill-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z"/></svg>Claude Code</span>
@@ -88,6 +87,8 @@
             <div class="frame">
               <div class="screen">
                 <img src="/img/iphone-list.webp" width="860" height="1861" alt="" fetchpriority="high">
+                <span class="row-hl hl-done"></span>
+                <span class="row-hl hl-working"></span>
                 <div class="island">
                   <div class="island-compact">
                     <img src="/img/icon-256.webp" alt="" width="28" height="28">
@@ -103,9 +104,9 @@
                 </div>
               </div>
             </div>
+            <div class="float float-done"><span class="dot dot-green"></span><span class="float-text"><b>Done</b><span>Install the herdr mod<br>from the repo</span></span></div>
+            <div class="float float-working"><span class="dot dot-yellow"></span><span class="float-text"><b>Working</b><span>Review the sub-agent tree</span></span></div>
           </div>
-          <div class="float float-1"><span class="dot dot-green"></span><b>Done</b><span>Fix the login redirect</span></div>
-          <div class="float float-2"><span class="dot dot-yellow"></span><b>Working</b><span>Review the sub-agent tree</span></div>
         </div>
       </div>
     </section>
@@ -306,13 +307,13 @@
       <div class="wrap narrow center">
         <img class="final-icon reveal" src="/img/icon-256.webp" width="112" height="112" alt="Wierdr app icon" loading="lazy">
         <h2 class="big reveal">Go for a walk.<br><span class="grad">Your agents will find&nbsp;you.</span></h2>
-        <p class="sub reveal">Native for iPhone and iPad.</p>
+        <p class="sub reveal">Join the beta for iPhone and iPad today. Coming soon to the App&nbsp;Store.</p>
         <div class="cta center reveal">
-          <span class="badge-store" role="note" aria-label="Coming soon to the App Store">
+          <a class="btn btn-primary btn-beta" href="https://testflight.apple.com/join/AKcvwn1c">
             <svg class="i i-lg" aria-hidden="true"><use href="#i-phone"/></svg>
-            <span class="btn-stack"><small>Coming soon to the</small><strong>App Store</strong></span>
-          </span>
-          <a class="btn btn-primary" href="https://github.com/wierdbytes/wierdr">
+            <span class="btn-stack"><small>Join the beta on</small><strong>TestFlight</strong></span>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/wierdbytes/wierdr">
             <svg class="i" aria-hidden="true"><use href="#i-gh"/></svg>
             <span><span class="long">View on </span>GitHub</span>
           </a>
