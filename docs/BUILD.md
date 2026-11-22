@@ -192,6 +192,9 @@ xcrun xctrace export --input /tmp/x.trace --xpath \
 `scripts/iphone-sim.sh` — то же, что `ipad.sh`, для симулятора «Wierdr iPhone 13 Pro Max»
 (создаётся при первом `boot`): сборка и установка, запуск с аргументами, скриншоты,
 WebDriverAgent на порту 8200 (iPad‑овский остаётся на 8100) для тапов/свайпов/ввода.
+Симулятор всегда на самом новом установленном рантайме iOS: одноимённый на старом рантайме
+скрипт не видит, `boot` создаёт новый. Другой симулятор — `SIM_NAME=… SIM_TYPE=<тип из
+`xcrun simctl list devicetypes`>` (так `make sim` поднимает iPad).
 
 ```sh
 make sim-iphone                         # сборка + симулятор + демо

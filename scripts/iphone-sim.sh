@@ -17,7 +17,11 @@
 #   scripts/iphone-sim.sh orient <portrait|landscape>
 #   scripts/iphone-sim.sh appearance <light|dark>
 #
-# Env: SIM_NAME (default "Wierdr iPhone 13 Pro Max"), WDA_DIR (~/.local/share/WebDriverAgent),
+# The simulator always runs the newest installed iOS runtime: a SIM_NAME device on an older
+# runtime is ignored, and `boot` creates a fresh one on the newest.
+#
+# Env: SIM_NAME (default "Wierdr iPhone 13 Pro Max"), SIM_TYPE (device type for `boot` to create,
+# default iPhone-13-Pro-Max), WDA_DIR (~/.local/share/WebDriverAgent),
 # WDA_PORT (8200, so it doesn't collide with the iPad's WDA on 8100).
 # Launch args/env for the app: see App/Sources/WierdrApp.swift and docs/architecture.md
 # (`-demo YES`, `-open …`, SIMCTL_CHILD_WIERDR_AUTOCONNECT=…).
@@ -25,6 +29,7 @@ set -euo pipefail
 
 BUNDLE_ID=pw.xff.wierdr
 SIM_NAME="${SIM_NAME:-Wierdr iPhone 13 Pro Max}"
+SIM_TYPE="${SIM_TYPE:-com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max}"
 WDA_DIR="${WDA_DIR:-$HOME/.local/share/WebDriverAgent}"
 PORT="${WDA_PORT:-8200}"
 URL="http://localhost:$PORT"
@@ -34,13 +39,21 @@ mkdir -p "$STATE"
 
 die() { echo "iphone-sim.sh: $*" >&2; exit 1; }
 
-udid() {
+runtime() { # the newest available iOS simulator runtime
+  xcrun simctl list runtimes -j | python3 -c '
+import json, sys
+rs = [r for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]
+if not rs: sys.exit("iphone-sim.sh: no iOS simulator runtime (xcodebuild -downloadPlatform iOS)")
+print(max(rs, key=lambda r: tuple(int(x) for x in r["version"].split(".")))["identifier"])'
+}
+
+udid() { # SIM_NAME on the newest runtime
+  local rt; rt=$(runtime)
   xcrun simctl list devices -j | python3 -c '
 import json, sys
-name = sys.argv[1]
-for runtime, devs in json.load(sys.stdin)["devices"].items():
-    for d in devs:
-        if d["name"] == name and d.get("isAvailable", True): print(d["udid"]); sys.exit()' "$SIM_NAME"
+name, rt = sys.argv[1], sys.argv[2]
+for d in json.load(sys.stdin)["devices"].get(rt, []):
+    if d["name"] == name and d.get("isAvailable", True): print(d["udid"]); sys.exit()' "$SIM_NAME" "$rt"
 }
 
 sim() {
@@ -52,11 +65,7 @@ sim() {
 boot() {
   local u; u=$(udid)
   if [ -z "$u" ]; then
-    local rt; rt=$(xcrun simctl list runtimes -j | python3 -c '
-import json, sys
-rs = [r for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]
-print(rs[-1]["identifier"])')
-    u=$(xcrun simctl create "$SIM_NAME" com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro-Max "$rt")
+    u=$(xcrun simctl create "$SIM_NAME" "$SIM_TYPE" "$(runtime)")
   fi
   xcrun simctl boot "$u" 2>/dev/null || true
   open -a Simulator
