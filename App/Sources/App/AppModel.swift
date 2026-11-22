@@ -24,7 +24,7 @@ final class AppModel {
     var addHostRequested = false
     /// A password host to connect to, waiting for its password: the host list asks for it.
     /// Passwords are never kept, so every connection to such a host asks (Connect, Retry,
-    /// the iPhone's return to the last host at launch); the session holds it in memory for
+    /// the return to the last host at launch); the session holds it in memory for
     /// its own reconnects.
     var passwordRequest: Host?
 
@@ -89,11 +89,11 @@ final class AppModel {
     /// The host of the last session, until the person disconnects on purpose.
     private static let lastHostKey = "lastHost"
 
-    /// iPhone: back into the last session at launch (iOS ends apps in the
-    /// background often, and the list of agents is what you open it for).
+    /// Back into the last session at launch (iOS ends apps in the background
+    /// often, and the list of agents is what you open it for).
     /// Not after a deliberate Disconnect; a failure lands on the host list as usual.
     func reconnectLastHost() async {
-        guard Device.isPhone, mode == .none, connecting == nil,
+        guard mode == .none, connecting == nil,
               let id = UserDefaults.standard.string(forKey: Self.lastHostKey).flatMap(UUID.init(uuidString:)),
               let host = hosts.hosts.first(where: { $0.id == id }) else { return }
         await connect(to: host)
