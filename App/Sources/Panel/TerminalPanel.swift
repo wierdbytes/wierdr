@@ -167,5 +167,8 @@ struct KeyLayerHost: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { origin = $0 }
         .ignoresSafeArea(.keyboard)
+        // The tour waits for it.
+        .onChange(of: controller.keys.open) { _, open in Tutorial.shared.report(\.keys, open: open) }
+        .onDisappear { Tutorial.shared.report(\.keys, open: false) }
     }
 }

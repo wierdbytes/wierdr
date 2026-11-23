@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import WierdrModel
 
 /// The tour: the app's features shown on the demo, step by step, with a hint card and a
@@ -10,7 +11,9 @@ import WierdrModel
 /// ✓); explanations go on with Next. Skip ends it at any step; it's marked seen once
 /// ended, and auto-starts no more. Steps come in chapters, which the card counts.
 ///
-/// The iPhone's layout only, for now (`isAvailable`).
+/// A scenario per layout, picked as it starts (`phone`): the iPhone's (`TutorialStep.phone`,
+/// a narrow iPad window too) and the iPad's split view (`TutorialStep.pad`). A window
+/// changing layout under it ends it.
 @MainActor
 @Observable
 final class Tutorial {
@@ -34,7 +37,13 @@ final class Tutorial {
     /// the pointer waits a moment).
     @ObservationIgnored private(set) var shownAt = Date.distantPast
 
-    let steps = TutorialStep.phone
+    /// The scenario: the iPhone layout's, else the iPad's split view.
+    private(set) var phone = true
+    private(set) var steps = TutorialStep.phone
+    /// Its chapters, in order (the card's segments).
+    var chapters: [TutorialChapter] {
+        steps.compactMap(\.chapter).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+    }
     @ObservationIgnored private weak var app: AppModel?
     /// Changes with each step (and its end): late work of an earlier one stops.
     @ObservationIgnored private var generation = 0
@@ -45,8 +54,15 @@ final class Tutorial {
     /// UserDefaults: the tour was taken or skipped (no auto-start any more).
     static let seenKey = "tour.seen"
 
-    /// The iPhone's layout only, for now.
-    static var isAvailable: Bool { Device.isPhone }
+    /// The app shows the iPhone layout: an iPhone, or an iPad's narrow window (as
+    /// `WorkspaceView.usesPhoneLayout`, from the window, as no session may be open yet).
+    static var phoneLayout: Bool {
+        if Device.isPhone { return true }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        let window = scene?.keyWindow ?? scene?.windows.first
+        return window?.traitCollection.horizontalSizeClass == .compact
+    }
 
     var step: TutorialStep? { isActive ? steps[index] : nil }
 
@@ -70,7 +86,7 @@ final class Tutorial {
 
     /// At launch: the first one (no hosts, nothing open, never toured).
     func startIfFirstLaunch() {
-        guard Self.isAvailable, !isActive, let app, app.mode == .none, app.hosts.hosts.isEmpty,
+        guard !isActive, let app, app.mode == .none, app.hosts.hosts.isEmpty,
               !UserDefaults.standard.bool(forKey: Self.seenKey) else { return }
         start()
     }
@@ -79,6 +95,8 @@ final class Tutorial {
     /// (DEBUG: `-tour <id>`; a demo step opens the demo).
     func start(at id: String? = nil) {
         guard let app else { return }
+        phone = Self.phoneLayout
+        steps = phone ? TutorialStep.phone : TutorialStep.pad
         let i = id.flatMap { id in steps.firstIndex { $0.id == id } } ?? 0
         if steps[i].needsDemo, app.mode != .demo { app.startDemo() }
         signals = TutorialSignals()
@@ -216,7 +234,9 @@ final class Tutorial {
         let id = watchID
         guard isActive, shown, let step, let ctx = context else { return }
         let (done, here, left) = withObservationTracking {
-            (step.done?(ctx) ?? false, ctx.isIn(step.place), step.needsDemo && ctx.app.mode != .demo)
+            (step.done?(ctx) ?? false, ctx.isIn(step.place),
+             // Out of the demo, or its window took the other layout: the scenario is no more.
+             step.needsDemo && (ctx.app.mode != .demo || ctx.controller.map { $0.singlePane != phone } == true))
         } onChange: {
             Task { @MainActor [weak self] in
                 guard let self, self.watchID == id else { return }
@@ -254,6 +274,7 @@ final class Tutorial {
         }
         guard let c = ctx.controller else { return }
         Self.dismissDialogs(c)
+        if !phone { return preparePad(place, c) }
         let ws = c.workspace
         switch place {
         case .list:
@@ -270,6 +291,41 @@ final class Tutorial {
             if let at = ws.pane(showing: parent),
                let kid = ws.subtree(of: parent).first(where: { $0.terminal.address == address }) {
                 c.open(kid, from: at.pane.id)
+            }
+        case .connect, .bare, .anywhere:
+            break
+        }
+    }
+
+    /// The iPad's split view: the sidebar shown (or hidden) beside the panes, the agents
+    /// panel in it, a pane focused, a sub-agent's window over the panes.
+    private func preparePad(_ place: TutorialPlace, _ c: WorkspaceController) {
+        let ws = c.workspace
+        let showSidebar = {
+            if c.columnVisibility == .detailOnly, !c.sidebarOverlay {
+                withAnimation(.easeInOut(duration: 0.25)) { c.columnVisibility = .all }
+            }
+        }
+        switch place {
+        case .list:
+            c.closePeek()
+            if c.showAgents { c.closeAgents() }
+            showSidebar()
+        case .agents:
+            c.closePeek()
+            showSidebar()
+            if !c.showAgents { c.openAgents() }
+        case .pane(let address):
+            if let at = ws.pane(showing: address) { c.focus(pane: at.pane.id) }
+        case .peek(let address, let parent):
+            if let at = ws.pane(showing: parent),
+               let kid = ws.subtree(of: parent).first(where: { $0.terminal.address == address }) {
+                c.open(kid, from: at.pane.id)
+            }
+        case .bare(let address):
+            if let at = ws.pane(showing: address) { c.focus(pane: at.pane.id) }
+            if c.columnVisibility != .detailOnly {
+                withAnimation(.easeInOut(duration: 0.25)) { c.columnVisibility = .detailOnly }
             }
         case .connect, .anywhere:
             break

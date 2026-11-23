@@ -33,6 +33,7 @@ struct SidebarOverlay: View {
                 SidebarView()
                     .keyboardCoverPadding()
                     .frame(width: width)
+                    .tutorialAnchor(.sidebarOverlay)
                     .overlay(alignment: .trailing) { Hairline(axis: .vertical).ignoresSafeArea() }
                     .overlay(alignment: .trailing) {
                         SidebarResizeHandle(width: $storedWidth, range: range, edge: .trailing)
@@ -51,6 +52,7 @@ struct SidebarOverlay: View {
                 canOpen: hidden && !controller.sidebarOverlay,
                 // Not from a sub-agent's window: the sidebar would come under it.
                 opensFromTerminal: controller.peek == nil,
+                drawnArea: controller.isDemo ? controller.keyArea : nil,
                 isOpen: controller.sidebarOverlay,
                 width: width,
                 onDrag: { dragged = min(max($0, 0), width) },
@@ -69,6 +71,8 @@ struct SidebarOverlay: View {
                 dragged = nil
             }
         }
+        // The tour waits for it.
+        .onChange(of: controller.sidebarOverlay) { _, open in Tutorial.shared.report(\.overlay, open: open) }
     }
 }
 
@@ -80,6 +84,9 @@ struct SidebarOverlay: View {
 private struct SidebarOverlayGestures: UIViewRepresentable {
     var canOpen: Bool
     var opensFromTerminal: Bool
+    /// The panes' area while their terminals are drawn (the demo's `DemoTerminalView`): no
+    /// terminal view under the finger, the swipe right starts anywhere there.
+    var drawnArea: CGRect?
     var isOpen: Bool
     var width: CGFloat
     var onDrag: (CGFloat) -> Void
@@ -178,7 +185,10 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            if g === swipe { return WierdrTerminalView.swipeable(touch) }
+            if g === swipe {
+                if let area = parent?.drawnArea, area.contains(touch.location(in: g.view)) { return true }
+                return WierdrTerminalView.swipeable(touch)
+            }
             guard g === close, let parent, let view = g.view else { return true }
             let x = touch.location(in: view).x
             return x < parent.width - 20 || x > parent.width + 4

@@ -2,18 +2,23 @@ import SwiftUI
 import WierdrModel
 
 /// Where a step happens. When the app isn't there as the step comes, or wanders off
-/// while it's up, the tour takes it back (`Tutorial.prepare`).
+/// while it's up, the tour takes it back (`Tutorial.prepare`). The iPad's split view reads
+/// them its way (`TutorialContext.isIn`): the list is the sidebar beside the panes, a pane
+/// is the focused one, a sub-agent is in its window over them.
 enum TutorialPlace: Equatable {
     /// The host list (the tour starts there).
     case connect
-    /// The demo's list screen.
+    /// The demo's list screen (the iPad: the sidebar shows).
     case list
     /// The agents panel over the list screen's spaces.
     case agents
-    /// The demo's pane screen showing this terminal.
+    /// The demo's pane screen showing this terminal (the iPad: its pane focused).
     case pane(String)
-    /// A sub-agent shown on the pane screen in its parent's place (its address, its parent's).
+    /// A sub-agent shown on the pane screen in its parent's place (its address, its parent's);
+    /// the iPad's window over the panes.
     case peek(String, parent: String)
+    /// The iPad: this terminal's pane focused, the sidebar hidden (slid over the panes or not).
+    case bare(String)
     /// Wherever the last step left the app (what it opened, the person closes).
     case anywhere
 }
@@ -33,8 +38,9 @@ enum TutorialGesture {
 }
 
 /// A part of the tour, for the card's progress ("Someone needs you · 2 of 4", a segment each).
+/// Each scenario has its own (`Tutorial.chapters`).
 enum TutorialChapter: Int, CaseIterable, Identifiable {
-    case list, needsYou, talk, tidy, limits
+    case list, needsYou, talk, tidy, room, limits
 
     var id: Int { rawValue }
 
@@ -44,6 +50,7 @@ enum TutorialChapter: Int, CaseIterable, Identifiable {
         case .needsYou: return "Someone needs you"
         case .talk: return "Talk to an agent"
         case .tidy: return "Tidy and find"
+        case .room: return "Make room"
         case .limits: return "Your limits"
         }
     }
@@ -77,31 +84,43 @@ struct TutorialContext {
     var signals: TutorialSignals { tour.signals }
     /// The signals as the step came.
     var baseline: TutorialSignals { tour.baseline }
+    /// The tour is the iPhone layout's (else the iPad's split view).
+    var phone: Bool { tour.phone }
 
     func terminal(_ address: String) -> TerminalInfo? { workspace?.terminal(address) }
 
-    /// The list screen, its spaces, nothing over them.
+    /// The iPad's sidebar shows: docked beside the panes, or slid over them.
+    var sidebarShown: Bool {
+        guard let c = controller else { return false }
+        return c.columnVisibility != .detailOnly || c.sidebarOverlay
+    }
+
+    /// The iPad's sidebar is hidden (`detailOnly`): only its overlay brings it.
+    var sidebarHidden: Bool { controller?.columnVisibility == .detailOnly }
+
+    /// The list screen, its spaces, nothing over them (the iPad: the sidebar shows them).
     var onList: Bool {
-        guard let c = controller else { return false }
-        return c.compactColumn == .sidebar && !c.showAgents && !c.showSettings
+        guard let c = controller, !c.showAgents, !c.showSettings else { return false }
+        return phone ? c.compactColumn == .sidebar : sidebarShown
     }
 
-    /// The list screen with the agents panel over its spaces.
+    /// The list screen with the agents panel over its spaces (the iPad: in the sidebar).
     var onAgents: Bool {
-        guard let c = controller else { return false }
-        return c.compactColumn == .sidebar && c.showAgents && !c.showSettings
+        guard let c = controller, c.showAgents, !c.showSettings else { return false }
+        return phone ? c.compactColumn == .sidebar : sidebarShown
     }
 
-    /// The pane screen showing `address`'s pane (not a sub-agent in its place).
+    /// The pane screen showing `address`'s pane, not a sub-agent in its place (the iPad:
+    /// its pane focused, no sub-agent's window over the panes).
     func showing(_ address: String) -> Bool {
         guard let c = controller else { return false }
-        return c.compactColumn == .detail && c.peek == nil && c.focusedPane?.terminal == address
+        return (!phone || c.compactColumn == .detail) && c.peek == nil && c.focusedPane?.terminal == address
     }
 
-    /// The pane screen showing the sub-agent `address`.
+    /// The pane screen showing the sub-agent `address` (the iPad: its window).
     func peeking(_ address: String) -> Bool {
         guard let c = controller else { return false }
-        return c.compactColumn == .detail && c.peek == address
+        return (!phone || c.compactColumn == .detail) && c.peek == address
     }
 
     func isIn(_ place: TutorialPlace) -> Bool {
@@ -111,6 +130,7 @@ struct TutorialContext {
         case .agents: return onAgents && controller?.peek == nil
         case .pane(let address): return showing(address)
         case .peek(let address, _): return peeking(address)
+        case .bare(let address): return showing(address) && sidebarHidden
         case .anywhere: return true
         }
     }
@@ -200,10 +220,12 @@ struct TutorialSignals: Equatable {
     var listMenu = Toggle()
     /// The pane screen's menu (`PhonePaneScreen`).
     var paneMenu = Toggle()
-    /// The key panel (`PhonePaneScreen`).
+    /// The key panel (`PhonePaneScreen`, the iPad's `KeyLayerHost`).
     var keys = Toggle()
     /// The limits' popover (`PhoneLimits`).
     var limits = Toggle()
+    /// The iPad's sidebar slid over the panes (`SidebarOverlay`).
+    var overlay = Toggle()
     /// Messages sent in the demo (`DemoAgents`).
     var messages = 0
 }
@@ -386,6 +408,173 @@ extension TutorialStep {
             card: .center, kind: .finish),
     ]
 
-    /// Every anchor the tour uses (other views never look at the tour).
-    static let anchors: Set<TutorialAnchor> = Set(phone.flatMap(\.anchorsUsed))
+    /// Every anchor the tours use (other views never look at the tour).
+    static let anchors: Set<TutorialAnchor> = Set((phone + pad).flatMap(\.anchorsUsed))
+}
+
+// MARK: - The iPad's tour
+
+extension TutorialStep {
+    /// The demo's actors are the iPhone's tour's, and herdr-app's agent, whose tab is split
+    /// with lazygit (the demo opens on wierdr's agent).
+    private static let split = "t6a"
+
+    /// The split view's: the sidebar beside the panes. From the host list into the demo:
+    /// the list, someone who needs you found in the agents panel and answered in its window,
+    /// a split tab and a message to its agent, the sidebar hidden and slid over the panes,
+    /// the limits; at the end what to remember, the keyboard's shortcuts too.
+    static let pad: [TutorialStep] = [
+        TutorialStep(
+            id: "welcome", place: .connect, title: "Welcome to Wierdr",
+            text: "Herdr's agents keep working on your Mac. Wierdr brings them to your iPad.",
+            bullets: [
+                TutorialBullet(mark: .symbol("exclamationmark.bubble.fill"), text: "See who needs you"),
+                TutorialBullet(mark: .symbol("hand.tap.fill"), text: "Answer in a tap"),
+                TutorialBullet(mark: .symbol("lock.fill"), text: "Straight to your Mac over SSH: no server, no account"),
+            ],
+            note: "A tour on sample agents, about 2 minutes: you try each thing yourself.",
+            card: .center, kind: .welcome),
+        TutorialStep(
+            id: "try-demo", chapter: .list, place: .connect, title: "Start with sample agents",
+            text: "Your Mac comes later: Add Host connects to it over SSH.",
+            action: "Tap Try the Demo",
+            anchor: .tryDemo, gesture: .tap, spotlight: [.addHost],
+            done: { $0.app.mode == .demo }, settle: 0.3),
+
+        // The list.
+        TutorialStep(
+            id: "fold", chapter: .list, place: .list, title: "One card per space",
+            text: "The sidebar runs bottom up: the newest rows and the header stay by your thumb. Folded, a card sums up its agents.",
+            action: "Tap the chevron to fold it",
+            anchor: .spaceChevron(folded), gesture: .tap, spotlight: [.card(folded)],
+            done: { $0.controller?.closedSpaces.contains(folded) == true }, settle: 1.4),
+        TutorialStep(
+            id: "agent", chapter: .list, place: .list, title: "An agent at a glance",
+            text: "Its row is lit while its pane is in front.",
+            bullets: [
+                TutorialBullet(mark: .symbol("text.alignleft"), text: "What it's working on"),
+                TutorialBullet(mark: .symbol("timer"), text: "For how long, in its status's color", legend: true),
+                TutorialBullet(mark: .symbol("chart.pie"), text: "Context used, model and effort"),
+                TutorialBullet(mark: .icon("bot"), text: "Its sub-agents, in the tree above it"),
+            ],
+            anchor: .agentRow(agent), spotlight: [.tree(agent)]),
+
+        // Someone needs you.
+        TutorialStep(
+            id: "ring", chapter: .needsYou, place: .list, title: "The status ring",
+            text: "The ring has a dash per agent, the most urgent first. The number counts those who need you.",
+            action: "Tap the ring",
+            anchor: .statusRing, gesture: .tap,
+            done: { $0.onAgents }, settle: 0.3),
+        TutorialStep(
+            id: "agents", chapter: .needsYou, place: .agents, title: "Every agent",
+            text: "By status: whoever needs you is lowest, by your thumb, its sub-agents over it. The field at the bottom searches them, \u{2318}P from a keyboard.",
+            action: "Tap the one that needs you",
+            anchor: .panelRow(scout), gesture: .tap, spotlight: [.panelRow(agent)],
+            done: { $0.peeking(scout) }, settle: 0.4),
+        TutorialStep(
+            id: "keys", chapter: .needsYou, place: .peek(scout, parent: agent), title: "Answer without the keyboard",
+            text: "The scout, one of its sub-agents, asks to read ~/.ssh/config. A sub-agent opens over the panes. The keys stay off-screen, so they never cover a terminal.",
+            action: "Swipe left on the terminal",
+            anchor: .peekTerminal, gesture: .swipeLeft,
+            done: { $0.signals.keys.opens > $0.baseline.keys.opens }, settle: 0.4),
+        TutorialStep(
+            id: "answer", chapter: .needsYou, place: .peek(scout, parent: agent), title: "Allow it",
+            text: "Keys go straight to the program: arrows, y and n, numbers, esc.",
+            action: "Tap \u{23CE}",
+            anchor: .keyEnter, gesture: .tap, also: [.keys, .peekTerminal],
+            phases: [TutorialPhase(action: "Swipe left for the keys again", pointer: .peekTerminal, gesture: .swipeLeft,
+                                   when: { !$0.signals.keys.open })],
+            done: { $0.terminal(scout)?.status != .blocked }, settle: 1.0),
+        TutorialStep(
+            id: "close", chapter: .needsYou, place: .peek(scout, parent: agent), title: "Close it, it keeps running",
+            text: "Keep would make it a tab next to its parent's. Esc or a tap beside the window closes it too.",
+            action: "Tap \u{2715}",
+            anchor: .peekClose, gesture: .tap, also: [.keys], card: .below,
+            done: { $0.controller?.peek == nil }, settle: 0.3),
+        TutorialStep(
+            id: "spaces", chapter: .needsYou, place: .agents, title: "Back to your spaces",
+            text: "The panel waits where you left it, until you put it away.",
+            action: "Swipe right on the panel",
+            anchor: .agentsPanel, gesture: .swipeRight,
+            done: { $0.onList }, settle: 0.3),
+
+        // Talk to an agent.
+        TutorialStep(
+            id: "open", chapter: .talk, place: .list, title: "Open an agent",
+            text: "Its tab opens beside the list, split as on your Mac. Its terminal takes the pane's size; a click on your Mac sizes it back.",
+            action: "Tap the herdr-app agent",
+            anchor: .agentRow(split), gesture: .tap,
+            done: { $0.showing(split) }, settle: 0.8),
+        TutorialStep(
+            id: "message", chapter: .talk, place: .pane(split), title: "Message it",
+            text: "The field under the panes writes to the focused one, as if typed on your Mac. The paperclip adds photos and files.",
+            action: "Tap the field",
+            anchor: .composer, gesture: .tap,
+            phases: [TutorialPhase(action: "Type anything, then send", symbol: "keyboard",
+                                   when: { $0.controller?.composing != nil })],
+            done: { $0.signals.messages > $0.baseline.messages }, settle: 0.3),
+        TutorialStep(
+            id: "reply", chapter: .talk, place: .pane(split), title: "It's on it",
+            text: "Its status shows on its row, its tab and the ring. A tap on a pane focuses it; its header splits, zooms and closes it.",
+            anchor: .terminal,
+            phases: [TutorialPhase(action: "It's answering\u{2026}", symbol: "hourglass",
+                                   when: { $0.terminal(split)?.status == .working })]),
+
+        // Make room.
+        TutorialStep(
+            id: "hide", chapter: .room, place: .list, title: "Make room",
+            text: "Hide the sidebar for wider panes: + has Hide Sidebar, and so has \u{2318}B on a keyboard.",
+            action: "Tap +, then Hide Sidebar",
+            // Free: the menu is the system's, its items in no hole (the ring and the pointer
+            // make way while it's over the +, `TutorialAnchors.covered`).
+            anchor: .sidebarMenu, gesture: .tap, free: true, card: .center,
+            done: { $0.sidebarHidden }, settle: 0.5),
+        TutorialStep(
+            id: "slide", chapter: .room, place: .bare(split), title: "The sidebar, when you need it",
+            text: "A swipe right on a terminal slides it over the panes; a swipe left or a tap beside it puts it away.",
+            action: "Swipe right on the terminal",
+            anchor: .terminal, gesture: .swipeRight, also: [.sidebarOverlay],
+            phases: [TutorialPhase(action: "Swipe left to put it away", pointer: .sidebarOverlay, gesture: .swipeLeft,
+                                   when: { $0.signals.overlay.open })],
+            done: { $0.signals.overlay.opens > $0.baseline.overlay.opens && !$0.signals.overlay.open }, settle: 0.4),
+        TutorialStep(
+            id: "show", chapter: .room, place: .bare(split), title: "Dock it again",
+            text: "The sidebar button brings it back beside the panes.",
+            action: "Tap the sidebar button",
+            anchor: .showSidebar, gesture: .tap,
+            done: { !$0.sidebarHidden }, settle: 0.4),
+
+        // The limits.
+        TutorialStep(
+            id: "limits", chapter: .limits, place: .list, title: "Your plan limits",
+            text: "Your Claude and Codex usage at a glance: a ring for each limit.",
+            action: "Tap the rings",
+            anchor: .limits, gesture: .tap,
+            done: { $0.signals.limits.opens > $0.baseline.limits.opens }, settle: 0.3),
+        TutorialStep(
+            id: "limits-open", chapter: .limits, place: .anywhere, title: "How to read them",
+            bullets: [
+                TutorialBullet(mark: .symbol("circle.lefthalf.filled"), text: "The arc: the share used, green on pace, then yellow and red"),
+                TutorialBullet(mark: .symbol("line.diagonal"), text: "The tick: how much of the window has gone"),
+                TutorialBullet(mark: .text("5 7"), text: "Inside: 5 hours, 7 days, a model's letter"),
+                TutorialBullet(mark: .text("\u{203A}\u{203A}"), text: "Used faster than time goes: it may run out before the reset"),
+            ],
+            action: "Tap outside to close", gesture: .tap, near: .limitsPopover, free: true,
+            done: { !$0.signals.limits.open }, settle: 0.3),
+
+        TutorialStep(
+            id: "finish", place: .list, title: "You're all set",
+            text: "Worth remembering:",
+            bullets: [
+                TutorialBullet(mark: .symbol("arrow.left"), text: "Swipe left on a terminal: keys"),
+                TutorialBullet(mark: .symbol("arrow.right"), text: "Swipe right on it: the hidden sidebar"),
+                TutorialBullet(mark: .symbol("circle.dashed"), text: "Tap the ring: every agent, and a search"),
+                TutorialBullet(mark: .symbol("hand.point.up.left.fill"), text: "Touch and hold a row: its menu"),
+                TutorialBullet(mark: .symbol("command"), text: "\u{2318}P finds an agent, \u{2318}] goes to the next, \u{2318}B hides the sidebar"),
+                TutorialBullet(mark: .symbol("plus"), text: "A new space, Settings and this tour"),
+            ],
+            note: "On your iPhone, Wierdr shows who needs you on the Lock Screen, even when it's closed (Live Activity).",
+            card: .center, kind: .finish),
+    ]
 }

@@ -87,8 +87,10 @@ struct TutorialCard: View {
                     .accessibilityHint("Ends the tour")
             }
             HStack(spacing: 4) {
-                ForEach(TutorialChapter.allCases) { chapter in
-                    let fill: CGFloat = chapter.rawValue < p.chapter.rawValue ? 1
+                let chapters = Tutorial.shared.chapters
+                let at = chapters.firstIndex(of: p.chapter) ?? 0
+                ForEach(Array(chapters.enumerated()), id: \.element) { i, chapter in
+                    let fill: CGFloat = i < at ? 1
                         : chapter == p.chapter ? CGFloat(p.number) / CGFloat(max(1, p.count)) : 0
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {

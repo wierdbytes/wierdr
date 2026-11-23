@@ -28,6 +28,7 @@ struct SidebarHeader: View {
             ComposerGlassGroup {
                 SidebarMenu()
                     .composerGlass(Circle(), theme: theme)
+                    .tutorialAnchor(.sidebarMenu)
             }
         }
         .frame(height: Self.height)

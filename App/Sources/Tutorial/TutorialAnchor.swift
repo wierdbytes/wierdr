@@ -12,6 +12,8 @@ enum TutorialAnchor: Hashable {
     case addHost, tryDemo
     // The list screen.
     case card(String), spaceHeader(String)
+    /// A space header's chevron, which folds its card (the iPad's tap on a header selects it).
+    case spaceChevron(String)
     /// An agent's row (its terminal's address).
     case agentRow(String)
     /// The rows of an agent's tree (its address): many views, one place (`TutorialAnchors.union`).
@@ -24,28 +26,40 @@ enum TutorialAnchor: Hashable {
     /// The agents panel over the spaces (all of it), and a row there (its agent's or
     /// sub-agent's address).
     case agentsPanel, panelRow(String)
+    /// The header's + (its menu: Settings, the iPad's Hide Sidebar, a new space).
+    case sidebarMenu
     // The pane screen.
-    case paneTitle, paneBack, terminal, composer
+    case paneTitle, paneBack, composer
+    /// The terminal in front: the iPhone's pane screen's, the iPad's focused pane's.
+    case terminal
     /// The key panel, and its ⏎.
     case keys, keyEnter
+    // The iPad's split view.
+    /// The tab bar's sidebar button, while the sidebar is hidden.
+    case showSidebar
+    /// The sidebar slid over the panes (`SidebarOverlay`).
+    case sidebarOverlay
+    /// A sub-agent's window over the panes (`SubAgentPeek`): its terminal, its ✕.
+    case peekTerminal, peekClose
 }
 
 extension View {
     /// Marks this view as `anchor` for the tour: only while a step points at it (or lets a
     /// finger through it), so it costs nothing otherwise.
-    func tutorialAnchor(_ anchor: TutorialAnchor) -> some View {
+    /// Nil: not marked (a pane that isn't the one in front).
+    func tutorialAnchor(_ anchor: TutorialAnchor?) -> some View {
         modifier(TutorialAnchorModifier(anchor: anchor))
     }
 }
 
 private struct TutorialAnchorModifier: ViewModifier {
-    let anchor: TutorialAnchor
+    let anchor: TutorialAnchor?
     @Environment(\.tutorialAnchorsOff) private var off
 
     func body(content: Content) -> some View {
         // Behind the content, its size: the content's identity doesn't change with the marker.
         content.background {
-            if !off, Tutorial.shared.marks(anchor) { TutorialMarker(anchor: anchor) }
+            if !off, let anchor, Tutorial.shared.marks(anchor) { TutorialMarker(anchor: anchor) }
         }
     }
 }
@@ -135,6 +149,28 @@ final class TutorialAnchors {
     func union(_ anchor: TutorialAnchor) -> CGRect? {
         entries.filter { $0.anchor == anchor }.compactMap { Self.shownFrame($0.view) }
             .reduce(nil) { (all: CGRect?, rect: CGRect) in all.map { $0.union(rect) } ?? rect }
+    }
+
+    /// Something else is on top at the anchor's middle (a system menu, a popover): the
+    /// topmost view there, the tour's window aside, isn't in the anchor's own screen (its
+    /// hosting controller's view).
+    func covered(_ anchor: TutorialAnchor) -> Bool {
+        guard let view = entries.last(where: { $0.anchor == anchor && $0.view?.window != nil })?.view,
+              let window = view.window, let scene = window.windowScene else { return false }
+        var host: UIView = view
+        while let up = host.superview, !(host.next is UIViewController) { host = up }
+        let middle = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: window)
+        // Front to back: by level, the later of a level in front.
+        let level = window.windowLevel.rawValue
+        let windows = scene.windows.enumerated()
+            .filter { !$0.element.isHidden && !($0.element is TutorialWindow) && $0.element.windowLevel.rawValue >= level }
+            .sorted { ($0.element.windowLevel.rawValue, $0.offset) > ($1.element.windowLevel.rawValue, $1.offset) }
+            .map(\.element)
+        for w in windows {
+            guard let hit = w.hitTest(w === window ? middle : w.convert(middle, from: window), with: nil) else { continue }
+            return w !== window || !hit.isDescendant(of: host)
+        }
+        return false
     }
 
     private static func shownFrame(_ view: UIView?) -> CGRect? {

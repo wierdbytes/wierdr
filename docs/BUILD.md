@@ -215,7 +215,11 @@ scripts/iphone-sim.sh orient landscape; scripts/iphone-sim.sh appearance dark
 
 Тур сам начинается при первом запуске без хостов (не с `-demo YES`); чтобы увидеть это снова —
 `xcrun simctl uninstall` и чистая установка (метка `tour.seen` в UserDefaults уходит вместе с данными). Жесты
-WDA доходят сквозь окно тура так же, как палец: только в вырез шага.
+WDA доходят сквозь окно тура так же, как палец: только в вырез шага. Тур iPad (свой сценарий,
+`TutorialStep.pad`) — в симуляторе iPad тем же скриптом: `SIM_NAME="iPad Pro 13-inch (M5)"
+WDA_PORT=8300 scripts/iphone-sim.sh launch -tour YES` (точки — 1032×1376 в портрете); id шагов у
+сценариев свои. Шаг, чьё условие уже выполнено, `-tour` проскакивает (`-tour close` без
+открытого окна scout — сразу дальше).
 
 Живое подключение из симулятора — как в `docs/architecture.md` (тестовый sshd на
 127.0.0.1:2222, `SIMCTL_CHILD_WIERDR_AUTOCONNECT=…`), с `SIM` = «Wierdr iPhone 13 Pro Max».

@@ -98,6 +98,7 @@ struct PaneCard: View {
             Color.clear
                 .overlay { content(terminal: terminal, focused: focused) }
                 .clipped()
+                .tutorialAnchor(focused ? .terminal : nil)
         }
         .background(theme.background)
         .clipShape(RoundedRectangle(cornerRadius: 10))

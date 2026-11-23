@@ -79,18 +79,14 @@ struct ConnectView: View {
                     }
                     .disabled(app.connecting != nil)
                     .tutorialAnchor(.tryDemo)
-                    if Tutorial.isAvailable {
-                        Button {
-                            Tutorial.shared.start()
-                        } label: {
-                            Label("Take the Tour", systemImage: "hand.point.up.left")
-                        }
-                        .disabled(app.connecting != nil || Tutorial.shared.isActive)
+                    Button {
+                        Tutorial.shared.start()
+                    } label: {
+                        Label("Take the Tour", systemImage: "hand.point.up.left")
                     }
+                    .disabled(app.connecting != nil || Tutorial.shared.isActive)
                 } footer: {
-                    Text(Tutorial.isAvailable
-                         ? "Explore Wierdr with sample spaces and agents, no computer needed. The tour shows you around on them."
-                         : "Explore Wierdr with sample spaces and agents, no computer needed.")
+                    Text("Explore Wierdr with sample spaces and agents, no computer needed. The tour shows you around on them.")
                 }
             }
             .listStyle(.insetGrouped)

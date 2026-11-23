@@ -57,6 +57,7 @@ struct SubAgentPeek: View {
                         .id(address)
                     }
                     .clipped()
+                    .tutorialAnchor(.peekTerminal)
                 if services.terminalSession(address)?.hasKeyboardFocus != true {
                     ComposerBar(address: address, placeholder: "Message to \(Format.kidTitle(terminal ?? TerminalInfo(address: address)))",
                                 placement: .card, room: room)
@@ -122,6 +123,7 @@ private struct PeekBar: View {
                 controller.closePeek()
             }
             .keyboardShortcut(terminalHasKeyboard ? nil : KeyboardShortcut(.escape, modifiers: []))
+            .tutorialAnchor(.peekClose)
         }
         .padding(.horizontal, 12)
         .frame(height: 38)

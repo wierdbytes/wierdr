@@ -16,6 +16,7 @@ struct TabBar: View {
                 ChromeIconButton(icon: "chevron-left", iconSize: 15, label: "Spaces") { controller.showSidebar() }
             } else if controller.columnVisibility == .detailOnly {
                 ChromeIconButton(icon: "sidebar", iconSize: 15, label: "Show Sidebar") { controller.toggleSidebar() }
+                    .tutorialAnchor(.showSidebar)
                     .padding(.trailing, 4)
             }
             ScrollViewReader { proxy in

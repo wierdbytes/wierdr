@@ -157,6 +157,7 @@ struct SpaceHeaderBar: View {
             .buttonStyle(.plain)
             .onHover { chevronHover = $0 }
             .hoverEffect(.highlight)
+            .tutorialAnchor(.spaceChevron(space.id))
             .accessibilityLabel(closed ? "Show tabs" : "Hide tabs")
         } else {
             Color.clear.frame(width: 32, height: 20)

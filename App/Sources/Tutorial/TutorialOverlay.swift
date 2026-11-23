@@ -98,6 +98,9 @@ final class TutorialPresenter {
                      soft: step?.also.compactMap { anchors.frame($0) } ?? [])
         model.set(phase: phase, pointer: pointer, near: step?.near.flatMap { anchors.frame($0) })
         model.passRects = [target, pointer].compactMap { $0 } + model.soft
+        // A free step lets the app open things over its anchor (a system menu over the +).
+        let covered = step?.free == true && step?.anchor.map { anchors.covered($0) } == true
+        if model.covered != covered { model.covered = covered }
         if model.safeArea != window.safeAreaInsets { model.safeArea = window.safeAreaInsets }
         if model.width != window.bounds.width { model.width = window.bounds.width }
         // An anchor that doesn't show: the card offers Next rather than leave the person stuck.
@@ -146,6 +149,8 @@ final class TutorialOverlayModel {
     var width: CGFloat = 0
     /// The anchor didn't show: the card offers Next.
     var lost = false
+    /// Something is over the anchor (a menu a free step let open): no ring, no pointer.
+    var covered = false
     /// A finger was blocked (the card shakes, the ring flashes).
     private(set) var nudges = 0
 
@@ -204,6 +209,7 @@ final class TutorialOverlayModel {
         near = nil
         step = nil
         lost = false
+        covered = false
         passRects = []
         cardFrame = .zero
     }
@@ -318,12 +324,13 @@ private struct TutorialOverlayContent: View {
                             .onTapGesture { tour.next() }
                             .accessibilityHidden(true)
                     }
-                    // Not round what fills the screen (the list, the terminal): it would frame the screen.
-                    if hole.height < bounds.height * 0.6 {
+                    // Not round what fills the screen (the list, the terminal): it would frame the screen;
+                    // nor while something is over it (a free step's menu).
+                    if hole.height < bounds.height * 0.6, !model.covered {
                         TutorialRing(rect: hole, flash: model.nudges, breathing: step.gesture != nil && !tour.succeeded)
                     }
                     let gesture = phase != nil ? phase?.gesture : step.gesture
-                    if let gesture, !tour.succeeded, let at = model.pointer ?? model.target {
+                    if let gesture, !tour.succeeded, !model.covered, let at = model.pointer ?? model.target {
                         TutorialPointer(gesture: gesture, target: at, since: max(tour.shownAt, model.phaseSince))
                             .transition(.opacity)
                     }
@@ -342,8 +349,8 @@ private struct TutorialOverlayContent: View {
                             model.cardFrame = frame
                             if frame.size != cardSize { cardSize = frame.size }
                         }
-                        .position(x: lane.midX,
-                                  y: cardY(step, height: cardSize.height, hole: hole, focus: focus, bounds: bounds))
+                        .position(cardCenter(step, height: cardSize.height, lane: lane, hole: hole, focus: focus,
+                                             bounds: bounds))
                         .opacity(cardSize.height > 0 ? 1 : 0)
                         .transition(.opacity)
                         .id(step.id)
@@ -365,15 +372,44 @@ private struct TutorialOverlayContent: View {
         return p
     }
 
-    /// The card's column: the screen's, 16 pt in, at most 380 wide; beside a tall narrow
-    /// place it shows by an edge (the key column), the rest of the width, if that leaves 260.
-    private static func lane(_ shown: [CGRect], bounds: CGSize) -> (midX: CGFloat, width: CGFloat) {
+    /// The card's column: the screen's, 16 pt in (`x0`…`x1`), the card at most 380 wide in
+    /// its middle; beside a tall narrow place it shows by an edge (the key column, the iPad's
+    /// sidebar slid out), the rest of the width, if that leaves 260.
+    private static func lane(_ shown: [CGRect], bounds: CGSize) -> (midX: CGFloat, width: CGFloat, x0: CGFloat, x1: CGFloat) {
         var x0: CGFloat = 16, x1 = bounds.width - 16
         for r in shown where r.width < bounds.width * 0.4 && r.height > 120 {
             if r.midX > bounds.width / 2 { x1 = min(x1, r.minX - 6) } else { x0 = max(x0, r.maxX + 6) }
         }
         if x1 - x0 < 260 { x0 = 16; x1 = bounds.width - 16 }
-        return ((x0 + x1) / 2, min(x1 - x0, 380))
+        return ((x0 + x1) / 2, min(x1 - x0, 380), x0, x1)
+    }
+
+    /// Where the card's middle goes: up and down by `cardY`, in its lane's middle. The iPad's
+    /// tour has room aside: by itself (`auto`), the card goes beside what the step shows (a
+    /// sidebar row, the ring, ⏎) at its height, to its right, else its left, where the screen
+    /// has room for it; else it's over that place's middle (a pane, the composer), in its lane.
+    private func cardCenter(_ step: TutorialStep, height h: CGFloat, lane: (midX: CGFloat, width: CGFloat, x0: CGFloat, x1: CGFloat),
+                            hole: CGRect?, focus: CGRect?, bounds: CGSize) -> CGPoint {
+        let w = lane.width
+        let y = cardY(step, height: h, hole: hole, focus: focus, bounds: bounds)
+        guard !Tutorial.shared.phone, !model.lost, let focus, [.auto, .below, .above].contains(step.card) else {
+            return CGPoint(x: lane.midX, y: y)
+        }
+        if step.card == .auto, focus.width <= bounds.width / 2 {
+            let gap: CGFloat = 16, margin: CGFloat = 16
+            let top = model.safeArea.top + 8
+            var bottom = bounds.height - max(model.safeArea.bottom, 8) - 8
+            if let keyboard = model.keyboardTop { bottom = min(bottom, keyboard - 8) }
+            let beside = min(max(focus.midY - h / 2, top), max(top, bottom - h)) + h / 2
+            if bounds.width - margin - (focus.maxX + gap) >= w {
+                return CGPoint(x: focus.maxX + gap + w / 2, y: beside)
+            }
+            if focus.minX - gap - margin >= w {
+                return CGPoint(x: focus.minX - gap - w / 2, y: beside)
+            }
+        }
+        let x = min(max(focus.midX, lane.x0 + w / 2), max(lane.x0 + w / 2, lane.x1 - w / 2))
+        return CGPoint(x: x, y: y)
     }
 
     /// Where the card's middle goes, up and down: by what the step shows (`focus`: the hole,
