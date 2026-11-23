@@ -4,7 +4,7 @@ import WierdrModel
 extension WorkspaceController {
     /// What of an agent's tree shows under its row (`TreeFolds.shown`): its sub-agents
     /// unless its bot chip folded them, each agent's terminals once its `>_` chip opened
-    /// them; `forced` (Go to's matches) whatever the folds.
+    /// them; `forced` (the agents panel's matches) whatever the folds.
     func shownTree(of row: SidebarRow, forced: Set<String> = []) -> [TreeNode] {
         guard row.kind == .agent, !row.tree.isEmpty else { return [] }
         let agentsOpen = !foldedAgents.contains(row.terminal?.address ?? "")

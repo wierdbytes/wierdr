@@ -100,9 +100,9 @@ struct SpaceCardLine: View {
         case .kid(let kid, let parent, let hasKids):
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
                          selected: !controller.singlePane && controller.isRinged(kid),
-                         trailing: [kidCloseAction(kid)],
+                         trailing: [actions.close(kid)],
                          edgeSwipesOnly: false, tap: { controller.open(kid, from: parent.row.paneID) },
-                         menu: { kidMenu(kid, parent: parent) }) {
+                         menu: { actions.kidMenu(kid, rowPane: parent.row.paneID) }) {
                 PhoneKidRowContent(kid: kid, hasKids: hasKids,
                                    terminals: TreeFolds.terminals(of: kid.terminal.address, in: parent.row.tree))
             }
@@ -126,9 +126,9 @@ struct SpaceCardLine: View {
         case .pane(let item):
             PhoneListRow(id: line.id, pinned: false, separator: line.separator, nextID: next,
                          selected: isSelected(item.row),
-                         trailing: [closeAction(item.row.paneID)],
+                         trailing: [actions.close(item.row.paneID)],
                          edgeSwipesOnly: false, tap: { controller.focus(pane: item.row.paneID) },
-                         menu: { paneMenu(item.row) }) {
+                         menu: { actions.paneMenu(item.row) }) {
                 PhonePaneRowContent(row: item.row)
             }
         }
@@ -145,9 +145,9 @@ struct SpaceCardLine: View {
         if let t = item.row.terminal {
             PhoneListRow(id: line.id, pinned: line.pinned, separator: line.separator, nextID: next,
                          selected: isSelected(item.row),
-                         leading: leadingActions(t), trailing: [closeAction(item.row.paneID)],
+                         leading: actions.leading(t), trailing: [actions.close(item.row.paneID)],
                          edgeSwipesOnly: false, tap: { controller.focus(pane: item.row.paneID) },
-                         menu: { paneMenu(item.row) }) {
+                         menu: { actions.paneMenu(item.row) }) {
                 PhoneAgentRowContent(terminal: t, tab: controller.workspace.tab(item.row.tabID), space: item.space,
                                      showsSpace: false, tree: item.row.tree,
                                      hasKids: !controller.shownTree(of: item.row).isEmpty)
@@ -156,88 +156,8 @@ struct SpaceCardLine: View {
         }
     }
 
-    // MARK: Actions
-
-    /// Swipe right: Unread (idle) or Idle (done) at the edge, then Pin/Unpin.
-    private func leadingActions(_ t: TerminalInfo) -> [PhoneSwipeAction] {
-        var out: [PhoneSwipeAction] = []
-        switch t.status {
-        case .idle where t.canMarkUnread:
-            out.append(PhoneSwipeAction(id: "unread", title: "Unread", symbol: "message.badge.filled.fill",
-                                        color: PhoneSwipeColors.unread(theme)) {
-                controller.markUnread(t.address)
-            })
-        case .done:
-            out.append(PhoneSwipeAction(id: "idle", title: "Idle", symbol: "checkmark.message.fill",
-                                        color: PhoneSwipeColors.inactive(theme)) {
-                controller.markRead(t.address)
-            })
-        default:
-            break
-        }
-        out.append(PhoneSwipeAction(id: t.pinned ? "unpin" : "pin", title: t.pinned ? "Unpin" : "Pin",
-                                    symbol: t.pinned ? "pin.slash.fill" : "pin.fill",
-                                    color: PhoneSwipeColors.pin(theme)) {
-            controller.setPinned(t.address, !t.pinned)
-        })
-        return out
-    }
-
-    /// Swipe left: Close (asks first).
-    private func closeAction(_ paneID: String) -> PhoneSwipeAction {
-        PhoneSwipeAction(id: "close", title: "Close", symbol: "xmark", color: PhoneSwipeColors.destructive(theme), fillsRow: true) {
-            controller.closePane(paneID)
-        }
-    }
-
-    /// A sub-agent's swipe left: Close (kept, its pane; else it stops; asks first).
-    private func kidCloseAction(_ kid: SubAgent) -> PhoneSwipeAction {
-        PhoneSwipeAction(id: "close", title: "Close", symbol: "xmark", color: PhoneSwipeColors.destructive(theme), fillsRow: true) {
-            controller.close(kid)
-        }
-    }
-
-    // MARK: Menus
-
-    /// An agent's or a terminal's long-press menu.
-    private func paneMenu(_ row: SidebarRow) -> PhoneMenu {
-        var agent: [PhoneMenuItem] = []
-        if let t = row.terminal, t.isAgent {
-            agent.append(PhoneMenuItem(title: t.pinned ? "Unpin" : "Pin", icon: .asset(t.pinned ? "ui.pin-off" : "ui.pin")) {
-                controller.setPinned(t.address, !t.pinned)
-            })
-            switch t.status {
-            case .idle where t.canMarkUnread:
-                agent.append(PhoneMenuItem(title: "Mark Unread", icon: .system("circle.fill")) { controller.markUnread(t.address) })
-            case .done:
-                agent.append(PhoneMenuItem(title: "Mark Idle", icon: .system("circle")) { controller.markRead(t.address) })
-            default:
-                break
-            }
-        }
-        let pane = [
-            PhoneMenuItem(title: "Split Right", icon: .asset("ui.split-right")) {
-                controller.focus(pane: row.paneID)
-                controller.split(.right, pane: row.paneID)
-            },
-            PhoneMenuItem(title: "Close Pane", icon: .asset("ui.x"), destructive: true) { controller.closePane(row.paneID) },
-        ]
-        return [agent, pane]
-    }
-
-    /// A sub-agent's: show it or keep it as a tab; a kept one, go to its tab; Close.
-    private func kidMenu(_ kid: SubAgent, parent: PhoneListLine.Item) -> PhoneMenu {
-        let open: [PhoneMenuItem]
-        if let pane = kid.paneID {
-            open = [PhoneMenuItem(title: "Go to Its Tab", icon: .asset("ui.terminal")) { controller.focus(pane: pane) }]
-        } else {
-            open = [
-                PhoneMenuItem(title: "Show", icon: .asset("ui.terminal")) { controller.open(kid, from: parent.row.paneID) },
-                PhoneMenuItem(title: "Keep as Tab", icon: .asset("ui.plus")) { controller.keep(kid.terminal.address) },
-            ]
-        }
-        return [open, [PhoneMenuItem(title: "Close", icon: .asset("ui.x"), destructive: true) { controller.close(kid) }]]
-    }
+    /// Its swipes and menu (`RowActions`, the agents panel's too).
+    private var actions: RowActions { RowActions(controller: controller, theme: theme) }
 }
 
 /// The swipe buttons' fills: Telegram's (day/night) for unread, pin, inactive and destructive.

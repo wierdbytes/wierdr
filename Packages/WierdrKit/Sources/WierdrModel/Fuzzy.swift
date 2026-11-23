@@ -1,6 +1,6 @@
 import Foundation
 
-/// fzf-style fuzzy matching (the Go to panel): the query's letters in order in
+/// fzf-style fuzzy matching (the agents panel's search): the query's letters in order in
 /// the text, not necessarily together. Of the ways they fit, the best scoring:
 /// each letter scores, more at the start of a word (after a space, then after
 /// `/-_.:` and the like, then at a camelCase hump or a digit) and the first

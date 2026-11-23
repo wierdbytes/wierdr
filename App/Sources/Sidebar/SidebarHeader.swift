@@ -5,10 +5,10 @@ import WierdrModel
 /// floating over the list's bottom (the rows scroll under it): one 44-pt row, 16 pt from
 /// the sides, its bottom 28 pt over the screen's, as the pane screen's message field's
 /// (`bottomGap`). At its left the subscription limits (`SidebarLimits`: as many rings as
-/// fit; none without data), in its middle the agents' statuses as one ring (or the
-/// connection's state, `SidebarTitle`), at its right, under the right thumb, + in a glass
-/// circle (`SidebarMenu`: a new space, Settings, on the iPad Hide Sidebar). Placed by
-/// `SidebarHeaderRow`.
+/// fit; none without data), in its middle the agents' statuses as one ring, whose tap
+/// opens the agents panel (or the connection's state, `SidebarTitle`), at its right, under
+/// the right thumb, + in a glass circle (`SidebarMenu`: a new space, Settings, on the iPad
+/// Hide Sidebar). Placed by `SidebarHeaderRow`.
 struct SidebarHeader: View {
     static let height: CGFloat = 44
     static let sideInset: CGFloat = 16
@@ -25,13 +25,9 @@ struct SidebarHeader: View {
                 .tutorialAnchor(.limits)
             SidebarTitle()
                 .tutorialAnchor(.statusRing)
-            HStack(spacing: 0) {
-                // Go to is a pull of the list; VoiceOver's is here.
-                GoToAccessibilityButton(hint: "Or pull the list up.")
-                ComposerGlassGroup {
-                    SidebarMenu()
-                        .composerGlass(Circle(), theme: theme)
-                }
+            ComposerGlassGroup {
+                SidebarMenu()
+                    .composerGlass(Circle(), theme: theme)
             }
         }
         .frame(height: Self.height)
@@ -150,24 +146,19 @@ struct SidebarTitle: View {
 
 /// The agents' statuses in the header's middle, one ring (`StatusRing`: a dash per
 /// agent, every sub-agent counting as it reads under its parent, the most urgent first;
-/// inside, how many have the most urgent status). A tap opens the first agent with the
-/// most urgent status in `Workspace.phoneList`'s order (an agent, then its sub-agents;
-/// one without a pane shows as a tap on its row does); held, a menu opens the first
-/// one of any status, the most urgent lowest, nearest the thumb.
+/// inside, how many have the most urgent status). A tap opens the agents panel over the
+/// spaces (`AgentsPanel`: every agent by status, the most urgent lowest, a search field
+/// under them).
 struct SidebarStatusRing: View {
     struct Entry: Equatable {
         var status: AgentStatus
         var count: Int
-        /// The first agent with this status.
-        var first: CountedAgent
 
         /// Every status with agents, most urgent first.
         @MainActor static func all(in workspace: Workspace) -> [Entry] {
-            let agents = workspace.phoneList(space: nil).agents.map(\.row).countedAgents
-            let counts = agents.byStatus
+            let counts = workspace.phoneList(space: nil).agents.map(\.row).countedAgents.byStatus
             return [AgentStatus.blocked, .done, .working, .idle].compactMap { s in
-                guard let n = counts[s], let first = agents.first(where: { $0.status == s }) else { return nil }
-                return Entry(status: s, count: n, first: first)
+                counts[s].map { Entry(status: s, count: $0) }
             }
         }
     }
@@ -176,71 +167,18 @@ struct SidebarStatusRing: View {
     var entries: [Entry]
 
     @Environment(WorkspaceController.self) private var controller
-    @Environment(\.theme) private var theme
 
     var body: some View {
-        if let top = entries.first {
-            Menu {
-                // The menu opens over the ring: the least urgent on top, the most
-                // urgent nearest the thumb.
-                ForEach(entries.reversed(), id: \.status) { entry in
-                    Button { open(entry.first) } label: {
-                        Label {
-                            Text(Self.title(entry))
-                        } icon: {
-                            Image(uiImage: Self.dot(theme.color(for: entry.status), hollow: entry.status == .idle))
-                        }
-                    }
-                }
-            } label: {
-                StatusRing(counts: Dictionary(uniqueKeysWithValues: entries.map { ($0.status, $0.count) }))
-                    .frame(width: SidebarHeader.height, height: SidebarHeader.height)
-                    .contentShape(Rectangle())
-            } primaryAction: {
-                open(top.first)
-            }
-            .menuOrder(.fixed)
-            .accessibilityLabel("Agents")
-            .accessibilityValue(entries.map { "\($0.count) \(Format.statusWord($0.status))" }.joined(separator: ", "))
-            .accessibilityHint("Opens the first one that \(top.status == .blocked ? "needs you" : "is \(Format.statusWord(top.status))"). Held, the first of any status.")
+        Button { controller.openAgents() } label: {
+            StatusRing(counts: Dictionary(uniqueKeysWithValues: entries.map { ($0.status, $0.count) }))
+                .frame(width: SidebarHeader.height, height: SidebarHeader.height)
+                .contentShape(Rectangle())
         }
-    }
-
-    /// A menu item's title: "2 Need You", "3 Done", "5 Working", "14 Idle".
-    private static func title(_ entry: Entry) -> String {
-        switch entry.status {
-        case .blocked: return "\(entry.count) \(entry.count == 1 ? "Needs" : "Need") You"
-        case .done: return "\(entry.count) Done"
-        case .working: return "\(entry.count) Working"
-        case .idle: return "\(entry.count) Idle"
-        }
-    }
-
-    /// A status's dot for its menu item, filled with its color (idle's a ring), drawn
-    /// as it is: a menu draws a SwiftUI shape's image as a template, in the text's color.
-    private static func dot(_ color: Color, hollow: Bool) -> UIImage {
-        let ui = UIColor(color)
-        return UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).image { _ in
-            let rect = CGRect(x: 5, y: 5, width: 10, height: 10)
-            if hollow {
-                let path = UIBezierPath(ovalIn: rect.insetBy(dx: 0.75, dy: 0.75))
-                path.lineWidth = 1.5
-                ui.setStroke()
-                path.stroke()
-            } else {
-                ui.setFill()
-                UIBezierPath(ovalIn: rect).fill()
-            }
-        }.withRenderingMode(.alwaysOriginal)
-    }
-
-    /// An agent's pane; a sub-agent as a tap on its row shows it (`open`).
-    private func open(_ agent: CountedAgent) {
-        if let kid = agent.kid {
-            controller.open(kid, from: agent.rowPane)
-        } else {
-            controller.focus(pane: agent.rowPane)
-        }
+        .buttonStyle(PressStyle())
+        .hoverEffect(.highlight)
+        .accessibilityLabel("Agents")
+        .accessibilityValue(entries.map { "\($0.count) \(Format.statusWord($0.status))" }.joined(separator: ", "))
+        .accessibilityHint("Shows every agent by status, with a search.")
     }
 }
 
@@ -336,7 +274,7 @@ struct StatusRing: View {
 }
 
 /// Telegram's edge effect behind the sidebar's header at the screen's bottom (and the
-/// status bar at its top, here and over Go to's panel): the list's background at 85 %,
+/// status bar at its top, here and over the agents panel): the list's background at 85 %,
 /// solid to 54 pt before its end, then fading out (Telegram's curve); it runs 14 pt
 /// past the header. The rows scroll under it.
 struct PhoneEdgeFade: View {

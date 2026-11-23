@@ -29,8 +29,11 @@ enum PhoneListMotion {
 ///   rounded plate of the highlight's color and uncovers round buttons; past the
 ///   full-swipe point it jumps on (a haptic) and letting go runs the outer one;
 /// - its separator, which fades while it or the row under it is lit;
-/// - tap (closes an open row instead), long-press menu: in the sidebar's upside-down
-///   list UIKit's, the list's own (`RowMenuMarker`), elsewhere SwiftUI's.
+/// - tap (closes an open row instead), long-press menu: in the sidebar's lists (the
+///   spaces' and the agents panel's) the list's own, Telegram's (`RowMenuMarker`,
+///   `SpaceListDragDrop`), elsewhere SwiftUI's.
+/// - `edgeSwipesOnly` (the agents panel, where a swipe right in the middle puts the panel
+///   back): its swipes start only in its edge zones (`PhoneRowPan`).
 struct PhoneListRow<Content: View>: View {
     var id: String
     var pinned: Bool
@@ -51,9 +54,8 @@ struct PhoneListRow<Content: View>: View {
     @Environment(\.theme) private var theme
     /// What's under the row: the list's chrome, a card's surface.
     @Environment(\.rowGround) private var ground
-    /// In the sidebar's list (`SpacesList`, each block upside down in its host): the menu is
-    /// the list's (UIKit's).
-    @Environment(\.invertedList) private var inverted
+    /// In the sidebar's lists: the menu is the list's own (`SpaceListDragDrop`).
+    @Environment(\.listMenus) private var listMenus
     @Environment(SpaceDrag.self) private var drag: SpaceDrag?
     @Environment(\.displayScale) private var displayScale
     @State private var size: CGSize = .zero
@@ -103,7 +105,7 @@ struct PhoneListRow<Content: View>: View {
         let px = 1 / max(1, displayScale)
         let separatorHidden = pressed || selected || swipes.litID == id || reveal.plate > 0.01
             || (nextID != nil && swipes.litID == nextID)
-        let listMenu = inverted ? drag : nil
+        let listMenu = listMenus ? drag : nil
         // VoiceOver: the list's menu isn't the row's, its items are actions (but the swipes' again).
         let menuActions = listMenu == nil ? [] : menu().joined().filter { item in
             !item.disabled && item.children == nil && !(leading + trailing).contains { $0.title == item.title }
@@ -422,13 +424,14 @@ private struct PhoneRowMenu: ViewModifier {
     }
 }
 
-private struct InvertedListKey: EnvironmentKey { static let defaultValue = false }
+private struct ListMenusKey: EnvironmentKey { static let defaultValue = false }
 
 extension EnvironmentValues {
-    /// The rows are in the sidebar's list (`SpacesList`), each block upside down in its host
-    /// and flipped back: the list draws their menus.
-    var invertedList: Bool {
-        get { self[InvertedListKey.self] }
-        set { self[InvertedListKey.self] = newValue }
+    /// The rows are in one of the sidebar's lists (`SpacesList`, `AgentsPanel`), whose own
+    /// press (`SpaceListDragDrop`) draws their menus, Telegram's, with the environment's
+    /// `SpaceDrag` (its markers, the held and the lifted row): not SwiftUI's context menu.
+    var listMenus: Bool {
+        get { self[ListMenusKey.self] }
+        set { self[ListMenusKey.self] = newValue }
     }
 }

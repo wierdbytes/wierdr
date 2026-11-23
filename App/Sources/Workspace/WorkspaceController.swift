@@ -18,11 +18,16 @@ final class WorkspaceController {
     var compactColumn: NavigationSplitViewColumn = .sidebar
     /// The sidebar slid over the panel while it's hidden (`SidebarOverlay`).
     var sidebarOverlay = false
-    /// Go to (`QuickSwitcher`): a sheet; in the iPhone layout a screen pushed over the others (`PhoneGoToRoot`).
-    var showSwitcher = false
+    /// The agents panel (`AgentsPanel`), pushed over the sidebar's spaces in the sidebar
+    /// itself (`SidebarNavController`): the status ring's tap, ⌘P; a swipe right puts it back.
+    var showAgents = false
+    /// The panel comes or goes at once, not pushed: the sidebar was covered when it was
+    /// asked for (⌘P from a pane screen, or with the iPad's sidebar hidden).
+    var agentsAtOnce = false
+    /// ⌘P asked the panel's search field to take the keyboard (a tap on the ring leaves it
+    /// be); the field that does takes the ask (a hidden sidebar's can't).
+    var agentsSearchPending = false
     var showSettings = false
-    /// The space whose card to bring into view, unfolded: its id (Go to sets it in the iPhone layout, `SpacesList` takes it).
-    var revealSpace: String?
 
     // MARK: Layout (set by `WorkspaceView`)
     /// The iPhone layout: one pane on screen at a time (the focused one).
@@ -150,6 +155,28 @@ final class WorkspaceController {
     func closeSidebarOverlay() {
         guard sidebarOverlay else { return }
         withAnimation(.easeOut(duration: 0.25)) { sidebarOverlay = false }
+    }
+
+    /// The agents panel in the sidebar: the status ring's tap, or ⌘P (`search`: its field
+    /// takes the keyboard). From a pane screen (iPhone layout) back to the sidebar; with the
+    /// iPad's sidebar hidden, its overlay comes out.
+    func openAgents(search: Bool = false) {
+        let covered = singlePane ? compactColumn == .detail : columnVisibility == .detailOnly && !sidebarOverlay
+        agentsAtOnce = covered
+        showAgents = true
+        agentsSearchPending = search
+        if singlePane {
+            if compactColumn == .detail { showSidebar() }
+        } else if columnVisibility == .detailOnly, !sidebarOverlay {
+            withAnimation(.easeOut(duration: 0.22)) { sidebarOverlay = true }
+        }
+    }
+
+    /// The agents panel goes back to the right (Esc, VoiceOver's escape; a swipe sets it itself).
+    func closeAgents() {
+        agentsAtOnce = false
+        agentsSearchPending = false
+        showAgents = false
     }
 
     func showPanel() { compactColumn = .detail }

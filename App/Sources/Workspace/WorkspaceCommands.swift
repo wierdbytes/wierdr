@@ -26,7 +26,8 @@ struct WorkspaceCommands: Commands {
             Button("Toggle Sidebar") { controller?.toggleSidebar() }
                 .keyboardShortcut("b", modifiers: .command)
                 .disabled(controller == nil)
-            Button("Quick Switcher…") { controller?.showSwitcher = true }
+            // The agents panel in the sidebar, its search field with the keyboard.
+            Button("Find Agent…") { controller?.openAgents(search: true) }
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(controller == nil)
         }

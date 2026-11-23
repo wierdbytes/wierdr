@@ -175,7 +175,7 @@ public enum TreeFolds {
     }
 
     /// The rows of `tree` that show: sub-agents' while `agentsOpen`, an agent's terminals
-    /// while `terminalsOpen(agent)`, nothing under a hidden row; `forced` (node ids: Go to's
+    /// while `terminalsOpen(agent)`, nothing under a hidden row; `forced` (node ids: the agents panel's
     /// matches) and the rows they hang under show whatever the folds. Relined.
     public static func shown(_ tree: [TreeNode], agentsOpen: Bool, terminalsOpen: (String) -> Bool,
                              forced: Set<String> = []) -> [TreeNode] {

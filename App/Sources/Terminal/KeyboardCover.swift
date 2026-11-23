@@ -13,7 +13,8 @@ import UIKit
 /// that never goes away). The key bar is always where the cover starts: just
 /// above a docked keyboard, at the bottom under a floating one or with a
 /// hardware keyboard. The message field carries an empty accessory for the
-/// same reason (`ComposerTextView.EmptyAccessory`). With neither having the keyboard
+/// same reason (`ComposerTextView.EmptyAccessory`), and so does the agents panel's
+/// search field (`AgentsSearchUITextField`). With none of them having the keyboard
 /// nothing is covered (the split view has no other text fields; sheets and
 /// alerts that do sit above it).
 @MainActor
@@ -61,7 +62,7 @@ final class KeyboardCover {
            let bar = owner.inputAccessoryView {
             accessory = (bar, window)
         } else {
-            accessory = ComposerUITextView.activeAccessory
+            accessory = ComposerUITextView.activeAccessory ?? AgentsSearchUITextField.activeAccessory
         }
         if let (bar, window) = accessory, bar.window != nil, !bar.isHidden, bar.alpha > 0 {
             // The bar is in the keyboard's own window: go through the screen.
@@ -107,9 +108,8 @@ private struct NoKeyboardSafeArea: UIViewRepresentable {
 }
 
 /// While in a window, turns the keyboard's safe area off in the hosting controllers
-/// above it (`NoKeyboardSafeArea`; the iPhone's Go to, which keeps over the keyboard by
-/// itself while the screens under it stay whole, `PhoneNavController`); back on when it
-/// leaves the window. Holds are counted per host.
+/// above it (`NoKeyboardSafeArea`); back on when it leaves the window. Holds are
+/// counted per host.
 final class KeyboardRegionOff: UIView {
     /// The hosts this view turned the region off in.
     private var held: [ObjectIdentifier] = []

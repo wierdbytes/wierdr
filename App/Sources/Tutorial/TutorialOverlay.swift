@@ -568,7 +568,7 @@ enum PointerPath {
         switch gesture {
         case .tap: return 0.4
         case .hold: return 1.0
-        case .swipeLeft, .swipeRight, .pullUp: return 0.75
+        case .swipeLeft, .swipeRight: return 0.75
         }
     }
 
@@ -601,22 +601,13 @@ enum PointerPath {
             return State(point: center, scale: 1.25 - 0.25 * appear - 0.2 * press + 0.2 * lift,
                          opacity: appear * (1 - fade), ripple: 1 + 0.9 * held,
                          rippleOpacity: press > 0 ? 0.9 * (1 - lift) : 0)
-        case .swipeLeft, .swipeRight, .pullUp:
+        case .swipeLeft, .swipeRight:
             let t = time.truncatingRemainder(dividingBy: 2.2)
-            let (from, to): (CGPoint, CGPoint) = {
-                switch gesture {
-                case .swipeRight:
-                    return (CGPoint(x: r.minX + min(48, r.width * 0.15), y: r.midY),
-                            CGPoint(x: r.minX + min(r.width * 0.62, 280), y: r.midY))
-                case .swipeLeft:
-                    return (CGPoint(x: r.maxX - 44, y: r.midY),
-                            CGPoint(x: r.maxX - min(r.width * 0.55, 220), y: r.midY))
-                default:
-                    // From the list's lower part, clear of the header under it.
-                    let start = r.minY + r.height * 0.72
-                    return (CGPoint(x: r.midX, y: start), CGPoint(x: r.midX, y: start - min(260, r.height * 0.45)))
-                }
-            }()
+            let (from, to): (CGPoint, CGPoint) = gesture == .swipeRight
+                ? (CGPoint(x: r.minX + min(48, r.width * 0.15), y: r.midY),
+                   CGPoint(x: r.minX + min(r.width * 0.62, 280), y: r.midY))
+                : (CGPoint(x: r.maxX - 44, y: r.midY),
+                   CGPoint(x: r.maxX - min(r.width * 0.55, 220), y: r.midY))
             let appear = phase(t, 0, 0.2), press = phase(t, 0.2, 0.32), move = phase(t, 0.35, 1.15)
             let lift = phase(t, 1.15, 1.3), fade = phase(t, 1.2, 1.45)
             let point = CGPoint(x: from.x + (to.x - from.x) * move, y: from.y + (to.y - from.y) * move)

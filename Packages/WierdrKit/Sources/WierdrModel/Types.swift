@@ -636,7 +636,7 @@ extension Sequence where Element == SidebarRow {
     }
 }
 
-/// What a space holds, as its rows show it (the Go to panel's line under a space).
+/// What a space holds, as its rows show it: agents, sub-agents, terminals.
 public struct SpaceTally: Hashable, Sendable {
     /// Its agents with a pane (rows of their own).
     public var agents: Int

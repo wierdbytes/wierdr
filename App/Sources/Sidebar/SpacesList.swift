@@ -16,8 +16,6 @@ import WierdrModel
 ///
 /// Cards fold (their chevron; the iPhone's header tap), and are dragged by their header to
 /// reorder them among their machine's (`SpaceDrag`, held then moved, as the menu comes).
-/// Pulled up past its bottom (its content's start), it brings out Go to's field under the
-/// last card; let go past 72 pt, Go to opens (`PullToSearch`).
 struct SpacesList: View {
     /// The status bar's room over the list (the cards scroll under it).
     var topInset: CGFloat
@@ -30,7 +28,6 @@ struct SpacesList: View {
     @Environment(\.isCompactLayout) private var compact
     @State private var drag = SpaceDrag()
     @State private var swipes = PhoneRowSwipes()
-    @State private var pull = PullToSearch(threshold: PullToSearchStyle.phone.threshold, edge: .bottom)
     @State private var handle = SpacesListHandle()
 
     /// Between cards, and from the list's sides.
@@ -42,9 +39,6 @@ struct SpacesList: View {
         let blocks = Array(SpacesListBlock.blocks(controller: controller, drag: drag).reversed())
         SpacesListContent(blocks: blocks, topInset: topInset, bottomInset: bottomInset,
                           drag: drag, swipes: swipes, handle: handle, events: events)
-            .overlay(alignment: .bottom) {
-                PullToSearchField(pull: pull, style: .phone, inset: bottomInset)
-            }
             .overlay {
                 if controller.workspace.spaces.isEmpty, controller.workspace.phase == .live { empty }
             }
@@ -61,29 +55,12 @@ struct SpacesList: View {
                 guard !controller.singlePane, let id, let space = controller.workspace.location(ofPane: id)?.space else { return }
                 handle.reveal(SpacesListBlock.cardID(space.id), duration: 0.28)
             }
-            .onChange(of: controller.revealSpace, initial: true) { _, id in
-                // Go to chose a space: its card, unfolded, comes into view.
-                guard let id else { return }
-                controller.revealSpace = nil
-                if let space = controller.workspace.space(id) {
-                    controller.foldedMachines.remove(space.machine ?? "")
-                }
-                withAnimation(SpaceCard.fold) { _ = controller.closedSpaces.remove(id) }
-                DispatchQueue.main.async { [handle] in
-                    handle.reveal(SpacesListBlock.cardID(id), duration: 0.3)
-                }
-            }
             .onDisappear { swipes.closeAll() }
     }
 
-    /// What the list reports: the pull past its start (Go to), a finger on it (closes an
-    /// open row; let go armed, Go to opens), a tap off the rows (closes an open row).
+    /// What the list reports: a tap off the rows (closes an open row).
     private var events: SpacesListEvents {
         SpacesListEvents(
-            overscroll: { [pull] d in pull.scrolled(d) },
-            dragging: { [pull, controller] on in
-                if pull.interacting(on) { controller.showSwitcher = true }
-            },
             tapped: { [swipes] in
                 withAnimation(PhoneSwipeMotion.bodyAnimation) { swipes.closeAll() }
             })

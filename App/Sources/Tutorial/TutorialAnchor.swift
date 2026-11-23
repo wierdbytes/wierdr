@@ -11,8 +11,6 @@ enum TutorialAnchor: Hashable {
     // The host list.
     case addHost, tryDemo
     // The list screen.
-    /// The list's room between the status bar and the header (the pull to Go to).
-    case list
     case card(String), spaceHeader(String)
     /// An agent's row (its terminal's address).
     case agentRow(String)
@@ -23,6 +21,9 @@ enum TutorialAnchor: Hashable {
     case statusRing, limits
     /// The limits' popover, while it's out.
     case limitsPopover
+    /// The agents panel over the spaces (all of it), and a row there (its agent's or
+    /// sub-agent's address).
+    case agentsPanel, panelRow(String)
     // The pane screen.
     case paneTitle, paneBack, terminal, composer
     /// The key panel, and its ⏎.

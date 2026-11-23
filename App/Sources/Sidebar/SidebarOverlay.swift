@@ -185,20 +185,25 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
         }
 
         // On a terminal the key panel's pan goes first: open, the panel closes with a swipe right.
+        // A row's swipe goes before closing where it goes first (`PhoneRowPanRecognizer.goesFirst`):
+        // a swipe left from a row's right edge uncovers its Close, an open row closes (and
+        // where it has nothing that way it fails at once, and closing goes on).
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
-            g === swipe && other.name == PhoneKeyPanelGestures.panName
+            if g === close, rowGoesFirst(other) { return true }
+            return g === swipe && other.name == PhoneKeyPanelGestures.panName
         }
 
         // The edge swipe goes first, as the system's does; the one on a terminal
-        // before its pans only (not the root view's own). Closing goes before a
-        // row's own swipe: leftward it closes, rightward it fails and the row's
+        // before its pans only (not the root view's own). Closing goes before a row's
+        // own swipe elsewhere: leftward it closes, rightward it fails and the row's
         // actions come. Only before pans: a held finger never fails a pan, so the
         // long-press menu, a space's lift (or the terminal's menu) waiting for it
         // would never come.
         func gestureRecognizer(_ g: UIGestureRecognizer,
                                shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             if g === swipe { return other is UIPanGestureRecognizer && other.view !== g.view }
-            return g === open || isRowSwipe(other)
+            if g === close { return other is PhoneRowPanRecognizer && !rowGoesFirst(other) }
+            return g === open
         }
 
         // Scrolling may run along with closing.
@@ -212,9 +217,9 @@ private struct SidebarOverlayGestures: UIViewRepresentable {
             g.isScrollViewPan
         }
 
-        /// A row's swipe (its actions, `PhoneRowPan`).
-        private func isRowSwipe(_ g: UIGestureRecognizer) -> Bool {
-            g is PhoneRowPanRecognizer
+        /// A row's swipe (`PhoneRowPan`) that goes before closing for this touch.
+        private func rowGoesFirst(_ g: UIGestureRecognizer) -> Bool {
+            (g as? PhoneRowPanRecognizer)?.goesFirst == true
         }
     }
 }

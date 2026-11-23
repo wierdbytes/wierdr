@@ -5,12 +5,12 @@ import WierdrModel
 
 // MARK: - Hosted screens
 
-/// What a screen the iPhone moves by Core Animation (the list, the pane screen, Go to)
-/// needs from the app's environment. Each such screen is a SwiftUI view in its own
-/// `UIHostingController` under a UIKit container (`PhoneNavController`), and SwiftUI
-/// doesn't carry its environment into those, so
-/// it is copied over here; the system's own values (color scheme, size classes, text
-/// size, scene phase) come with the UIKit traits.
+/// What a screen moved by Core Animation (the iPhone's list and pane screen; the sidebar's
+/// spaces and agents panel) needs from the app's environment. Each such screen is a
+/// SwiftUI view in its own `UIHostingController` under a UIKit container
+/// (`PhoneNavController`, `SidebarNavController`), and SwiftUI doesn't carry its
+/// environment into those, so it is copied over here; the system's own values (color
+/// scheme, size classes, text size, scene phase) come with the UIKit traits.
 ///
 /// And the safe area the screen lays out in (`insets`): the hosting controllers ignore
 /// UIKit's (`safeAreaRegions = []`), which follows a view's place on screen (one moved
@@ -140,8 +140,8 @@ enum PhoneMotion {
     }
 }
 
-/// Asks the display for its top rate while a finger moves a screen (the pane screen, Go
-/// to): ProMotion otherwise keeps a finger's custom drag at 60 Hz (a scroll view asks
+/// Asks the display for its top rate while a finger moves a screen (the pane screen, the
+/// agents panel): ProMotion otherwise keeps a finger's custom drag at 60 Hz (a scroll view asks
 /// for itself), and touches come at the display's rate. A display link that does nothing
 /// but ask.
 @MainActor

@@ -17,10 +17,6 @@ import WierdrModel
 
 /// What the list tells its SwiftUI owner (`SpacesList`).
 struct SpacesListEvents {
-    /// How far the list is pulled past its start (up past its bottom), every time it moves.
-    var overscroll: (CGFloat) -> Void = { _ in }
-    /// A finger took the list (true) or let it go (false).
-    var dragging: (Bool) -> Void = { _ in }
     /// A tap on the list off its rows' own taps.
     var tapped: () -> Void = {}
 }
@@ -562,7 +558,6 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
         moveContent(to: px(contentShift - anchor))
         if !interacting, scrollAnimation == nil { announceContentOrigin() }
         placeIndicator()
-        events.overscroll(startEdge.map { max(0, (h - bottomInset) - $0) } ?? 0)
         if atRest { schedulePrefetch() }
     }
 
@@ -771,12 +766,6 @@ final class SpacesListController: UIViewController, UIScrollViewDelegate, UIGest
         stopScrollAnimation()
         // Scrolling closes an open row (Telegram: as the list's drag begins).
         if swipes.openID != nil { swipes.closeAll() }
-        events.dragging(true)
-    }
-
-    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint,
-                                   targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-        events.dragging(false)
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -1096,7 +1085,7 @@ struct SpacesListBlockRoot: View {
         }
         .environment(swipes)
         .environment(drag)
-        .environment(\.invertedList, true)
+        .environment(\.listMenus, true)
     }
 }
 

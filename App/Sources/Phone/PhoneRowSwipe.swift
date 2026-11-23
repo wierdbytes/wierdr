@@ -222,11 +222,20 @@ private struct PhoneSwipeButtonStyle: ButtonStyle {
 /// - it starts after 25 pt of mostly horizontal travel and fails as soon as the
 ///   finger goes more than 10 pt up or down (more than sideways): the list's
 ///   scrolling waits for that (`shouldBeRequiredToFailBy` its pan);
-/// - with `edgeOnly` (the pager pages through tabs) it takes only touches that
-///   start in the edge zones, x < e or x > width − e with e = clamp(width/6, 22, 80);
-///   the pager's pan takes the ones in between, so the two never compete;
+/// - with `edgeOnly` (the agents panel, whose swipe right anywhere puts it back, and the
+///   iPad's overlay, whose swipe left puts the sidebar away) it takes only touches that
+///   start in the edge zones, x < e or x > width − e with e = clamp(width/6, 22, 80), but
+///   the leftmost 16 pt (`PhoneBackSwipeRecognizer.edge`, the panel's from the screen's
+///   edge), each for a swipe away from its edge only (the left one rightward, the right
+///   one leftward: `allowedDirection`); the panel's and the overlay's swipes wait for it
+///   there (`PhoneBackSwipe.yieldsToRows`, `SidebarOverlay`) and take the rest;
 /// - an open row takes horizontal swipes anywhere on it (they close it), and pans
-///   around it (the pager's) wait for it.
+///   around it (the panel's) wait for it;
+/// - the iPad overlay's swipe left (it puts the sidebar away) goes before a row's, but
+///   not where the row goes first (`goesFirst`: a touch at its trailing edge, a swipe
+///   left there being its Close; an open row; an `edgeOnly` row's edges);
+/// - a mostly horizontal move toward a side with nothing to uncover fails it at once
+///   (4 pt), so what waits for it (the panel's swipe) doesn't wait for its 25 pt.
 struct PhoneRowPan: UIGestureRecognizerRepresentable {
     var edgeOnly: Bool
     var width: CGFloat
@@ -247,6 +256,7 @@ struct PhoneRowPan: UIGestureRecognizerRepresentable {
 
     func makeUIGestureRecognizer(context: Context) -> PhoneRowPanRecognizer {
         let pan = PhoneRowPanRecognizer()
+        pan.edgeOnly = edgeOnly
         pan.delegate = context.coordinator
         pan.canBegin = { [weak coordinator = context.coordinator] direction in
             coordinator?.parent.canBegin(direction) ?? false
@@ -256,6 +266,7 @@ struct PhoneRowPan: UIGestureRecognizerRepresentable {
 
     func updateUIGestureRecognizer(_ pan: PhoneRowPanRecognizer, context: Context) {
         context.coordinator.parent = self
+        pan.edgeOnly = edgeOnly
     }
 
     func handleUIGestureRecognizerAction(_ pan: PhoneRowPanRecognizer, context: Context) {
@@ -285,11 +296,27 @@ struct PhoneRowPan: UIGestureRecognizerRepresentable {
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             let p = parent
-            guard p.edgeOnly, !p.isOpen, p.width > 0 else { return true }
+            let pan = g as? PhoneRowPanRecognizer
+            pan?.allowedDirection = nil
+            pan?.rowOpen = p.isOpen
+            pan?.fromTrailingEdge = false
+            guard p.width > 0 else { return true }
             // SwiftUI's global space is its hosting view's (the screen's), not the window's.
             let x = converter.convert(globalPoint: touch.location(in: g.view?.controllerRoot), to: .local).x
             let e = PhoneRowPan.edgeZone(p.width)
-            return x < e || x > p.width - e
+            let leading = x >= PhoneBackSwipeRecognizer.edge && x < e, trailing = x > p.width - e
+            pan?.fromTrailingEdge = trailing
+            guard p.edgeOnly, !p.isOpen else { return true }
+            // Away from the edge it starts at.
+            if leading {
+                pan?.allowedDirection = 1
+                return true
+            }
+            if trailing {
+                pan?.allowedDirection = -1
+                return true
+            }
+            return false
         }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
@@ -309,6 +336,19 @@ struct PhoneRowPan: UIGestureRecognizerRepresentable {
 /// the finger's over its last 80 ms.
 final class PhoneRowPanRecognizer: UIGestureRecognizer {
     var canBegin: ((CGFloat) -> Bool)?
+    /// Its row's swipes start only at its edges (`PhoneRowPan.edgeOnly`).
+    var edgeOnly = false
+    /// The one way this touch may swipe (+1 right, -1 left; its edge zone's), or any (nil).
+    var allowedDirection: CGFloat?
+    /// This touch came down in the row's trailing edge zone (a swipe left there is its Close).
+    var fromTrailingEdge = false
+    /// The row was open as the touch came down.
+    var rowOpen = false
+
+    /// Where it has the touch, it goes before the iPad overlay's swipe left (which puts the
+    /// sidebar away): an edge-only row (it takes only its edges' touches), an open row,
+    /// a touch at its trailing edge.
+    var goesFirst: Bool { edgeOnly || rowOpen || fromTrailingEdge }
     private(set) var translation: CGFloat = 0
     private(set) var velocity: CGFloat = 0
     /// +1 right, -1 left.
@@ -339,6 +379,11 @@ final class PhoneRowPanRecognizer: UIGestureRecognizer {
         switch state {
         case .possible:
             if abs(dy) > 10 && abs(dy) >= abs(dx) { state = .failed; return }
+            // Nothing to uncover that way (or not from this edge): let what waits for it go now.
+            if abs(dx) >= 4, abs(dx) > abs(dy) {
+                let way: CGFloat = dx < 0 ? -1 : 1
+                if canBegin?(way) == false || allowedDirection.map({ $0 != way }) == true { state = .failed; return }
+            }
             if abs(dx) >= Self.slop && abs(dx) > abs(dy) {
                 direction = dx < 0 ? -1 : 1
                 if canBegin?(direction) == false { state = .failed; return }

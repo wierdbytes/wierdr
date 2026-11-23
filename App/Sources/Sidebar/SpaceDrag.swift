@@ -412,9 +412,9 @@ final class ListPressRecognizer: UIGestureRecognizer {
 }
 
 /// The list's long press (`ListPressRecognizer`, on the list's view, `SpacesListView`, where
-/// its scrolling pan is): a header's or a row's menu (`ListMenuOverlay`, the item drawn
-/// afresh: each block's host is upside down, a picture of it would be too), and dragging a
-/// card by its header. Held, a header shows
+/// its scrolling pan is; or on the agents panel's, which has rows only): a header's or a
+/// row's menu (`ListMenuOverlay`, the item drawn afresh: each block's host is upside down,
+/// a picture of it would be too), and dragging a card by its header. Held, a header shows
 /// its menu; moved on away from the menu, its card lifts out of the list and follows
 /// the finger (`LiftedCard`, over the window, so off the list too), the list scrolling
 /// while the finger is near its top or bottom; let go over the list, it lands in its
@@ -422,7 +422,9 @@ final class ListPressRecognizer: UIGestureRecognizer {
 @MainActor
 final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
     var drag: SpaceDrag
-    private(set) weak var list: SpacesListView?
+    /// The view it's on: the spaces list's (`SpacesListView`, which scrolls under a dragged
+    /// card), or the agents panel's.
+    private(set) weak var list: UIView?
     private lazy var press: ListPressRecognizer = {
         let press = ListPressRecognizer(target: self, action: #selector(pressed(_:)))
         press.delegate = self
@@ -467,7 +469,7 @@ final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
         super.init()
     }
 
-    func attach(list: SpacesListView) {
+    func attach(list: UIView) {
         guard self.list !== list else { return }
         detach()
         self.list = list
@@ -694,7 +696,7 @@ final class SpaceListDragDrop: NSObject, UIGestureRecognizerDelegate {
     /// Near the list's visible top or bottom (its insets: the status bar's, the
     /// header's), it scrolls that way, faster nearer the edge.
     private func autoscroll() {
-        guard let list, let window = list.window, dropping else { return }
+        guard let list = list as? SpacesListView, let window = list.window, dropping else { return }
         let p = list.convert(finger, from: window)
         let area = list.contentArea
         let zone: CGFloat = 70, most: CGFloat = 14

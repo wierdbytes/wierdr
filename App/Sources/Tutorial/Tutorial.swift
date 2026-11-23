@@ -244,8 +244,9 @@ final class Tutorial {
         }
     }
 
-    /// Takes the app to `place`: the host list (the session left), the list, an agent's
-    /// pane screen, a sub-agent shown in its parent's place. Dialogs and sheets go.
+    /// Takes the app to `place`: the host list (the session left), the list, the agents
+    /// panel, an agent's pane screen, a sub-agent shown in its parent's place. Dialogs and
+    /// sheets go.
     private func prepare(_ place: TutorialPlace, _ ctx: TutorialContext) {
         if place == .connect {
             if ctx.app.session != nil { Task { await ctx.app.disconnect() } }
@@ -256,14 +257,16 @@ final class Tutorial {
         let ws = c.workspace
         switch place {
         case .list:
-            c.showSwitcher = false
+            c.closePeek()
+            if c.showAgents { c.closeAgents() }
+            if c.compactColumn != .sidebar { c.showSidebar() }
+        case .agents:
             c.closePeek()
             if c.compactColumn != .sidebar { c.showSidebar() }
+            if !c.showAgents { c.openAgents() }
         case .pane(let address):
-            c.showSwitcher = false
             if let at = ws.pane(showing: address) { c.focus(pane: at.pane.id) }
         case .peek(let address, let parent):
-            c.showSwitcher = false
             if let at = ws.pane(showing: parent),
                let kid = ws.subtree(of: parent).first(where: { $0.terminal.address == address }) {
                 c.open(kid, from: at.pane.id)

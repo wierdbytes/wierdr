@@ -59,6 +59,17 @@ import Testing
         #expect(page.agents.first { $0.row.paneID == "pa3" }?.row.subtree.map(\.terminal.address) == ["k1"])
     }
 
+    /// The agents panel: by status (an agent's own or its sub-agents'), pinned first in each,
+    /// then the newest; the inbox's groups in one list.
+    @Test func agentsByStatusIsTheInboxsOrder() {
+        let ws = workspace()
+        #expect(ws.agentsByStatus.map(\.row.paneID) == ["pa1", "pa5", "pb1", "pa4", "pa3", "pb3", "pb2", "pa2"])
+        #expect(ws.inbox.flatMap(\.items).map(\.row.paneID) == ws.agentsByStatus.map(\.row.paneID))
+        // A sub-agent's status lifts its agent: a2 waits for you through its own.
+        ws.terminals["k2"] = agent("k2", .blocked, ago: 1, parent: "a2")
+        #expect(ws.agentsByStatus.map(\.row.paneID).prefix(2) == ["pa2", "pa1"])
+    }
+
     @Test func aSpaceIsItsAgentsThenItsOtherPanes() {
         let ws = workspace()
         let a = ws.phoneList(space: "spA")

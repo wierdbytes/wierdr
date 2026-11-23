@@ -130,24 +130,50 @@ extension Workspace {
     /// Every agent with a pane (all spaces and computers), grouped by what it
     /// needs: needs you, done, working, idle (an agent goes where its most urgent
     /// sub-agent would). Inside a group: pinned first, then the most recent
-    /// status change. Empty groups are left out.
+    /// status change (`InboxOrder`). Empty groups are left out.
     public var inbox: [InboxGroup] {
         var byStatus: [AgentStatus: [InboxItem]] = [:]
         for space in spaces {
             for row in sidebarRows(for: space) where row.kind == .agent {
-                guard let status = row.urgency ?? row.terminal?.status else { continue }
+                guard let status = InboxOrder.status(row) else { continue }
                 byStatus[status, default: []].append(InboxItem(row: row, space: space))
             }
         }
         return [AgentStatus.blocked, .done, .working, .idle].compactMap { status in
             guard let items = byStatus[status], !items.isEmpty else { return nil }
-            return InboxGroup(status: status, items: items.sorted { a, b in
-                let ta = a.row.terminal, tb = b.row.terminal
-                if ta?.pinned != tb?.pinned { return ta?.pinned == true }
-                let da = ta?.statusChangedAt ?? .distantPast, db = tb?.statusChangedAt ?? .distantPast
-                if da != db { return da > db }
-                return a.row.paneID < b.row.paneID
-            })
+            return InboxGroup(status: status, items: items.sorted(by: InboxOrder.before))
         }
+    }
+
+    /// Every agent with a pane in the inbox's order, as one list (the agents panel's):
+    /// needs you, done, working, idle, then those with no status yet; in each, pinned
+    /// first, then the most recent status change.
+    public var agentsByStatus: [InboxItem] {
+        var items: [InboxItem] = []
+        for space in spaces {
+            for row in sidebarRows(for: space) where row.kind == .agent {
+                items.append(InboxItem(row: row, space: space))
+            }
+        }
+        return items.sorted(by: InboxOrder.before)
+    }
+}
+
+/// The inbox's order: by status (an agent's own, or its most urgent sub-agent's), the
+/// most urgent first and none last; then pinned first; then the latest status change.
+public enum InboxOrder {
+    /// What an agent's row needs: its own status or its most urgent sub-agent's.
+    public static func status(_ row: SidebarRow) -> AgentStatus? {
+        row.urgency ?? row.terminal?.status
+    }
+
+    public static func before(_ a: InboxItem, _ b: InboxItem) -> Bool {
+        let ua = status(a.row).map { $0.rawValue + 1 } ?? 0, ub = status(b.row).map { $0.rawValue + 1 } ?? 0
+        if ua != ub { return ua > ub }
+        let ta = a.row.terminal, tb = b.row.terminal
+        if ta?.pinned != tb?.pinned { return ta?.pinned == true }
+        let da = ta?.statusChangedAt ?? .distantPast, db = tb?.statusChangedAt ?? .distantPast
+        if da != db { return da > db }
+        return a.row.paneID < b.row.paneID
     }
 }

@@ -125,7 +125,7 @@ make install                          # свежая сборка на iPad (mak
 scripts/ipad.sh start                 # WebDriverAgent на iPad (USB: проброс :8100, иначе Tailscale)
 scripts/ipad.sh shot /tmp/ipad.png    # скриншот (devicectl по USB, иначе через WDA)
 scripts/ipad.sh tree                  # дерево элементов с рамками в точках (1600×1200 в landscape)
-scripts/ipad.sh tap "Quick Switcher"  # тап по accessibility label
+scripts/ipad.sh tap Agents            # тап по accessibility label (кольцо статусов: панель агентов)
 scripts/ipad.sh tap-xy 800 336        # тап по точке; long-press, swipe x1 y1 x2 y2
 scripts/ipad.sh type lazy             # ввод в поле/терминал с фокусом клавиатуры
 scripts/ipad.sh orient portrait       # повернуть экран
@@ -150,6 +150,12 @@ make ipa && scripts/iphone.sh install # поставить dist/Wierdr.ipa и з
 - Сессия WDA цепляется к приложению на переднем плане и не перезапускает Wierdr.
   Перезапуск приложения: `launch`.
 - Скриншот iPad — 3200×2400 px (2× от точек), iPhone — 1284×2778 (3×).
+- Свайп назад (экран панели, панель агентов) проверяй быстрым `swipe … 100`–`120` мс: в конце
+  `swipe` WDA палец плавно тормозит, и правило отпускания (`PhonePopTracker`) читает это как
+  отмену — медленный (250 мс) свайп на устройстве нередко возвращает экран, в симуляторе нет.
+- Печать в консоль приложения на устройстве (без USB `idevicesyslog` его не видит):
+  `xcrun devicectl device process launch --device <udid> --terminate-existing --console pw.xff.wierdr > log`
+  — перезапускает Wierdr и пишет его stdout/stderr (`NSLog`) в файл, пока команда жива.
 - При запуске WDA система может спросить код-пароль устройства: так она подтверждает UI
   Automation. Отключить запрос можно только вместе с код-паролем. Разрешение живёт
   от нескольких часов до нескольких дней, а запрос появляется только на `start`: запросы к
@@ -177,8 +183,7 @@ xcrun xctrace export --input /tmp/x.trace --xpath \
 - Жесты — WDA: `scripts/iphone.sh swipe 214 760 214 260 120` — бросок. Снимок доступности WDA
   (~0,4 с главного потока) идёт до жеста, не во время движения; но с WDA в приложении включена
   доступность, и SwiftUI ведёт её дерево (сверху ~10–20 % главного потока) — сравнивай замеры с
-  WDA только между собой. Бросок к началу, когда список уже у начала, — вытягивание Go to:
-  чередуй броски к концу и к началу.
+  WDA только между собой. Чередуй броски к концу и к началу.
 - Таблицы: `hitches-renders` — кадры render server (интервалы 8,33 мс — 120 Гц, 12,5 — 80,
   16,7 — 60; время кадра, offscreen‑проходы), `hitches` — пропуски, `time-profile` — сэмплы
   потоков (по 1 мс, только пока поток работает), `os-signpost` — свои signpost'ы (Points of
@@ -199,7 +204,7 @@ WebDriverAgent на порту 8200 (iPad‑овский остаётся на 8
 ```sh
 make sim-iphone                         # сборка + симулятор + демо
 scripts/iphone-sim.sh start             # WebDriverAgent в симуляторе (один раз за сессию)
-scripts/iphone-sim.sh launch -demo YES  # (-open pane|banner|switcher|settings — сразу туда)
+scripts/iphone-sim.sh launch -demo YES  # (-open pane|banner|agents|find|settings — сразу туда; find — как ⌘P)
 scripts/iphone-sim.sh launch -tour YES  # тур с начала; -tour message — с шага (id в TutorialSteps.swift, демо откроется само)
 scripts/iphone-sim.sh tap "Agents"      # по accessibility label; tap-xy в точках (428×926)
 scripts/iphone-sim.sh swipe 2 500 300 500   # свайп назад от края

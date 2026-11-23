@@ -56,8 +56,8 @@ private struct PreviewHost<Content: View>: View {
     }
 }
 
-#Preview("Quick switcher") {
-    PreviewHost { _ in QuickSwitcher() }
+#Preview("Agents panel") {
+    PreviewHost { _ in AgentsPanel() }
 }
 
 #Preview("Connect") {

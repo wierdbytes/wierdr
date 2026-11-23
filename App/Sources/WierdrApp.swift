@@ -56,10 +56,11 @@ struct WierdrApp: App {
                 // The first launch: the tour, on the host list.
                 Tutorial.shared.startIfFirstLaunch()
                 #if DEBUG
-                // `-open switcher|settings|space:<id>|agent:<address>` (screenshots).
+                // `-open agents|find|settings|space:<id>|agent:<address>` (screenshots; `find`
+                // as ⌘P: the agents panel with its search field focused).
                 if let open = UserDefaults.standard.string(forKey: "open"), let s = app.session {
                     try? await Task.sleep(for: .milliseconds(600))
-                    if open == "switcher" { s.showSwitcher = true }
+                    if open == "agents" || open == "find" { s.openAgents(search: open == "find") }
                     if open == "settings" { s.showSettings = true }
                     // iPhone: the first agent's pane (also before `banner`).
                     if open == "pane" || open == "banner",

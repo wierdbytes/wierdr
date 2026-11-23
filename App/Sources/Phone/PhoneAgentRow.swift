@@ -25,14 +25,14 @@ enum PhoneRowMetrics {
 ///    sub-agents (`KidCounts`: the whole tree's, with those run in-process; tap: fold or
 ///    unfold them) and its own terminals (with its background shells; tap: show or hide
 ///    them, folded until then; its sub-agents' are on their rows); on the right its
-///    space's name on a gray chip as theirs (in Go to; cut when room runs out) and the
+///    space's name on a gray chip as theirs (in the agents panel; cut when room runs out) and the
 ///    pin glyph.
 /// With rows of its tree over it, their line comes down its ring's axis into its top.
 struct PhoneAgentRowContent: View {
     var terminal: TerminalInfo
     var tab: Tab?
     var space: Space
-    /// The space's name on line 2 (Go to, where rows of all spaces mix; a card names its space).
+    /// The space's name on line 2 (the agents panel, where rows of all spaces mix; a card names its space).
     var showsSpace: Bool
     /// Its tree (`SidebarRow.tree`, all of it): sub-agents, terminals, records.
     var tree: [TreeNode]
@@ -112,7 +112,7 @@ struct PhoneAgentRowContent: View {
     }
 
     /// The context's ring, model, @effort (the model gives way first), the sub-agents' and
-    /// terminals' chips, then on the right the space (Go to) and the pin.
+    /// terminals' chips, then on the right the space (the agents panel) and the pin.
     private var secondLine: some View {
         let counts = KidCounts(terminal: terminal, tree: tree)
         let address = terminal.address

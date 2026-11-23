@@ -8,6 +8,8 @@ enum TutorialPlace: Equatable {
     case connect
     /// The demo's list screen.
     case list
+    /// The agents panel over the list screen's spaces.
+    case agents
     /// The demo's pane screen showing this terminal.
     case pane(String)
     /// A sub-agent shown on the pane screen in its parent's place (its address, its parent's).
@@ -18,7 +20,7 @@ enum TutorialPlace: Equatable {
 
 /// What the pointer shows a finger doing on the anchor (and the symbol by the card's action).
 enum TutorialGesture {
-    case tap, hold, swipeLeft, swipeRight, pullUp
+    case tap, hold, swipeLeft, swipeRight
 
     var symbol: String {
         switch self {
@@ -26,7 +28,6 @@ enum TutorialGesture {
         case .hold: return "hand.point.up.left.fill"
         case .swipeLeft: return "arrow.left"
         case .swipeRight: return "arrow.right"
-        case .pullUp: return "arrow.up"
         }
     }
 }
@@ -79,28 +80,35 @@ struct TutorialContext {
 
     func terminal(_ address: String) -> TerminalInfo? { workspace?.terminal(address) }
 
-    /// The list screen, nothing over it.
+    /// The list screen, its spaces, nothing over them.
     var onList: Bool {
         guard let c = controller else { return false }
-        return c.compactColumn == .sidebar && !c.showSwitcher && !c.showSettings
+        return c.compactColumn == .sidebar && !c.showAgents && !c.showSettings
+    }
+
+    /// The list screen with the agents panel over its spaces.
+    var onAgents: Bool {
+        guard let c = controller else { return false }
+        return c.compactColumn == .sidebar && c.showAgents && !c.showSettings
     }
 
     /// The pane screen showing `address`'s pane (not a sub-agent in its place).
     func showing(_ address: String) -> Bool {
         guard let c = controller else { return false }
-        return c.compactColumn == .detail && c.peek == nil && !c.showSwitcher && c.focusedPane?.terminal == address
+        return c.compactColumn == .detail && c.peek == nil && c.focusedPane?.terminal == address
     }
 
     /// The pane screen showing the sub-agent `address`.
     func peeking(_ address: String) -> Bool {
         guard let c = controller else { return false }
-        return c.compactColumn == .detail && c.peek == address && !c.showSwitcher
+        return c.compactColumn == .detail && c.peek == address
     }
 
     func isIn(_ place: TutorialPlace) -> Bool {
         switch place {
         case .connect: return app.session == nil
         case .list: return onList && controller?.peek == nil
+        case .agents: return onAgents && controller?.peek == nil
         case .pane(let address): return showing(address)
         case .peek(let address, _): return peeking(address)
         case .anywhere: return true
@@ -207,8 +215,9 @@ extension TutorialStep {
     /// the space folded (its agent is done: the folded header shows it).
     private static let agent = "t5w", scout = "t60", folded = "sp3"
 
-    /// From the host list into the demo: the list, someone who needs you answered, a
-    /// message to an agent, a row's swipe, Go to and the limits; at the end what to remember.
+    /// From the host list into the demo: the list, someone who needs you found in the
+    /// agents panel and answered, a message to an agent, a row's swipe, the panel's search
+    /// and the limits; at the end what to remember.
     static let phone: [TutorialStep] = [
         TutorialStep(
             id: "welcome", place: .connect, title: "Welcome to Wierdr",
@@ -248,8 +257,14 @@ extension TutorialStep {
         TutorialStep(
             id: "ring", chapter: .needsYou, place: .list, title: "The status ring",
             text: "The ring has a dash per agent, the most urgent first. The number counts those who need you.",
-            action: "Tap the ring to go to the first",
+            action: "Tap the ring",
             anchor: .statusRing, gesture: .tap,
+            done: { $0.onAgents }, settle: 0.3),
+        TutorialStep(
+            id: "agents", chapter: .needsYou, place: .agents, title: "Every agent",
+            text: "By status: whoever needs you is lowest, by your thumb, its sub-agents over it. The field at the bottom searches them.",
+            action: "Tap the one that needs you",
+            anchor: .panelRow(scout), gesture: .tap, spotlight: [.panelRow(agent)],
             done: { $0.peeking(scout) }, settle: 0.4),
         TutorialStep(
             id: "keys", chapter: .needsYou, place: .peek(scout, parent: agent), title: "Answer without the keyboard",
@@ -266,10 +281,16 @@ extension TutorialStep {
                                    when: { !$0.signals.keys.open })],
             done: { $0.terminal(scout)?.status != .blocked }, settle: 1.0),
         TutorialStep(
-            id: "back", chapter: .needsYou, place: .peek(scout, parent: agent), title: "Back to the list",
+            id: "back", chapter: .needsYou, place: .peek(scout, parent: agent), title: "Back to the agents",
             text: "The badge on \u{2039} tells how many others need you (or are done), in their status's color.",
             action: "Tap \u{2039}, or swipe right anywhere",
             anchor: .paneBack, gesture: .tap, also: [.terminal, .keys],
+            done: { $0.onAgents || $0.onList }, settle: 0.3),
+        TutorialStep(
+            id: "spaces", chapter: .needsYou, place: .agents, title: "Back to your spaces",
+            text: "The panel waits where you left it, until you put it away.",
+            action: "Swipe right anywhere",
+            anchor: .agentsPanel, gesture: .swipeRight,
             done: { $0.onList }, settle: 0.3),
 
         // Talk to an agent.
@@ -310,22 +331,27 @@ extension TutorialStep {
             phases: [TutorialPhase(action: "Tap Pin", pointer: .swipeButton("pin"), gesture: .tap)],
             done: { $0.terminal(agent)?.pinned == true }, settle: 1.2),
         TutorialStep(
-            id: "pull", chapter: .tidy, place: .list, title: "Go to",
-            text: "Search every agent and space, without reaching for the top of the screen.",
-            action: "Pull the list up",
-            anchor: .list, gesture: .pullUp,
-            done: { $0.controller?.showSwitcher == true }, settle: 0.3),
+            id: "find", chapter: .tidy, place: .list, title: "Find an agent",
+            text: "The ring's panel searches every agent, without reaching for the top of the screen.",
+            action: "Tap the ring",
+            anchor: .statusRing, gesture: .tap,
+            done: { $0.onAgents }, settle: 0.3),
         TutorialStep(
-            id: "go-to", chapter: .tidy, place: .anywhere, title: "Find anything",
-            text: "Type a few letters of an agent or a space, try \u{201C}login\u{201D}. A tap on a result opens it.",
-            action: "Swipe right to close Go to", gesture: .swipeRight,
+            id: "search", chapter: .tidy, place: .anywhere, title: "Search",
+            text: "Tap the field and type a few letters of an agent, try \u{201C}login\u{201D}. A tap on a result opens it.",
+            action: "Swipe right to put it away", gesture: .swipeRight,
             free: true, card: .top,
-            done: { $0.controller?.showSwitcher == false }, settle: 0.3),
+            done: { $0.onList || $0.controller?.compactColumn == .detail }, settle: 0.3),
         TutorialStep(
-            id: "result-back", chapter: .tidy, place: .anywhere, title: "Back to the list",
-            text: "Go to opened it right here.",
+            id: "result-back", chapter: .tidy, place: .anywhere, title: "Back to the agents",
+            text: "It opened right here, over the panel.",
             action: "Tap \u{2039}, or swipe right anywhere",
             anchor: .paneBack, gesture: .tap, also: [.terminal], extra: true,
+            done: { $0.onAgents || $0.onList }, settle: 0.3),
+        TutorialStep(
+            id: "result-spaces", chapter: .tidy, place: .anywhere, title: "Back to your spaces",
+            action: "Swipe right anywhere",
+            anchor: .agentsPanel, gesture: .swipeRight, extra: true,
             done: { $0.onList }, settle: 0.3),
 
         // The limits.
@@ -352,7 +378,7 @@ extension TutorialStep {
             bullets: [
                 TutorialBullet(mark: .symbol("arrow.left"), text: "Swipe left on a terminal: keys"),
                 TutorialBullet(mark: .symbol("arrow.right"), text: "Swipe right: back"),
-                TutorialBullet(mark: .symbol("arrow.up"), text: "Pull the list up: Go to"),
+                TutorialBullet(mark: .symbol("circle.dashed"), text: "Tap the ring: every agent, and a search"),
                 TutorialBullet(mark: .symbol("hand.point.up.left.fill"), text: "Touch and hold a row: its menu"),
                 TutorialBullet(mark: .symbol("plus"), text: "A new space, Settings and this tour"),
             ],
