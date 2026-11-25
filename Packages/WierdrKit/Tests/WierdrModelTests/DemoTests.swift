@@ -31,4 +31,23 @@ import Testing
         ws.markSeen(["t60"])
         #expect(ws.terminal("t60")?.status == .blocked)
     }
+
+    /// As the engine's: a turn on screen is seen once, so Mark Unread on the agent in front
+    /// sticks (its status changed, the screen is reported again); its next turn is seen.
+    @Test func markedUnreadOnScreenStaysUnread() {
+        let ws = Workspace.preview()
+        ws.markSeen(["t7a"])
+        #expect(ws.terminal("t7a")?.status == .idle)
+        ws.markUnread("t7a")
+        ws.markSeen(["t7a"])
+        #expect(ws.terminal("t7a")?.status == .done)
+        ws.changeLocally("t7a") { $0.status = .done; $0.turn += 1 }
+        ws.markSeen(["t7a"])
+        #expect(ws.terminal("t7a")?.status == .idle)
+        // Off screen and back: seen again.
+        ws.markUnread("t7a")
+        ws.markSeen([])
+        ws.markSeen(["t7a"])
+        #expect(ws.terminal("t7a")?.status == .idle)
+    }
 }

@@ -167,6 +167,12 @@ struct TabPill: View {
         return t.isAgent ? Format.agentTitle(t, tab: tab) : Format.processName(t)
     }
 
+    /// Its agents' most urgent status, read from their terminals (as the engine's
+    /// `Tab.status`, which the demo's local changes don't redo).
+    static func status(of tab: Tab, in ws: Workspace) -> AgentStatus? {
+        AgentStatus.rollup(tab.panes.map { ws.terminal($0.terminal)?.status })
+    }
+
     /// Needs you, done, working: its color; idle or none: no line.
     static func keyline(_ status: AgentStatus?, theme: Theme) -> Color? {
         guard let status, status != .idle else { return nil }
@@ -175,6 +181,7 @@ struct TabPill: View {
 
     var body: some View {
         let face = TabFace(tab: tab, controller: controller)
+        let status = Self.status(of: tab, in: workspace)
         let shape = Capsule()
         let slot = drag?.dragged == tab.id
         let shrunk = drag?.pressing == tab.id
@@ -183,7 +190,7 @@ struct TabPill: View {
             // The status on the glass, not through it.
             .overlay {
                 shape.strokeBorder(lineWidth: 1.5)
-                    .animation(.easeInOut(duration: 0.25)) { $0.foregroundStyle(Self.keyline(tab.status, theme: theme) ?? .clear) }
+                    .animation(.easeInOut(duration: 0.25)) { $0.foregroundStyle(Self.keyline(status, theme: theme) ?? .clear) }
                     .allowsHitTesting(false)
             }
             .contentShape(shape)
@@ -208,7 +215,7 @@ struct TabPill: View {
             .hoverEffect(.highlight)
             .onTapGesture { controller.select(tab: tab) }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Tab \(face.title)\(tab.status.map { ", " + Format.statusWord($0) } ?? "")")
+            .accessibilityLabel("Tab \(face.title)\(status.map { ", " + Format.statusWord($0) } ?? "")")
             .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
             // VoiceOver: the menu's items as the tab's actions.
             .accessibilityActions {
@@ -280,7 +287,7 @@ struct TabPicture: View {
     var body: some View {
         let isActive = controller.activeTab?.id == tab.id
         let shape = Capsule()
-        let keyline = TabPill.keyline(tab.status, theme: theme)
+        let keyline = TabPill.keyline(TabPill.status(of: tab, in: controller.workspace), theme: theme)
         TabLabel(face: TabFace(tab: tab, controller: controller), isActive: isActive,
                  zoomed: controller.screen.zoomedPane(of: tab) != nil)
             .frame(maxWidth: .infinity, maxHeight: .infinity)

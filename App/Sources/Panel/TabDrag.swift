@@ -581,18 +581,19 @@ final class TabDragDrop: NSObject, UIGestureRecognizerDelegate {
 
 // MARK: - The menu's items
 
-/// A tab's menu (`TabDragDrop`, VoiceOver's actions on the tab): Rename…; its focused
-/// pane's Split Right / Down, Zoom (with more than one pane, under the pane's name, or
-/// while zoomed); Close Pane (with more than one; else it's the tab), Close Tab. No New Tab:
-/// the bar's + has it.
+/// A tab's menu (`TabDragDrop`, VoiceOver's actions on the tab): Mark Idle or Mark Unread (as
+/// the sidebar's rows', `unread`), Rename…; its focused pane's Split Right / Down, Zoom (with
+/// more than one pane, under the pane's name, or while zoomed); Close Pane (with more than
+/// one; else it's the tab), Close Tab. No New Tab: the bar's + has it.
 @MainActor
 enum TabMenu {
     static func menu(tab id: String, controller: WorkspaceController) -> PhoneMenu {
         let ws = controller.workspace
         guard let tab = ws.tab(id) else { return [] }
-        var menu: PhoneMenu = [[
-            PhoneMenuItem(title: "Rename…", icon: .asset("ui.square-pen")) { controller.beginRename(tab: id) },
-        ]]
+        var first: [PhoneMenuItem] = []
+        if let unread = unread(tab, controller: controller) { first.append(unread) }
+        first.append(PhoneMenuItem(title: "Rename…", icon: .asset("ui.square-pen")) { controller.beginRename(tab: id) })
+        var menu: PhoneMenu = [first]
         let closeTab = PhoneMenuItem(title: "Close Tab", icon: .asset("ui.x"), destructive: true) { controller.closeTab(id) }
         guard let pane = controller.screen.focusedPane(of: tab) else { return menu + [[closeTab]] }
         let split = tab.panes.count > 1
@@ -616,5 +617,22 @@ enum TabMenu {
         }
         menu.append(close + [closeTab])
         return menu
+    }
+
+    /// As the sidebar's rows: while the tab is done (an agent of it is, its keyline green),
+    /// Mark Idle (every done agent of it, `herdr.seen = turn`); else Mark Unread for the agent
+    /// it's named after (`TabPill.subject`) when it's idle and can be (not a Codex saying
+    /// idle); the active tab's too, as the sidebar's row of the agent on screen.
+    private static func unread(_ tab: Tab, controller: WorkspaceController) -> PhoneMenuItem? {
+        let ws = controller.workspace
+        let done = tab.panes.compactMap { ws.terminal($0.terminal) }.filter { $0.isAgent && $0.status == .done }
+        if !done.isEmpty {
+            return PhoneMenuItem(title: "Mark Idle", icon: .system("circle")) {
+                for t in done { controller.markRead(t.address) }
+            }
+        }
+        guard let pane = TabPill.subject(of: tab, focused: controller.screen.focusedPane(of: tab), in: ws),
+              let t = ws.terminal(pane.terminal), t.isAgent, t.status == .idle, t.canMarkUnread else { return nil }
+        return PhoneMenuItem(title: "Mark Unread", icon: .system("circle.fill")) { controller.markUnread(t.address) }
     }
 }

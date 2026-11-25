@@ -90,6 +90,8 @@ public final class Workspace {
 
     /// Who started whom, for this snapshot (rebuilt after spaces or terminals change).
     @ObservationIgnored private var index: SubAgentIndex?
+    /// The demo's: the turn of each agent on screen that's been seen (`markSeen`).
+    @ObservationIgnored private var looked: [String: Int] = [:]
 
     var subAgents: SubAgentIndex {
         // Read both every time: a view that only asks the (unobserved) cache still
@@ -242,9 +244,16 @@ public final class Workspace {
     /// background): raise their shared `herdr.seen` to their current turn
     /// (clears "done" on every Herdr client).
     public func markSeen(_ addresses: [String]) {
-        // The demo: what's on screen is seen at once, done turning idle as live.
+        // The demo: what's on screen is seen at once, done turning idle as live; and as the
+        // engine's, each turn once while it stays on screen, so one marked unread there stays
+        // unread until its next turn (or until it leaves the screen and comes back).
         if isLocal {
-            for a in addresses where terminals[a]?.status == .done { changeHere(a) { $0.status = .idle } }
+            looked = looked.filter { addresses.contains($0.key) }
+            for a in addresses {
+                guard let t = terminals[a], looked[a] != t.turn else { continue }
+                looked[a] = t.turn
+                if t.status == .done { changeHere(a) { $0.status = .idle } }
+            }
             return
         }
         backend?.markSeen(addresses)
