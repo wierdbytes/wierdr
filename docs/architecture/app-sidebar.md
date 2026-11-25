@@ -106,7 +106,9 @@ growing out of the item's bottom edge; the holding finger lights the item under 
 selection haptic on each change) and runs it let go; a new touch on the menu too; a tap elsewhere
 puts it away (on a lifted row, opens it, the picture fading where it is); a submenu
 (`PhoneMenuItem.children`) takes the page's place with Back on top; away in 0.2 s, the item back
-where the list has it once an item's work is laid out. `ListMenuView`: the glass panel
+where the list has it once an item's work is laid out. Without a picture (`Source.picture` nil: the
+iPad's tabs) the item stays where it is, seen through a hole of its shape in the dim, and only the
+menu moves to fit. `ListMenuView`: the glass panel
 (`UIGlassEffect` on iOS 26+, a material on 18), 220–260 pt, 43-pt items, 20-pt dividers between
 sections, the lit item's pill. `SpaceDrag`: reordering cards by their header, the same press: a
 header's menu, the finger gone off it and off the lifted header (12 pt; 24 pt round the menu), puts

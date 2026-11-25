@@ -12,6 +12,10 @@ import UIKit
 /// `fingerLifted`). A new touch on the menu lights its item at once, and letting go runs
 /// it too; a tap elsewhere puts the menu away, and a tap on a lifted row opens it. An
 /// item runs, and the menu goes in 0.2 s, its item back into its place in the list.
+///
+/// Without a picture (a tab of the iPad's tab bar: its glass can't be drawn afresh, drawn
+/// it looked different), the item itself stays where it is, seen through a hole in the
+/// dim of its shape, and only the menu moves to fit.
 @MainActor
 final class ListMenuOverlay: UIView {
     struct Source {
@@ -19,7 +23,8 @@ final class ListMenuOverlay: UIView {
         var identifier: String
         /// Where it lies, in the window.
         var frame: CGRect
-        var picture: UIImage
+        /// Lifted over the dim; nil: the item stays in place, seen through the dim.
+        var picture: UIImage?
         var radius: CGFloat
         var menu: PhoneMenu
         /// A tap on it lifted (a row: opens it).
@@ -94,18 +99,47 @@ final class ListMenuOverlay: UIView {
     /// The item and the menu under it: in place if they fit, else up together, between the
     /// status bar (+ 8) and the screen's bottom (- 10, over the home indicator). The menu
     /// at the item's left edge if it's in the screen's left half, else at its right edge.
+    /// An item without a picture stays where it is (a tab, by the status bar), the menu
+    /// under it going up over it only in a window too short for both.
     private func layoutBlock(itemSize: CGSize, menuSize: CGSize, from origin: CGRect) -> (item: CGRect, menu: CGRect) {
         let bounds = self.bounds
         let safe = window?.safeAreaInsets ?? .zero
         let top = safe.top + 8, bottom = bounds.height - 10 - safe.bottom
         var y = origin.minY
-        let blockBottom = y + itemSize.height + Self.spacing + menuSize.height
-        if blockBottom > bottom { y -= blockBottom - bottom }
-        y = max(y, top)
+        let lifted = source.picture != nil
+        if lifted {
+            let blockBottom = y + itemSize.height + Self.spacing + menuSize.height
+            if blockBottom > bottom { y -= blockBottom - bottom }
+            y = max(y, top)
+        }
         let itemFrame = CGRect(origin: CGPoint(x: origin.minX, y: y), size: itemSize)
         var x = origin.midX < bounds.midX ? origin.minX + 2 : origin.maxX - 7 - menuSize.width
         x = min(max(x, 12), bounds.width - 12 - menuSize.width)
-        return (itemFrame, CGRect(origin: CGPoint(x: x, y: itemFrame.maxY + Self.spacing), size: menuSize))
+        var menuY = itemFrame.maxY + Self.spacing
+        if !lifted { menuY = max(min(menuY, bottom - menuSize.height), top) }
+        return (itemFrame, CGRect(origin: CGPoint(x: x, y: menuY), size: menuSize))
+    }
+
+    /// No picture: the dim (and the blur) leave the item's shape clear, the item seen
+    /// through them as it is.
+    private func cutHole(_ hole: CGRect) {
+        func mask() -> CAShapeLayer {
+            let path = UIBezierPath(rect: bounds)
+            path.append(UIBezierPath(roundedRect: hole, cornerRadius: source.radius))
+            let layer = CAShapeLayer()
+            layer.frame = bounds
+            layer.path = path.cgPath
+            layer.fillRule = .evenOdd
+            return layer
+        }
+        dim.frame = bounds
+        dim.layer.mask = mask()
+        if let blur {
+            blur.frame = bounds
+            let view = UIView(frame: bounds)
+            view.layer.addSublayer(mask())
+            blur.mask = view
+        }
     }
 
     // MARK: Open
@@ -118,6 +152,7 @@ final class ListMenuOverlay: UIView {
         autoresizingMask = [.flexibleWidth, .flexibleHeight]
         if let sibling { container.insertSubview(self, aboveSubview: sibling) } else { container.addSubview(self) }
         sourceFrame = convert(source.frame, from: nil)
+        if source.picture == nil { cutHole(sourceFrame) }
         let size = menuView.preferredSize
         let (itemFrame, menuFrame) = layoutBlock(itemSize: sourceFrame.size, menuSize: size, from: sourceFrame)
         dim.alpha = 0

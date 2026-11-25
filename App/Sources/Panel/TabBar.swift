@@ -139,8 +139,8 @@ struct TabStripLayout: Layout {
 /// sidebar reads (`subject`); the active one lighter, its text bright; the tab's status (its
 /// most urgent agent's) as a keyline in its color, as the iPhone's title capsule. A tap
 /// selects it. Held, as the sidebar's rows: it shrinks, then its menu (`TabMenu`) over a dim,
-/// the tab lifted; moved on, it's dragged to another place (`TabDrag`): meanwhile its place
-/// is a dashed slot.
+/// the tab seen through it as it is; moved on, it's dragged to another place (`TabDrag`):
+/// meanwhile its place is a dashed slot.
 struct TabPill: View {
     var tab: Tab
     var isActive: Bool
@@ -200,8 +200,9 @@ struct TabPill: View {
             .visualEffect { content, proxy in
                 content.scaleEffect(shrunk ? max(0.7, (proxy.size.width - 15) / max(1, proxy.size.width)) : 1)
             }
-            // Lifted by its menu, or dragged: its picture stands in for it.
-            .opacity(slot || drag?.menuLifted == tab.id ? 0 : 1)
+            // Dragged: its picture stands in for it. With its menu out it stays, seen
+            // through the dim (its glass drawn afresh looked different).
+            .opacity(slot ? 0 : 1)
             .background {
                 if slot {
                     shape.fill(theme.accent.opacity(0.05))
@@ -273,9 +274,9 @@ struct TabLabel: View {
     }
 }
 
-/// A tab drawn afresh for its menu and its drag (`TabDragDrop`): the glass as its drawn
-/// stand-in (opaque, over the panes' ground), or lifted: raised, with an accent edge,
-/// as the sidebar's dragged card.
+/// A tab drawn afresh for its drag (`TabDragDrop`, `LiftedCard`): lifted, raised, with an
+/// accent edge, as the sidebar's dragged card; resting (as it lands), the glass as its drawn
+/// stand-in (opaque, over the panes' ground).
 struct TabPicture: View {
     enum Style { case resting, lifted }
     var tab: Tab

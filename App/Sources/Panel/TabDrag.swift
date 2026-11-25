@@ -3,12 +3,13 @@ import UIKit
 import WierdrModel
 
 /// A tab's long press, as the sidebar's rows' and cards' (`SpaceDrag`, `SpaceListDragDrop`):
-/// held 0.12 s, the tab shrinks; at 0.32 s it's lifted over a dim with its menu under it
-/// (`ListMenuOverlay`, `TabMenu`). Moved on along the bar (or off the tab and its menu),
-/// the menu goes and the tab follows the finger (`LiftedCard`), the space's other tabs
-/// parting round its slot, a dashed capsule as wide as it; let go over the bar, it lands
-/// in its slot and moves there (`tab.move`), off it, it flies back. A pointer's press
-/// moved on drags at once; its secondary click shows the menu at once.
+/// held 0.12 s, the tab shrinks; at 0.32 s a dim comes with its menu under it
+/// (`ListMenuOverlay`, `TabMenu`), the tab itself seen through it where it is (its glass
+/// can't be drawn afresh: a drawn stand-in looked different). Moved on along the bar (or
+/// off the tab and its menu), the menu goes and the tab follows the finger (`LiftedCard`),
+/// the space's other tabs parting round its slot, a dashed capsule as wide as it; let go
+/// over the bar, it lands in its slot and moves there (`tab.move`), off it, it flies back.
+/// A pointer's press moved on drags at once; its secondary click shows the menu at once.
 ///
 /// The press is `ListPressRecognizer` on the window's root view (`TabDragDrop`, attached by
 /// `TabDragHost`), taking only touches on a tab; the tabs' markers (`TabMarker`) say where
@@ -25,7 +26,7 @@ final class TabDrag {
 
     /// The tab held for its menu: it shrinks, Telegram's way.
     var pressing: String?
-    /// The tab the menu has lifted: hidden in the bar meanwhile (its picture is lifted).
+    /// The tab whose menu is out: it stays in the bar, seen through the menu's dim.
     var menuLifted: String? {
         didSet {
             if (menuLifted != nil) != (oldValue != nil) { Tutorial.shared.report(\.listMenu, open: menuLifted != nil) }
@@ -411,11 +412,11 @@ final class TabDragDrop: NSObject, UIGestureRecognizerDelegate {
 
     private func openMenu(for id: String, in window: UIWindow) {
         overlay?.removeFromSuperview()
-        guard let controller = drag.controller, let tab = controller.workspace.tab(id),
-              let frame = drag.frame(of: id, in: window), frame.width > 0,
-              let picture = picture(of: tab, size: frame.size, style: .resting, in: window) else { return }
+        guard let controller = drag.controller, controller.workspace.tab(id) != nil,
+              let frame = drag.frame(of: id, in: window), frame.width > 0 else { return }
+        // No picture: the tab stays in the bar as it is, seen through a hole in the dim.
         let source = ListMenuOverlay.Source(
-            identifier: "tab:\(id)", frame: frame, picture: picture, radius: frame.height / 2,
+            identifier: "tab:\(id)", frame: frame, picture: nil, radius: frame.height / 2,
             menu: TabMenu.menu(tab: id, controller: controller),
             open: { [weak controller] in
                 guard let controller, let tab = controller.workspace.tab(id) else { return }

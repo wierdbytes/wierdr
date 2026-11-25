@@ -36,12 +36,13 @@ docked sidebar and docks the hidden one; the active space's tabs as glass capsul
 as their sidebar rows, `subject`: the focused pane if it runs an agent, else the first agent, else
 the focused one; the status as a keyline; laid out by `TabStripLayout`, whole while they fit, else
 the widest cut to a common width, not under 84 pt, then scrolled; held, the sidebar's own menu and
-drag (`TabDrag.swift`: `TabDrag`, the state, as `SpaceDrag`: pressing, the menu's lifted tab, the
-dragged one shown as a dashed slot, the bar's order meanwhile, `Lane`, until the workspace has it;
-`TabDragDrop` puts `ListPressRecognizer` on the window's root view, taking only touches on a tab,
-`TabMarker`, and shows `ListMenuOverlay` with `TabMenu`: Mark Idle or Mark Unread as the sidebar
-rows', rename, the focused pane's split, zoom and close under its name, close tab; moved along the
-bar, the tab follows the finger as a `LiftedCard`, `TabPicture`, and lands with `tab.move`;
+drag (`TabDrag.swift`: `TabDrag`, the state, as `SpaceDrag`: pressing, the tab whose menu is out,
+the dragged one shown as a dashed slot, the bar's order meanwhile, `Lane`, until the workspace has
+it; `TabDragDrop` puts `ListPressRecognizer` on the window's root view, taking only touches on a
+tab, `TabMarker`, and shows `ListMenuOverlay` with no picture (the tab stays, seen through a hole
+in the dim: its glass can't be drawn afresh) with `TabMenu`: Mark Idle or Mark Unread as the
+sidebar rows', rename, the focused pane's split, zoom and close under its name, close tab; moved
+along the bar, the tab follows the finger as a `LiftedCard`, `TabPicture`, and lands with `tab.move`;
 `TabDragHost` behind the strip attaches it); the tabs' glass not in a container, not interactive;
 the + new menu, `NewMenu`), pane tree with weights (the pane header without buttons: its commands
 are in the tab's menu and its own), pane cards/headers, the message field under the panes
