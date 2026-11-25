@@ -331,6 +331,9 @@ final class ListMenuView: UIView {
 
     private static let font = UIFont.systemFont(ofSize: 17)
     private static var rowHeight: CGFloat { 22 + ceil(font.lineHeight) }
+    /// A section's caption (`PhoneMenuItem.caption`): smaller, dim, at the titles' edge.
+    private static let captionFont = UIFont.systemFont(ofSize: 13)
+    private static var captionHeight: CGFloat { 12 + ceil(captionFont.lineHeight) }
 
     private let dark: Bool
     private let glass: UIVisualEffectView
@@ -468,7 +471,9 @@ final class ListMenuView: UIView {
         let hasSubmenus = sections.joined().contains { $0.children != nil }
         let text = entries.map { entry -> CGFloat in
             switch entry {
-            case .item(let item): return ceil((item.title as NSString).size(withAttributes: [.font: Self.font]).width)
+            case .item(let item):
+                let font = item.caption ? Self.captionFont : Self.font
+                return ceil((item.title as NSString).size(withAttributes: [.font: font]).width)
             case .back: return ceil(("Back" as NSString).size(withAttributes: [.font: Self.font]).width)
             case .separator: return 0
             }
@@ -489,6 +494,15 @@ final class ListMenuView: UIView {
                 height = Self.rowHeight
                 view.addSubview(row(title: "Back", icon: UIImage(systemName: "chevron.left"), color: primary,
                                     chevron: false, frame: CGRect(x: 0, y: y, width: width, height: height)))
+            case .item(let item) where item.caption:
+                height = Self.captionHeight
+                let label = UILabel(frame: CGRect(x: 20, y: y + 4, width: width - 38, height: height - 4))
+                label.text = item.title
+                label.font = Self.captionFont
+                label.textColor = primary.withAlphaComponent(0.5)
+                label.lineBreakMode = .byTruncatingTail
+                label.accessibilityTraits = .header
+                view.addSubview(label)
             case .item(let item):
                 height = Self.rowHeight
                 let color = item.destructive ? destructive : primary

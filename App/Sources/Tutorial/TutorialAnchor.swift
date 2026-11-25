@@ -26,8 +26,6 @@ enum TutorialAnchor: Hashable {
     /// The agents panel over the spaces (all of it), and a row there (its agent's or
     /// sub-agent's address).
     case agentsPanel, panelRow(String)
-    /// The header's + (its menu: Settings, the iPad's Hide Sidebar, a new space).
-    case sidebarMenu
     // The pane screen.
     case paneTitle, paneBack, composer
     /// The terminal in front: the iPhone's pane screen's, the iPad's focused pane's.
@@ -35,8 +33,8 @@ enum TutorialAnchor: Hashable {
     /// The key panel, and its ⏎.
     case keys, keyEnter
     // The iPad's split view.
-    /// The tab bar's sidebar button, while the sidebar is hidden.
-    case showSidebar
+    /// The tab bar's sidebar button: hides the docked sidebar, docks the hidden one.
+    case sidebarButton
     /// The sidebar slid over the panes (`SidebarOverlay`).
     case sidebarOverlay
     /// A sub-agent's window over the panes (`SubAgentPeek`): its terminal, its ✕.

@@ -516,7 +516,7 @@ extension TutorialStep {
             done: { $0.signals.messages > $0.baseline.messages }, settle: 0.3),
         TutorialStep(
             id: "reply", chapter: .talk, place: .pane(split), title: "It's on it",
-            text: "Its status shows on its row, its tab and the ring. A tap on a pane focuses it; its header splits, zooms and closes it.",
+            text: "Its status shows on its row, its tab and the ring. A tap on a pane focuses it; hold its tab to split, zoom or close it.",
             anchor: .terminal,
             phases: [TutorialPhase(action: "It's answering\u{2026}", symbol: "hourglass",
                                    when: { $0.terminal(split)?.status == .working })]),
@@ -524,11 +524,9 @@ extension TutorialStep {
         // Make room.
         TutorialStep(
             id: "hide", chapter: .room, place: .list, title: "Make room",
-            text: "Hide the sidebar for wider panes: + has Hide Sidebar, and so has \u{2318}B on a keyboard.",
-            action: "Tap +, then Hide Sidebar",
-            // Free: the menu is the system's, its items in no hole (the ring and the pointer
-            // make way while it's over the +, `TutorialAnchors.covered`).
-            anchor: .sidebarMenu, gesture: .tap, free: true, card: .center,
+            text: "Hide the sidebar for wider panes: the button left of the tabs, or \u{2318}B on a keyboard.",
+            action: "Tap the sidebar button",
+            anchor: .sidebarButton, gesture: .tap,
             done: { $0.sidebarHidden }, settle: 0.5),
         TutorialStep(
             id: "slide", chapter: .room, place: .bare(split), title: "The sidebar, when you need it",
@@ -540,9 +538,9 @@ extension TutorialStep {
             done: { $0.signals.overlay.opens > $0.baseline.overlay.opens && !$0.signals.overlay.open }, settle: 0.4),
         TutorialStep(
             id: "show", chapter: .room, place: .bare(split), title: "Dock it again",
-            text: "The sidebar button brings it back beside the panes.",
+            text: "The same button brings it back beside the panes.",
             action: "Tap the sidebar button",
-            anchor: .showSidebar, gesture: .tap,
+            anchor: .sidebarButton, gesture: .tap,
             done: { !$0.sidebarHidden }, settle: 0.4),
 
         // The limits.

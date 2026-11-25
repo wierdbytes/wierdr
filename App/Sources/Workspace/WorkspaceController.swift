@@ -186,7 +186,7 @@ final class WorkspaceController {
     }
 
     func toggleSidebar() {
-        // The overlay's own Hide Sidebar button (and ⌘B over it) closes it.
+        // Over the overlay (⌘B, the tab bar's sidebar button) it closes the overlay.
         if sidebarOverlay { return closeSidebarOverlay() }
         // iPhone: the pane screen is pushed over the list, or popped (`PhoneWorkspaceView`).
         if singlePane { compactColumn = compactColumn == .sidebar ? .detail : .sidebar; return }
@@ -429,8 +429,16 @@ final class WorkspaceController {
         }
     }
 
-    func moveTab(_ tabID: String, to index: Int) {
-        run("Move tab") { [workspace] in try await workspace.moveTab(tabID, to: index) }
+    /// A tab dropped in the tab bar (`TabDrag`): to `index` among its space's tabs.
+    func moveTab(_ tabID: String, to index: Int, failed: @escaping @MainActor () -> Void = {}) {
+        run("Move tab") { [workspace] in
+            do {
+                try await workspace.moveTab(tabID, to: index)
+            } catch {
+                failed()
+                throw error
+            }
+        }
     }
 
     /// Pin, unread and idle work in the demo too (its workspace changes them locally).

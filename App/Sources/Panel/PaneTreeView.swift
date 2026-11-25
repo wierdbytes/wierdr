@@ -129,7 +129,8 @@ struct PaneCard: View {
     }
 }
 
-/// The pane header (§8): icon, name, cwd; split/zoom/close buttons on the focused pane.
+/// The pane header (§8): icon, name, cwd. Its split, zoom and close are in its tab's menu
+/// (`TabPill`, for the tab's focused pane) and its own long-press menu.
 struct PaneHeader: View {
     var pane: Pane
     var tab: Tab
@@ -139,7 +140,6 @@ struct PaneHeader: View {
 
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    @State private var hovering = false
 
     var body: some View {
         let home = controller.workspace.home
@@ -162,9 +162,6 @@ struct PaneHeader: View {
                 .truncationMode(.head)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(-1)
-            if focused || hovering {
-                buttons
-            }
         }
         .padding(.horizontal, 10)
         .frame(height: 29)
@@ -173,23 +170,8 @@ struct PaneHeader: View {
         .overlay(alignment: .bottom) { Hairline() }
         .frame(height: 30, alignment: .top)
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
         .onTapGesture { controller.focus(pane: pane.id, reveal: false) }
         .contextMenu { menuItems }
-    }
-
-    private var buttons: some View {
-        HStack(spacing: 2) {
-            headerButton("split-right", "Split Right") { controller.split(.right, pane: pane.id) }
-            headerButton("split-down", "Split Down") { controller.split(.down, pane: pane.id) }
-            headerButton(zoomed ? "unzoom" : "zoom", zoomed ? "Unzoom" : "Zoom") { controller.toggleZoom(pane: pane.id) }
-            headerButton("close", "Close Pane") { controller.closePane(pane.id) }
-        }
-        .padding(.trailing, -4)
-    }
-
-    private func headerButton(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
-        ChromeIconButton(icon: icon, iconSize: 14, frame: 22, radius: 4, color: theme.dim, label: label, action: action)
     }
 
     @ViewBuilder

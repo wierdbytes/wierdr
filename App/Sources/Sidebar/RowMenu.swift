@@ -17,9 +17,17 @@ struct PhoneMenuItem: Identifiable {
     var disabled = false
     /// A submenu: chosen, it takes the menu's place (with a Back item on top).
     var children: PhoneMenu? = nil
+    /// Not an item but its section's caption (small, dim, never chosen): what the items
+    /// under it act on.
+    var caption = false
     var run: () -> Void = {}
 
     var id: String { title }
+
+    /// A section's caption (`caption`).
+    static func caption(_ title: String) -> PhoneMenuItem {
+        PhoneMenuItem(title: title, icon: .system(""), disabled: true, caption: true)
+    }
 }
 
 /// A menu: sections of items, divided by lines.
@@ -44,7 +52,9 @@ struct PhoneMenuButtons: View {
         ForEach(sections.indices, id: \.self) { i in
             if i > 0 { Divider() }
             ForEach(sections[i]) { item in
-                if let children = item.children {
+                if item.caption {
+                    Text(item.title)
+                } else if let children = item.children {
                     Menu {
                         PhoneMenuButtons(menu: children)
                     } label: {

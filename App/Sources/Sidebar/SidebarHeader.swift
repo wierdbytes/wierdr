@@ -7,8 +7,8 @@ import WierdrModel
 /// (`bottomGap`). At its left the subscription limits (`SidebarLimits`: as many rings as
 /// fit; none without data), in its middle the agents' statuses as one ring, whose tap
 /// opens the agents panel (or the connection's state, `SidebarTitle`), at its right, under
-/// the right thumb, + in a glass circle (`SidebarMenu`: a new space, Settings, on the iPad
-/// Hide Sidebar). Placed by `SidebarHeaderRow`.
+/// the right thumb, + in a glass circle (`SidebarMenu`: Settings and a new space).
+/// Placed by `SidebarHeaderRow`.
 struct SidebarHeader: View {
     static let height: CGFloat = 44
     static let sideInset: CGFloat = 16
@@ -28,7 +28,6 @@ struct SidebarHeader: View {
             ComposerGlassGroup {
                 SidebarMenu()
                     .composerGlass(Circle(), theme: theme)
-                    .tutorialAnchor(.sidebarMenu)
             }
         }
         .frame(height: Self.height)
@@ -312,26 +311,19 @@ struct PhoneEdgeFade: View {
 }
 
 /// The header's +, Telegram's compose, the sidebar's one button: its menu opens over it,
-/// top to bottom Settings, on the iPad Hide Sidebar (⌘B), then a new space (a terminal or
-/// an installed agent) in the folder of the last pane you looked at (as the desktop's New
-/// Space), on its computer, the new space's items lowest, nearest the thumb. A new tab
-/// in a space is in its card's menu.
+/// top to bottom Settings, then a new space (a terminal or an installed agent) in the
+/// folder of the last pane you looked at (as the desktop's New Space), on its computer,
+/// the new space's items lowest, nearest the thumb. A new tab in a space is in its card's
+/// menu; the iPad hides its sidebar with the tab bar's sidebar button (or ⌘B).
 struct SidebarMenu: View {
     @Environment(WorkspaceController.self) private var controller
     @Environment(\.theme) private var theme
-    /// The iPad's split view (the sidebar beside the panel): it can be hidden.
-    @Environment(\.isCompactLayout) private var compact
 
     var body: some View {
         let machine = controller.activeSpace?.machine
         Menu {
             Button { controller.showSettings = true } label: {
                 Label { Text("Settings") } icon: { MenuIcon.image("ui.settings") }
-            }
-            if !compact {
-                Button { controller.toggleSidebar() } label: {
-                    Label { Text("Hide Sidebar") } icon: { MenuIcon.image("ui.sidebar") }
-                }
             }
             NewSpaceItems()
         } label: {

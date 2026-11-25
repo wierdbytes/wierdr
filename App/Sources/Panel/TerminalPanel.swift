@@ -1,7 +1,7 @@
 import SwiftUI
 import WierdrModel
 
-/// The work column: tab bar, the active tab's panes on `canvas`, and under
+/// The work column: tab bar (its glass on the panes' ground), the active tab's panes on `canvas`, and under
 /// all of them the message field (`ComposerBar`) for the focused pane, named
 /// in its placeholder (hidden while that terminal has the keyboard itself).
 /// Over the panes, the key panel and the ways it and the keyboards come
@@ -40,7 +40,7 @@ struct TerminalPanel: View {
             .background(theme.canvas.ignoresSafeArea(edges: .bottom))
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { room = $0 }
         }
-        .background(theme.chrome.ignoresSafeArea())
+        .background(theme.canvas.ignoresSafeArea())
         .overlay(alignment: .top) { ConnectionBanner() }
         // Another pane: its keyboard goes (the draft stays with its terminal).
         .onChange(of: address) { controller.closeCompose() }

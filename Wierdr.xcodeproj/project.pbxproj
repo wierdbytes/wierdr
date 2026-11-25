@@ -77,6 +77,7 @@
 		A5D7C1BE74E945F756C69D4D /* AgentsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 091EF73D2E632F989C41B9D3 /* AgentsPanel.swift */; };
 		A8A992B35F53658971A79996 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F884493E41282F237E5D6C75 /* Assets.xcassets */; };
 		AF982C4C42B0466BC0894351 /* PhoneListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CAC83BAAFE0CB19F2F6FBF /* PhoneListRow.swift */; };
+		B292482AF34231D0CA42F33C /* TabDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B69E3A0DB44F80ECF5233B /* TabDrag.swift */; };
 		B326FE920950C00CBFBA3688 /* RowMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84FD27B70E7742ECA8155B28 /* RowMenu.swift */; };
 		B5B1FD18194956E82415185A /* AgentsLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9346C1C598BD3C31634D3A /* AgentsLiveActivity.swift */; };
 		B643253F51979CBEAB68A2E0 /* JetBrainsMono-Variable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0A90669C8C57EAABB46040A3 /* JetBrainsMono-Variable.ttf */; };
@@ -151,6 +152,7 @@
 		12EDAF530116B45FFE732B07 /* Format.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Format.swift; sourceTree = "<group>"; };
 		14BA0F685C194597C14F60C3 /* TerminalTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTheme.swift; sourceTree = "<group>"; };
 		14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalKeyBar.swift; sourceTree = "<group>"; };
+		19B69E3A0DB44F80ECF5233B /* TabDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabDrag.swift; sourceTree = "<group>"; };
 		1A26A269D22F1730952287B9 /* TerminalLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalLabView.swift; sourceTree = "<group>"; };
 		1AF2BC817415DFF36FE83826 /* PaneTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaneTreeView.swift; sourceTree = "<group>"; };
 		1B63AAA583363CB64F13B188 /* RelayRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayRegistration.swift; sourceTree = "<group>"; };
@@ -265,6 +267,7 @@
 				1AF2BC817415DFF36FE83826 /* PaneTreeView.swift */,
 				384B24F496E887AC8E036AF3 /* SubAgentPeek.swift */,
 				DEFF448659A8E45E54D69258 /* TabBar.swift */,
+				19B69E3A0DB44F80ECF5233B /* TabDrag.swift */,
 				A6654E2F2DE8CC92909567AD /* TerminalPanel.swift */,
 				97C6BD950A0C47F6B5C9FFDC /* TerminalViewProvider.swift */,
 			);
@@ -738,6 +741,7 @@
 				9A165F94B15012E02066E6CE /* SpacesListView.swift in Sources */,
 				24484EFD85EC8F1800F97C9F /* SubAgentPeek.swift in Sources */,
 				3129E5A3E56BC7C93B4845AF /* TabBar.swift in Sources */,
+				B292482AF34231D0CA42F33C /* TabDrag.swift in Sources */,
 				1B9C0986410D5D97B355145D /* TerminalKeyBar.swift in Sources */,
 				37C4F8FC0E6A74F9D18F5DCC /* TerminalLabView.swift in Sources */,
 				997F8D2F476056E4F6653FC8 /* TerminalPanel.swift in Sources */,

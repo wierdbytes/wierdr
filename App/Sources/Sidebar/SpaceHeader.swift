@@ -171,6 +171,15 @@ struct SpaceHeaderBar: View {
 enum SpaceHeaderMenu {
     static func menu(space id: String, controller: WorkspaceController) -> PhoneMenu {
         guard let space = controller.workspace.space(id) else { return [] }
+        return [
+            [PhoneMenuItem(title: "Rename…", icon: .asset("ui.square-pen")) { controller.beginRename(space: id) },
+             newTab(in: space, controller: controller)],
+            [PhoneMenuItem(title: "Close Space", icon: .asset("ui.x"), destructive: true) { controller.closeSpace(id) }],
+        ]
+    }
+
+    /// New Tab ›: a terminal or an installed agent, in `space`.
+    static func newTab(in space: Space, controller: WorkspaceController) -> PhoneMenuItem {
         let launchers = controller.workspace.launchers[space.machine ?? ""] ?? []
         var tabs: [PhoneMenuItem] = [PhoneMenuItem(title: "Terminal", icon: .asset("program.shell")) {
             controller.newTab(launch: .shell, in: space)
@@ -183,11 +192,7 @@ enum SpaceHeaderMenu {
                 controller.newTab(launch: .agent(launcher, task: nil), in: space)
             })
         }
-        return [
-            [PhoneMenuItem(title: "Rename…", icon: .asset("ui.square-pen")) { controller.beginRename(space: id) },
-             PhoneMenuItem(title: "New Tab", icon: .asset("ui.plus"), children: [tabs])],
-            [PhoneMenuItem(title: "Close Space", icon: .asset("ui.x"), destructive: true) { controller.closeSpace(id) }],
-        ]
+        return PhoneMenuItem(title: "New Tab", icon: .asset("ui.plus"), children: [tabs])
     }
 }
 

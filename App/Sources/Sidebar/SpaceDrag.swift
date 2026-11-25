@@ -812,7 +812,8 @@ final class LiftedCard: UIView {
     private let shadow = UIView()
     var landing = false
 
-    init(lifted: UIImage, resting: UIImage) {
+    /// `radius`: its corners' (a card's; a tab's, `TabDragDrop`, half its height).
+    init(lifted: UIImage, resting: UIImage, radius: CGFloat = SpaceCard.radius) {
         super.init(frame: CGRect(origin: .zero, size: resting.size))
         isUserInteractionEnabled = false
         shadow.frame = bounds
@@ -820,7 +821,7 @@ final class LiftedCard: UIView {
         shadow.layer.shadowOpacity = 0.35
         shadow.layer.shadowRadius = 18
         shadow.layer.shadowOffset = CGSize(width: 0, height: 10)
-        shadow.layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: SpaceCard.radius).cgPath
+        shadow.layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
         self.resting.image = resting
         self.resting.frame = bounds
         self.lifted.image = lifted
