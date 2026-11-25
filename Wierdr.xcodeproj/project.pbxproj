@@ -76,6 +76,7 @@
 		A5A665F63667AD58A3437D8E /* HostSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B9899D1F0993F0A4EEFB4B /* HostSession.swift */; };
 		A5D7C1BE74E945F756C69D4D /* AgentsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 091EF73D2E632F989C41B9D3 /* AgentsPanel.swift */; };
 		A8A992B35F53658971A79996 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F884493E41282F237E5D6C75 /* Assets.xcassets */; };
+		AA01A3C6E10D3BC133EE7374 /* ScrollCoast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4447BA06698B093527380A3E /* ScrollCoast.swift */; };
 		AF982C4C42B0466BC0894351 /* PhoneListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CAC83BAAFE0CB19F2F6FBF /* PhoneListRow.swift */; };
 		B292482AF34231D0CA42F33C /* TabDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B69E3A0DB44F80ECF5233B /* TabDrag.swift */; };
 		B326FE920950C00CBFBA3688 /* RowMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84FD27B70E7742ECA8155B28 /* RowMenu.swift */; };
@@ -172,6 +173,7 @@
 		3E32A6DFB0783950D3599945 /* DebugAutoConnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugAutoConnect.swift; sourceTree = "<group>"; };
 		3F148D55F4969B78423C1E75 /* Wierdr.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Wierdr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3FDE13B0AE2E033B2732E515 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4447BA06698B093527380A3E /* ScrollCoast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollCoast.swift; sourceTree = "<group>"; };
 		44D0D83266FC227D2F050C23 /* WorkspaceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceCommands.swift; sourceTree = "<group>"; };
 		4FAB055678CBEED35D324983 /* SpacesList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacesList.swift; sourceTree = "<group>"; };
 		52EDFAC9EB0534459E6950A3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -407,6 +409,7 @@
 			isa = PBXGroup;
 			children = (
 				24C773688B33E3F0413C5204 /* KeyboardCover.swift */,
+				4447BA06698B093527380A3E /* ScrollCoast.swift */,
 				14C163F0C56C5AB1DD58AA4C /* TerminalKeyBar.swift */,
 				3970FD27B3DF671D83DC038E /* TerminalSession.swift */,
 				F859D6049AABA66F33A95A82 /* TerminalSessionPool.swift */,
@@ -727,6 +730,7 @@
 				EAB13DB1FC1F556848339681 /* RelayRegistration.swift in Sources */,
 				C142C6CC594743701629A8B3 /* RowActions.swift in Sources */,
 				B326FE920950C00CBFBA3688 /* RowMenu.swift in Sources */,
+				AA01A3C6E10D3BC133EE7374 /* ScrollCoast.swift in Sources */,
 				7CC2C3A024443CF62DBEE2E2 /* SettingsView.swift in Sources */,
 				676EF61AE1D9EC7E298BCBC9 /* SetupViews.swift in Sources */,
 				E2019B79A2F0067DC6F63E40 /* SidebarHeader.swift in Sources */,

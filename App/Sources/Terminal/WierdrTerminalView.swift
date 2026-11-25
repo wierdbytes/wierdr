@@ -28,7 +28,8 @@ final class EmulatorOutputRouter: Sendable {
 ///   already answered the queries it can; focus reports are the core's job);
 /// - the desktop's terminal keymap (⌥←/→/⌫, ⌘←/→/⌫) and ⌘. as Esc;
 /// - ⌘-shortcuts that are not ours are left to the app's menu commands;
-/// - a themed key bar above the on-screen keyboard.
+/// - a themed key bar above the on-screen keyboard;
+/// - inertia for the scrolls a program takes (`ScrollCoast`).
 final class WierdrTerminalView: TerminalView {
     nonisolated let router = EmulatorOutputRouter()
 
@@ -72,6 +73,12 @@ final class WierdrTerminalView: TerminalView {
     private var keyboardRequested = false
 
     private var keyBar: TerminalKeyBar?
+
+    /// Inertia for the scrolls a program takes (`ScrollCoast`).
+    private let coast = ScrollCoast()
+    /// The touch down now stopped a coasting scroll: as on a scroll view, it's no tap
+    /// (no click into the program, no link opened, no focus).
+    private var touchCaughtCoast = false
 
     /// Emulator options. Kitty graphics get Ghostty's image storage (320 MB per
     /// screen, as the desktop's libghostty) instead of SwiftTerm's 10 MB: pi's
@@ -169,6 +176,24 @@ final class WierdrTerminalView: TerminalView {
         _ = becomeFirstResponder()
     }
 
+    // MARK: Scroll coast
+
+    /// Every recognizer added (SwiftTerm's too, from its init on) goes past the coast.
+    override func addGestureRecognizer(_ gestureRecognizer: UIGestureRecognizer) {
+        super.addGestureRecognizer(gestureRecognizer)
+        coast.watch(gestureRecognizer, on: self)
+    }
+
+    /// A touch landed on the terminal (finger or pointer): it stops a coasting scroll.
+    fileprivate func touchDown() {
+        touchCaughtCoast = coast.stop()
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if touchCaughtCoast, gestureRecognizer is UITapGestureRecognizer { return false }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
+
     // MARK: Metal scale
 
     override func layoutSubviews() {
@@ -178,6 +203,7 @@ final class WierdrTerminalView: TerminalView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        if window == nil { coast.stop() }
         matchMetalScale()
     }
 
@@ -303,11 +329,14 @@ final class WierdrTerminalView: TerminalView {
 }
 
 /// Lets our "user touched the terminal" recognizer run beside SwiftTerm's own,
-/// and notes whether the touch is a finger's or a pointer's (`tapsTakeKeyboard`).
+/// notes whether the touch is a finger's or a pointer's (`tapsTakeKeyboard`) and stops a
+/// coasting scroll (`touchDown`).
 private final class TouchPassthrough: NSObject, UIGestureRecognizerDelegate {
     @MainActor static let shared = TouchPassthrough()
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        (g.view as? WierdrTerminalView)?.lastTouchWasPointer = touch.type == .indirectPointer
+        let terminal = g.view as? WierdrTerminalView
+        terminal?.lastTouchWasPointer = touch.type == .indirectPointer
+        terminal?.touchDown()
         return true
     }
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }

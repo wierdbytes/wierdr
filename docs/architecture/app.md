@@ -129,7 +129,8 @@ line).
 
 SwiftTerm integration: `TerminalSession` (one attach stream ↔ one emulator,
 grid/FACTS/RESIZE/FOCUS/credit, reattach), `TerminalSessionPool` (per-address sessions, detach when
-hidden), `TerminalSurface` (SwiftUI), key bar, theme, keymap, `KeyboardCover` (the iPad sidebar's
+hidden), `TerminalSurface` (SwiftUI), key bar, theme, keymap, `ScrollCoast` (inertia for the
+scrolls a program takes, fed to SwiftTerm's own handlers), `KeyboardCover` (the iPad sidebar's
 and panel's bottom inset, measured from the key bar, or the message field's empty accessory
 (`ComposeAccessory`), instead of SwiftUI's keyboard safe area, which iPadOS gets wrong with the
 floating keyboard).
