@@ -5,6 +5,39 @@
 есть в связке ключей этого Mac. iPad Pro 13" M4 и iPhone 13 Pro Max уже зарегистрированы в
 команде и входят в профиль, которым подписывается сборка (один `.ipa` для обоих).
 
+## Проверка UI‑правки: рецепт
+
+Сначала симулятор iPad (быстро, без устройства), потом — физический iPad: без него
+правка не готова (команды — в «Проверка на iPad и iPhone» ниже). Симуляторы общие с
+другими агентами: что запущено — `xcrun simctl list devices booted`, чужое не перезапускай.
+
+```sh
+export SIM_NAME="iPad Pro 13-inch (M5)" WDA_PORT=8300 \
+  SIM_TYPE=com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB
+D=$(mktemp -d)                               # снимки — в своём каталоге
+make project                                 # только если файлы добавлялись или удалялись
+scripts/iphone-sim.sh boot                   # если не запущен (без SIM_TYPE создал бы iPhone)
+scripts/iphone-sim.sh install                # Debug-сборка и установка, после каждой правки
+scripts/iphone-sim.sh launch -demo YES       # вернётся, когда приложение нарисуется
+scripts/iphone-sim.sh start                  # WebDriverAgent, один раз за сессию
+scripts/iphone-sim.sh shot $D/0.png          # 2752×2064 px: точки × 2
+scripts/iphone-sim.sh long-press 720 56 800  # в точках, 1376×1032 в альбоме; ещё tap-xy, swipe
+scripts/iphone-sim.sh shot $D/1.png
+# вырезка (ширина:высота:x:y в пикселях), втрое крупнее; две — одна под другой
+for i in 0 1; do ffmpeg -loglevel error -y -i $D/$i.png \
+  -vf "crop=560:150:1240:50,scale=iw*3:ih*3:flags=neighbor" $D/c$i.png; done
+ffmpeg -loglevel error -y -i $D/c0.png -i $D/c1.png -filter_complex vstack $D/cmp.png
+```
+
+- Смотри вырезки, а не целые снимки: снимок — ~4k токенов контекста, вырезка — 0,3–2k. PIL нет,
+  есть ffmpeg.
+- Меню после `long-press` остаётся открытым (палец WDA ничего не выбирает): прежде чем
+  снимать «до» заново, закрой его тапом мимо.
+- Тема — `appearance dark|light`, поворот — `orient portrait|landscape`; тур iPad, живое
+  подключение и остальное — в «Проверка в симуляторе iPhone».
+- Физический iPad: `make install`, дальше те же команды через `scripts/ipad.sh` (точки 1600×1200
+  в альбоме), в конце `scripts/ipad.sh stop`.
+
 ## Установка на iPhone
 
 На iPhone уже включён Режим разработчика (iOS 27.2.1). Способы, любой:

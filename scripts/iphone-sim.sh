@@ -4,7 +4,8 @@
 #
 #   scripts/iphone-sim.sh boot               create (once) and boot the simulator
 #   scripts/iphone-sim.sh install            Debug build for the simulator + install
-#   scripts/iphone-sim.sh launch [args…]     (re)launch Wierdr, e.g. `launch -demo YES`
+#   scripts/iphone-sim.sh launch [args…]     (re)launch Wierdr, e.g. `launch -demo YES`, and wait
+#                                            until it has drawn (a launching app is blank)
 #   scripts/iphone-sim.sh start              WebDriverAgent on the simulator (port $WDA_PORT)
 #   scripts/iphone-sim.sh stop               stop WebDriverAgent
 #   scripts/iphone-sim.sh shot [file.png]    screenshot (simctl, 3x pixels)
@@ -80,6 +81,36 @@ install() {
   xcrun simctl install "$(sim)" build/DerivedData/Build/Products/Debug-iphonesimulator/Wierdr.app
 }
 
+# The screen shows more than one color: a launching app is black, then its launch screen plain.
+# Measured on a 32×24 copy, without its top rows (the status bar) and bottom row (home indicator).
+drawn() { # udid
+  local d ok=1; d=$(mktemp -d)
+  if xcrun simctl io "$1" screenshot "$d/s.png" >/dev/null 2>&1 &&
+     sips -z 24 32 -s format bmp "$d/s.png" --out "$d/s.bmp" >/dev/null 2>&1; then
+    python3 - "$d/s.bmp" <<'PY' && ok=0
+import struct, sys
+b = open(sys.argv[1], "rb").read()
+off, (w, h), bpp = struct.unpack_from("<I", b, 10)[0], struct.unpack_from("<ii", b, 18), b[28] // 8
+stride = (w * bpp + 3) // 4 * 4
+rows = [b[off + r * stride: off + r * stride + w * bpp] for r in range(abs(h))]
+if h > 0: rows.reverse()  # a bottom-up BMP
+px = [r[i:i + 3] for r in rows[2:-1] for i in range(0, w * bpp, bpp)]
+sys.exit(0 if max(max(p[c] for p in px) - min(p[c] for p in px) for c in range(3)) > 24 else 1)
+PY
+  fi
+  rm -rf "$d"; return $ok
+}
+
+wait_drawn() { # until two shots in a row show the app drawn, up to 40 s
+  local u seen=0 end=$((SECONDS + 40)); u=$(sim)
+  sleep 1
+  while [ $SECONDS -lt $end ]; do
+    if drawn "$u"; then seen=$((seen + 1)); [ $seen -ge 2 ] && return 0; else seen=0; fi
+    sleep 0.5
+  done
+  die "the screen is still blank 40 s after launch"
+}
+
 up() { curl -sf -m 3 "$URL/status" >/dev/null 2>&1; }
 
 start() {
@@ -150,7 +181,8 @@ case "$cmd" in
   install) install ;;
   launch) xcrun simctl terminate "$(sim)" "$BUNDLE_ID" 2>/dev/null || true
           rm -f "$STATE/session"
-          xcrun simctl launch "$(sim)" "$BUNDLE_ID" "$@" ;;
+          xcrun simctl launch "$(sim)" "$BUNDLE_ID" "$@"
+          wait_drawn ;;
   start) start ;;
   stop) stop; echo stopped ;;
   shot) out="${1:-iphone-shot.png}"; xcrun simctl io "$(sim)" screenshot "$out" >/dev/null 2>&1; echo "$out" ;;
