@@ -1,10 +1,10 @@
 # Wierdr
 
 - Прежде чем менять код, прочитай нужное из `docs/` — там уже записано то, что иначе
-  приходится выяснять заново:
-  [`architecture.md`](docs/architecture.md) — устройство по файлам и типам;
-  [`TRADEOFFS.md`](docs/TRADEOFFS.md) — решения и их причины (схема ввода, жесты, раскладка);
-  [`FEATURES.md`](docs/FEATURES.md) — что реализовано;
+  приходится выяснять заново. Оглавление по файлам — [`docs/README.md`](docs/README.md):
+  [`architecture/`](docs/architecture/) — устройство по файлам и типам;
+  [`tradeoffs/`](docs/tradeoffs/) — решения и их причины (схема ввода, жесты, раскладка);
+  [`features/`](docs/features/) — что реализовано;
   [`BUILD.md`](docs/BUILD.md) — сборка, установка, устройства, симуляторы, WDA;
   [`live-activity.md`](docs/live-activity.md) — Live Activity и APNs, проверенные ловушки;
   [`relay.md`](docs/relay.md) — релей пушей (Cloudflare Worker в `Relay/`, App Attest, права), развёртывание;
@@ -20,6 +20,12 @@
   для Herdr на Mac (сайдбар Wierdr на десктопе): правка здесь, затем `sh Integrations/herdr-app/install.sh`;
   копии в `~/.config/herdr-app` руками не править, в chezmoi их нет.
   Меняя поведение или решение, обнови соответствующий документ в том же коммите.
+- Документы читай выборочно: файл — по оглавлению, в файле — `grep -n '^#' <файл>`, потом нужный
+  раздел через `offset`/`limit`; целиком — только когда нужен весь. Размер смотри в байтах
+  (`wc -c`), не в строках.
+- Пиши документы так же: один файл — одна тема, до ~15 KB; у каждой темы свой заголовок;
+  строки до 100 знаков, без таблиц с длинными ячейками. Разросся — раздели; новый файл —
+  строка в `docs/README.md`.
 - Перед тем как назвать UI-изменение готовым, проверь его на физическом iPad:
   [`scripts/ipad.sh`](scripts/ipad.sh); изменения раскладки iPhone (`App/Sources/Phone`) — на
   iPhone: [`scripts/iphone.sh`](scripts/iphone.sh). Инструкция в шапке

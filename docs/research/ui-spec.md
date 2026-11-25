@@ -122,7 +122,7 @@ to **370** (`layouts/.state` + screenshot); everything inside is width-flexible.
   1. `search.svg` → opens the **picker** (Herdr's ⌘P quick switcher: type to filter
      spaces/tabs, Enter goes, spaces needing you first). Wierdr's is "Go to"
      (`QuickSwitcher`): spaces and agents in the iPhone list's look, fuzzy filtered, the
-     field at the bottom (docs/FEATURES.md §2). **Wierdr has no button for it**: the spaces
+     field at the bottom (docs/features/agents-panel.md). **Wierdr has no button for it**: the spaces
      list pulled down past its top opens it (`PullToSearch`), and ⌘P; the bar keeps only
      the toggle.
   2. `sidebar.svg` → collapses the sidebar to a 44/76 px "rail" (or back to its width).

@@ -23,7 +23,7 @@
 # Env: SIM_NAME (default "Wierdr iPhone 13 Pro Max"), SIM_TYPE (device type for `boot` to create,
 # default iPhone-13-Pro-Max), WDA_DIR (~/.local/share/WebDriverAgent),
 # WDA_PORT (8200, so it doesn't collide with the iPad's WDA on 8100).
-# Launch args/env for the app: see App/Sources/WierdrApp.swift and docs/architecture.md
+# Launch args/env for the app: see App/Sources/WierdrApp.swift and docs/architecture/app.md
 # (`-demo YES`, `-open …`, SIMCTL_CHILD_WIERDR_AUTOCONNECT=…).
 set -euo pipefail
 

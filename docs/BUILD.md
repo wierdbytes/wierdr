@@ -221,7 +221,7 @@ WDA_PORT=8300 scripts/iphone-sim.sh launch -tour YES` (точки — 1032×1376
 сценариев свои. Шаг, чьё условие уже выполнено, `-tour` проскакивает (`-tour close` без
 открытого окна scout — сразу дальше).
 
-Живое подключение из симулятора — как в `docs/architecture.md` (тестовый sshd на
+Живое подключение из симулятора — как в `docs/architecture/app.md` (тестовый sshd на
 127.0.0.1:2222, `SIMCTL_CHILD_WIERDR_AUTOCONNECT=…`), с `SIM` = «Wierdr iPhone 13 Pro Max».
 Осторожно: открытая на iPhone панель забирает размер своего терминала и на Mac; для проверок
 создавай свой спейс (`WIERDR_DEBUG_STEPS='sleep 4;newSpace'`) и закрывай его после.
@@ -248,4 +248,4 @@ WIERDR_SSH_LIVE=1 swift test --filter HerdrSSHTests
 ```
 
 `scripts/test-sshd.sh start|stop` — одноразовый sshd на `127.0.0.1:2222` для тестов
-симулятора, не трогает `~/.ssh`. Сквозной прогон в симуляторе — см. `docs/architecture.md`.
+симулятора, не трогает `~/.ssh`. Сквозной прогон в симуляторе — см. `docs/architecture/app.md`.

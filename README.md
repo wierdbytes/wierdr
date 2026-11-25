@@ -135,7 +135,8 @@ More in [docs/BUILD.md](docs/BUILD.md).
 
 Most of the detailed docs are in Russian for now (RU); the rest are in English (EN).
 
-- [Features](docs/FEATURES.md): everything Wierdr does, screen by screen (RU).
+- [All the docs, file by file](docs/README.md) (RU).
+- [Features](docs/features/): everything Wierdr does, screen by screen (RU).
 - [Building and installing](docs/BUILD.md): devices, install over the air, preparing the Mac (RU).
 - [SSH](docs/ssh.md): sign-in, keys, host keys, setting up the Mac (EN).
 - [Live Activity](docs/live-activity.md): how it works and how to set it up (RU);
@@ -145,6 +146,6 @@ Most of the detailed docs are in Russian for now (RU); the rest are in English (
 - Agent integrations: [pi](Integrations/pi/README.md), [Claude Code](Integrations/claude-code/README.md),
   [Codex](Integrations/codex/README.md) (EN); how they work inside: [pi](docs/pi.md),
   [Claude Code](docs/claude-code.md), [Codex](docs/codex.md) (RU).
-- For developers: [architecture](docs/architecture.md) (EN),
+- For developers: [architecture](docs/architecture/) (EN),
   [the herdr-core client](docs/hc-protocol-client.md) (EN),
-  [assumptions and trade-offs](docs/TRADEOFFS.md) (RU), [App Store plan](docs/app-store.md) (RU).
+  [assumptions and trade-offs](docs/tradeoffs/) (RU), [App Store plan](docs/app-store.md) (RU).
