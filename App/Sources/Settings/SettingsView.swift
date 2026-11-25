@@ -8,6 +8,7 @@ struct SettingsView: View {
 
     @AppStorage("appearance") private var appearance: AppearanceOverride = .system
     @AppStorage(TerminalFonts.sizeKey) private var fontSize = Double(TerminalFonts.defaultSize)
+    @AppStorage(ScrollCoast.enabledKey) private var scrollInertia = true
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var app
     @Environment(LiveConnector.self) private var connector
@@ -25,7 +26,7 @@ struct SettingsView: View {
                     LabeledContent("Dark", value: "Atom One Dark")
                     LabeledContent("Light", value: "Paper")
                 }
-                Section("Terminal") {
+                Section {
                     Stepper(value: $fontSize, in: Double(TerminalFonts.sizeRange.lowerBound)...Double(TerminalFonts.sizeRange.upperBound), step: 1) {
                         LabeledContent("Font Size", value: "\(Int(fontSize)) pt")
                     }
@@ -33,6 +34,11 @@ struct SettingsView: View {
                         .font(.mono(fontSize))
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
+                    Toggle("Scroll Inertia in Programs", isOn: $scrollInertia)
+                } header: {
+                    Text("Terminal")
+                } footer: {
+                    Text("After a flick, scrolling in pi, Claude Code, vim or less keeps going and slows down. The shell’s history always does.")
                 }
                 Section("Connection") {
                     LabeledContent("Connected to", value: isDemo ? "Demo" : (hostName ?? "—"))

@@ -12,9 +12,16 @@ import QuartzCore
 /// `handlePointerScroll:` for a trackpad) with a stand-in recognizer, so routing, the cell grid
 /// and its report budget (100 a second) stay SwiftTerm's. A new scroll, a touch on the terminal
 /// or the terminal leaving the window stops it (`WierdrTerminalView`: the touch that stopped it
-/// is no tap). A mouse wheel's notches don't coast.
+/// is no tap). A mouse wheel's notches don't coast. Settings → Terminal turns it off
+/// (`enabledKey`); the shell's history coasts either way.
 @MainActor
 final class ScrollCoast: NSObject {
+    /// `UserDefaults` key of Settings → Terminal → Scroll Inertia in Programs (absent: on).
+    nonisolated static let enabledKey = "terminalScrollInertia"
+    nonisolated static var isEnabled: Bool {
+        UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
+    }
+
     private enum Source {
         case finger, trackpad
 
@@ -103,7 +110,7 @@ final class ScrollCoast: NSObject {
 
     private func start(_ source: Source, velocity: Double, at place: CGPoint, modifiers: UIKeyModifierFlags) {
         stop()
-        guard abs(velocity) > Self.minimumSpeed, let host, host.window != nil,
+        guard Self.isEnabled, abs(velocity) > Self.minimumSpeed, let host, host.window != nil,
               host.responds(to: source.action) else { return }
         self.source = source
         self.velocity = velocity
