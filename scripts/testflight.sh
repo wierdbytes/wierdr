@@ -44,7 +44,7 @@ cat > "$OPTS" <<PL
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>method</key><string>app-store-connect</string>
-  <key>destination</key><string>$MODE</string>
+  <key>destination</key><string>export</string>
   <key>teamID</key><string>AUL4CCB2XY</string>
   <key>signingStyle</key><string>automatic</string>
   <key>uploadSymbols</key><true/>
@@ -57,10 +57,16 @@ rm -rf build/export-appstore
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath build/export-appstore \
   -exportOptionsPlist "$OPTS" $AUTH 2>&1 | grep -vE "^\s*$" | tail -8
 
+IPA=build/export-appstore/Wierdr.ipa
+[ -f "$IPA" ] || { echo "export failed: no $IPA" >&2; exit 1; }
 if [ "$MODE" = export ]; then
   mkdir -p dist
-  cp build/export-appstore/Wierdr.ipa dist/Wierdr-appstore.ipa
+  cp "$IPA" dist/Wierdr-appstore.ipa
   echo "dist/Wierdr-appstore.ipa"
 else
+  # altool with the key, not exportArchive's destination=upload: that one failed with
+  # "Account credentials have expired" (build 91) while the same key worked for the API.
+  xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 \
+    | grep -E "UPLOAD|ERROR|error" | cut -c1-300
   echo "Uploaded $VERSION ($BUILD). App Store Connect processes it for a few minutes, then: TestFlight › Internal Testing."
 fi

@@ -104,6 +104,9 @@ scripts/testflight.sh --export      # то же без загрузки: dist/Wi
 
 - **Ключ API** App Store Connect: `~/.appstoreconnect/.env` (`ASC_KEY_ID`, `ASC_ISSUER_ID`)
   и `~/.appstoreconnect/private_keys/AuthKey_<id>.p8`. Через него идут и подпись, и загрузка.
+- **Загрузка — `xcrun altool --upload-app`** с этим ключом, экспорт только собирает ipa.
+  Загрузка самим `xcodebuild -exportArchive` (`destination` `upload`) на сборке 91 упала
+  с «Account credentials have expired», хотя тот же ключ в API работал.
 - **Подпись облачная.** Сертификата Apple Distribution в связке ключей нет: Xcode
   подписывает облачным сертификатом команды и сам заводит профили App Store. Для этого
   ключу нужна роль Admin.
